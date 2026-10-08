@@ -1,0 +1,21 @@
+{
+  "name": "silphmod-engine",
+  "version": "1.5.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "build": "node build.cjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.cjs location-test/*.test.cjs"
+  },
+  "dependencies": {
+    "frida-il2cpp-bridge": "0.14.0",
+    "frida-java-bridge": "7.0.13",
+    "buffer": "6.0.3"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3",
+    "@types/frida-gum": "19.0.0"
+  }
+}

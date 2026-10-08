@@ -1,0 +1,10 @@
+<resources>
+    <string name="enable_notifications_start">Enable notifications to start</string>
+    <string name="enable_notifications_service">Enable service notifications</string>
+    <string name="exporting">Exporting…</string>
+    <string name="export_logs">Export logs</string>
+    <plurals name="item_types">
+        <item quantity="one">Item limits · %1$d type</item>
+        <item quantity="other">Item limits · %1$d types</item>
+    </plurals>
+</resources>

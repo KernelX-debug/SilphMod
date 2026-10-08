@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 470" role="img" aria-labelledby="title desc">
+  <title id="title">One connection, one session</title>
+  <desc id="desc">The interface configures the Android service. The service monitors the process and exchanges control and events with the in-game agent. The agent validates the profile and invokes game methods. Responses feed statistics, reconciliation and local logs.</desc>
+  <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 8 4 0 8Z" fill="#61e9b6"/></marker></defs>
+  <rect width="1080" height="470" rx="18" fill="#10151e"/>
+  <g font-family="Segoe UI, Arial, sans-serif" fill="#f2f7fb">
+    <text x="40" y="49" font-size="25" font-weight="700">One connection, one session</text>
+    <text x="40" y="80" font-size="17" fill="#b5c3d1">Android control, game actions on the Unity thread</text>
+    <g fill="#1d2b38"><rect x="40" y="128" width="260" height="114" rx="12"/><rect x="400" y="128" width="280" height="114" rx="12"/><rect x="780" y="128" width="260" height="114" rx="12"/><rect x="400" y="324" width="280" height="120" rx="12"/></g>
+    <text x="62" y="162" font-size="21" font-weight="600">Interface + service</text>
+    <text x="62" y="193" font-size="17">Settings and Stop button</text>
+    <text x="62" y="219" font-size="17">PID, focus and heartbeat</text>
+    <text x="422" y="162" font-size="21" font-weight="600">Internal agent</text>
+    <text x="422" y="193" font-size="17">Location option → validation</text>
+    <text x="422" y="219" font-size="17">One pending request</text>
+    <text x="802" y="162" font-size="21" font-weight="600">Original game</text>
+    <text x="802" y="193" font-size="17">Encounters and catches</text>
+    <text x="802" y="219" font-size="17">Spins and inventory</text>
+    <text x="422" y="360" font-size="21" font-weight="600">Confirmed responses</text>
+    <text x="422" y="391" font-size="17">Reconciliation and statistics</text>
+    <text x="422" y="418" font-size="17">Notification + ZIP export</text>
+  </g>
+  <g fill="none" stroke="#61e9b6" stroke-width="2" marker-end="url(#arrow)"><path d="M300 174H400"/><path d="M680 174H780"/><path d="M910 242V282H540V324"/><path d="M400 385H170V242"/></g>
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="#b5c3d1"><text x="333" y="159">pipe</text><text x="713" y="159">calls</text><text x="713" y="270">game response</text><text x="186" y="373">local events</text></g>
+</svg>

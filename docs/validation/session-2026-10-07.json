@@ -1,0 +1,33 @@
+{
+  "reviewDate": "2026-10-07",
+  "evidence": "Local diagnostic bundle provided by the tester; raw bundle intentionally not published",
+  "indexedFilesVerified": 60,
+  "integrityMismatches": 0,
+  "observedVersion": "1.3.1-ugphone",
+  "android": "10",
+  "sdk": 29,
+  "gameVersion": "0.431.0",
+  "actionDelayMs": 250,
+  "maxThrows": 4,
+  "activeDurationToStopRequestMs": 7591177,
+  "durationDefinition": "Host monotonic stop_requested.elapsedMs minus report-status.activeSinceElapsedMs",
+  "confirmed": {
+    "caught": 1365,
+    "fled": 34,
+    "spun": 532,
+    "transferred": 1362,
+    "discardedItems": 634,
+    "xp": 416800,
+    "stardust": 360650
+  },
+  "missingRewardReceipts": 0,
+  "cleanupPaused": false,
+  "endReason": "Game process identity changed; session stopped by the host",
+  "limits": [
+    "Single tester/device/session, not a multi-device reliability benchmark",
+    "Log streams were rotated and do not preserve every historical event",
+    "End reason does not establish why the game process ended",
+    "This runtime evidence belongs to 1.3.1 and does not certify later versions or Android 14/15",
+    "No coordinates, account identifiers, friend codes or raw logs included"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "version": "17.22.1",
+  "archiveSha256": "9bf7ce67a77b43041f4be40a53f940018f78bd45a2b9e666f6558b7ceaa7da02",
+  "binarySha256": "fde5dd3d72cdc062e31c9f262038d9bfb637b6ac9665131341cfddd1fb7f05c0",
+  "bytes": 58920136,
+  "source": "https://github.com/frida/frida/releases/tag/17.22.1"
+}

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 240" role="img" aria-labelledby="title desc">
+  <title id="title">SilphMod — UGPhone Edition</title>
+  <desc id="desc">Automated catches, PokéStops and inventory with local session control.</desc>
+  <rect width="1080" height="240" rx="22" fill="#10151e"/>
+  <g transform="translate(46 44) scale(1.35)">
+    <path d="M54 13 89 33V75L54 95 19 75V33Z" fill="#273a49"/>
+    <path d="M54 21 81 37V71L54 87 27 71V37Z M54 27 32 40V68L54 81 76 68V40Z" fill="#61e9b6" fill-rule="evenodd"/>
+    <path d="M68 36H45L37 44V53L59 62V65H40V72H63L71 64V55L49 46V43H68Z" fill="#f2f7fb"/>
+  </g>
+  <g font-family="Segoe UI, Arial, sans-serif">
+    <text x="228" y="106" fill="#f2f7fb" font-size="56" font-weight="700">SilphMod</text>
+    <text x="231" y="146" fill="#61e9b6" font-size="21" letter-spacing="2">UGPHONE EDITION · 1.5.0</text>
+    <text x="231" y="187" fill="#b5c3d1" font-size="19">Catches · PokéStops · Inventory · Session statistics</text>
+  </g>
+</svg>
