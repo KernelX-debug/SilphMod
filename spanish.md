@@ -14,7 +14,7 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 
 ## Cómo funciona
 
-[![Ver SilphMod en funcionamiento — 1:13](docs/assets/demo-preview.png)](docs/assets/test%40KernelX-debug_01.mp4?raw=true)
+![SilphMod en funcionamiento — 1:13](docs/assets/demo.gif)
 
 ## Compatibilidad
 

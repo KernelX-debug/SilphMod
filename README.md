@@ -14,7 +14,7 @@ Configure the features, press **Start service**, and follow the progress through
 
 ## How it works
 
-[![Watch SilphMod in action — 1:13](docs/assets/demo-preview.png)](docs/assets/test%40KernelX-debug_01.mp4?raw=true)
+![SilphMod in action — 1:13](docs/assets/demo.gif)
 
 ## Compatibility
 
