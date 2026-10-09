@@ -12,7 +12,9 @@ public final class GameStartShellTest {
     @Test public void allGeneratedCommandsHaveValidShellSyntax() throws Exception {
         String bash = TestShell.bash();
         for (String command : new String[]{GameStartCheck.framed("PIDOF", GameStartCheck.PIDOF),
-                GameStartCheck.framed("PROC", GameStartCheck.PROC), GameStartCheck.framed("STOP_GAME", GameStartCheck.STOP_GAME)}) {
+                GameStartCheck.framed("PROC", GameStartCheck.PROC), GameStartCheck.framed("STOP_GAME", GameStartCheck.STOP_GAME),
+                GameStartCheck.framed("LIMIT_STOP", SessionLimitStop.command(1234, 56789)),
+                GameStartCheck.framed("TARGET", SessionLimitStop.targetCommand(1234))}) {
             Process process = new ProcessBuilder(bash, "--noprofile", "--norc", "-n").redirectErrorStream(true).start();
             try {
                 process.getOutputStream().write(command.getBytes(StandardCharsets.UTF_8)); process.getOutputStream().close();

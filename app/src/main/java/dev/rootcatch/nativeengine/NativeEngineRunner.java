@@ -1,8 +1,10 @@
 package dev.rootcatch.nativeengine;
 
 import android.content.Context;
+import android.app.KeyguardManager;
 import android.content.pm.PackageInfo;
 import android.os.Build;
+import android.os.PowerManager;
 import android.os.SystemClock;
 
 import dev.rootcatch.automation.AutomationConfig;
@@ -26,6 +28,8 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 /** Root-owned attach process controlled by pipes, never a remote Frida server. */
 public final class NativeEngineRunner implements Runnable {
@@ -85,6 +89,12 @@ public final class NativeEngineRunner implements Runnable {
     private volatile String ending = "Internal engine stopped";
     private int caught, fled, spun, discarded, transferred;
     private RewardTotals rewards = new RewardTotals();
+    private String sessionLimitKind = "";
+    private boolean sessionLimitAcknowledged;
+
+    public String sessionLimitReached() {
+        return agentStopped && sessionLimitAcknowledged && cleanupConfirmed && nativeLocationCleanupConfirmed && !requestedStop ? sessionLimitKind : "";
+    }
 
     /** Process-local location option, restricted to this edition. */
     public void enableNativeLocation(boolean enabled) {
@@ -119,10 +129,29 @@ public final class NativeEngineRunner implements Runnable {
     }
 
     public static boolean gameFocused(RootShell root) {
+        return gameFocused(root, () -> false, ignored -> { });
+    }
+    public static boolean gameFocused(RootShell root, BooleanSupplier stopping, Consumer<String> observer) {
         return new FocusReader((command, timeout) -> {
             RootShell.Result reply = root.execute(command, timeout);
             return new FocusReader.Reply(reply.code, reply.output);
-        }, () -> false, sample -> { }).read("startup").focus.isGame();
+        }, stopping, sample -> {
+            try { observer.accept(focusRecord(sample).toString()); } catch (Exception ignored) { }
+        }).read("early_startup").focus.initialAttachAllowed();
+    }
+    private static JSONObject focusRecord(FocusReader.Sample sample) throws Exception {
+        return new JSONObject().put("event", "host_focus").put("source", sample.source)
+                .put("state", sample.focus.state.name()).put("reason", sample.focus.reason).put("stage", sample.stage)
+                .put("sourceExit", sample.sourceExitCode).put("durationMs", sample.durationMs)
+                .put("shellExit", sample.shellExitCode).put("error", sample.error == null ? JSONObject.NULL : sample.error)
+                .put("raw", sample.response).put("command", sample.command).put("truncated", sample.truncated)
+                .put("displayId", sample.focus.displayId).put("initialAttachAllowed", sample.focus.initialAttachAllowed())
+                .put("notificationShade", sample.focus.notificationShadeAllowed()).put("time", System.currentTimeMillis());
+    }
+    private boolean screenAllowsActions() {
+        PowerManager power = context.getSystemService(PowerManager.class);
+        KeyguardManager keyguard = context.getSystemService(KeyguardManager.class);
+        return power != null && keyguard != null && power.isInteractive() && !keyguard.isKeyguardLocked();
     }
 
     public NativeEngineRunner(Context context, RootShell shell, AutomationConfig config,
@@ -221,6 +250,10 @@ public final class NativeEngineRunner implements Runnable {
                     .put("version", EnginePolicy.VERSION).put("autoCatch", config.autoCatch)
                     .put("autoSpin", config.autoSpin).put("cleanBag", config.cleanBag)
                     .put("readOnly", readOnly).put("maxThrows", config.maxThrows)
+                    .put("throwQuality", config.throwQuality).put("notificationShadeSupport", true)
+                    .put("useBerries", config.useBerries).put("berryOrder", new org.json.JSONArray(config.berryOrder))
+                    .put("skipInterruptions", config.skipInterruptions)
+                    .put("maxCatches", config.maxCatches).put("maxSpins", config.maxSpins)
                     .put("automaticPreflight", automaticPreflight)
                     .put("nativeLocationJNI", false).put("edition", "ugphone")
                     .put("resolveError12", nativeLocationJNI).put("sdk", Build.VERSION.SDK_INT)
@@ -241,11 +274,7 @@ public final class NativeEngineRunner implements Runnable {
                 RootShell.Result reply = shell.execute(command, timeout);
                 return new FocusReader.Reply(reply.code, reply.output);
             }, () -> stopping, sample -> {
-                try { record(new JSONObject().put("event", "host_focus").put("source", sample.source)
-                        .put("state", sample.focus.state.name()).put("reason", sample.focus.reason).put("stage", sample.stage)
-                        .put("sourceExit", sample.sourceExitCode).put("durationMs", sample.durationMs)
-                        .put("shellExit", sample.shellExitCode).put("error", sample.error == null ? JSONObject.NULL : sample.error)
-                        .put("raw", sample.response).put("time", System.currentTimeMillis()).toString()); }
+                try { record(focusRecord(sample).toString()); }
                 catch (Exception ignored) { }
             });
             started = SystemClock.elapsedRealtime();
@@ -253,7 +282,7 @@ public final class NativeEngineRunner implements Runnable {
             listener.onStatus("Conectando SilphMod…");
             while (!stopping && SystemClock.elapsedRealtime() - started < 90000) {
                 if (gamePid > 1) break;
-                if (focusReader.read("before_attach").focus.isGame()) {
+                if (focusReader.read("before_attach").focus.initialAttachAllowed()) {
                     gamePid = EnginePolicy.uniquePid(shell.execute("pidof " + EnginePolicy.GAME, 3000).output);
                     if (gamePid > 1) break;
                 }
@@ -282,6 +311,7 @@ public final class NativeEngineRunner implements Runnable {
             reader.setDaemon(true); reader.start();
             ControlPulse pulses = new ControlPulse(SystemClock::elapsedRealtime, pulse ->
                     command(new JSONObject().put("type", "heartbeat").put("foreground", pulse.foreground)
+                            .put("notificationShade", pulse.notificationShade)
                             .put("sequence", pulse.sequence).put("sentAtElapsedMs", pulse.sentAt)), (pulse, writeMs) -> {
                 try {
                     // Nonessential diagnostics may be skipped if the output queue is full;
@@ -289,6 +319,7 @@ public final class NativeEngineRunner implements Runnable {
                     lines.offer(new JSONObject().put("event", "host_control_pulse").put("time", System.currentTimeMillis())
                             .put("elapsedMs", SystemClock.elapsedRealtime()).put("sequence", pulse.sequence)
                             .put("foreground", pulse.foreground).put("focusFresh", pulse.focusFresh)
+                            .put("notificationShade", pulse.notificationShade)
                             .put("focusAgeMs", pulse.focusAgeMs).put("gapMs", pulse.gapMs)
                             .put("maxGapMs", pulse.maxGapMs).put("writeMs", writeMs).toString());
                 } catch (Exception ignored) { }
@@ -303,9 +334,10 @@ public final class NativeEngineRunner implements Runnable {
                 if (pulses.failure() != null) throw new IllegalStateException("Control transport failed", pulses.failure());
                 if (now >= nextFocus) {
                     long focusStarted = SystemClock.elapsedRealtime();
-                    boolean observedGame = focusReader.read("focus_sample").focus.isGame();
+                    ForegroundFocus observedFocus = focusReader.read("focus_sample").focus;
+                    boolean observedGame = observedFocus.isGame() && screenAllowsActions();
                     if (stopping) break;
-                    pulses.publishFocus(observedGame, focusStarted);
+                    pulses.publishFocus(observedGame, observedFocus.notificationShadeAllowed(), focusStarted);
                     boolean focus = pulses.focusAllowed();
                     nextFocus = SystemClock.elapsedRealtime() + 500;
                     if (previousFocus && !focus) listener.onStatus("Internal paused: game not in foreground");
@@ -471,6 +503,15 @@ public final class NativeEngineRunner implements Runnable {
                     : "Catches paused: no ordinary Poké Balls; spinning and cleanup remain available");
         } else if ("capture_resumed".equals(event)) {
             listener.onStatus("Catches resumed: searching near the player");
+        } else if ("session_limit".equals(event)) {
+            if (!ready || readOnly || !"SESSION".equals(payload.optString("scope"))
+                    || !payload.optBoolean("stopSession") || !payload.optBoolean("closeGameRequested")
+                    || payload.optInt("maxCatches") != config.maxCatches || payload.optInt("maxSpins") != config.maxSpins
+                    || !dev.rootcatch.automation.SessionLimits.reached(payload.optString("kind"),
+                    payload.optInt("caught", -1), payload.optInt("spun", -1), config.maxCatches, config.maxSpins,
+                    config.autoCatch, config.autoSpin)) throw new IllegalStateException("Invalid session limit completion");
+            sessionLimitKind = payload.optString("kind");
+            listener.onStatus(sessionLimitStatus(payload));
         } else if ("ready".equals(event)) {
             if (nativeLocationJNI && !nativeLocationReady)
                 throw new IllegalStateException("Engine did not confirm the JNI location connection");
@@ -516,6 +557,11 @@ public final class NativeEngineRunner implements Runnable {
             if (!cleanupConfirmed || !nativeLocationCleanupConfirmed || !payload.optBoolean("cleanupPassed"))
                 throw new IllegalStateException("Agent ended without confirming reference release");
             statistics(payload);
+            if (!sessionLimitKind.equals(payload.optString("limitStopKind")))
+                throw new IllegalStateException("Session limit stop was not acknowledged");
+            sessionLimitAcknowledged = !sessionLimitKind.isEmpty()
+                    && dev.rootcatch.automation.SessionLimits.reached(sessionLimitKind, caught, spun,
+                    config.maxCatches, config.maxSpins, config.autoCatch, config.autoSpin);
             ending = readOnly && ready && readOnlyStopAt > 0
                     ? "Check passed. Export logs; no actions sent"
                     : payload.optString("reason", "Agent stopped");
@@ -523,7 +569,8 @@ public final class NativeEngineRunner implements Runnable {
         } else if ("stats".equals(event)) {
             statistics(payload);
             if (SystemClock.elapsedRealtime() - lastStatusTime >= 1800) {
-                listener.onStatus("Internal · catches " + caught + " · spins " + spun + " · items " + discarded);
+                String limits = sessionLimitStatus(payload);
+                listener.onStatus(limits.isEmpty() ? "Internal · catches " + caught + " · spins " + spun + " · items " + discarded : limits);
                 lastStatusTime = SystemClock.elapsedRealtime();
             }
         } else if ("bag_full".equals(event) || "no_balls".equals(event)) {
@@ -571,6 +618,10 @@ public final class NativeEngineRunner implements Runnable {
     private static boolean locationCleanup(JSONObject payload) {
         return payload.optBoolean("passed") && payload.optInt("remainingHooks", -1) == 0
                 && payload.optInt("remainingClassRefs", -1) == 0;
+    }
+
+    private static String sessionLimitStatus(JSONObject payload) {
+        return dev.rootcatch.automation.SessionLimits.status(payload.optBoolean("catchLimitReached"), payload.optBoolean("spinLimitReached"));
     }
 
     private static boolean gcCleanup(JSONObject payload) {

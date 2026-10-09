@@ -86,4 +86,18 @@ public final class ControlPulseTest {
         try { channel.start(); try { channel.start(); fail("duplicate worker"); } catch (IllegalStateException expected) { } }
         finally { channel.close(); }
     }
+    @Test public void freshShadeProofSurvivesLostWindowFocusButNotAnAppSwitchOrStaleRead() throws Exception {
+        Harness h = new Harness(); h.channel.publishFocus(true, true, h.now); h.channel.pulseOnce();
+        assertTrue(h.sent.get(0).foreground); assertTrue(h.sent.get(0).notificationShade);
+        h.now += 500; h.channel.publishFocus(false, true, h.now); h.channel.pulseOnce();
+        assertFalse(h.sent.get(1).foreground); assertFalse(h.sent.get(1).notificationShade);
+        h.channel.publishFocus(true, true, h.now); h.now += 2000; h.channel.pulseOnce();
+        assertFalse(h.sent.get(2).foreground); assertFalse(h.sent.get(2).notificationShade);
+    }
+    @Test public void shadeTransitionsAreLoggedEvenWhenTheGameRemainsAllowed() throws Exception {
+        Harness h = new Harness(); h.channel.publishFocus(true, h.now); h.channel.pulseOnce();
+        h.now += 500; h.channel.publishFocus(true, true, h.now); h.channel.pulseOnce();
+        h.now += 500; h.channel.publishFocus(true, h.now); h.channel.pulseOnce();
+        assertEquals(3, h.diagnostics.size()); assertFalse(h.sent.get(2).notificationShade);
+    }
 }

@@ -35,8 +35,8 @@ android {
         applicationId = "dev.rootcatch.ugphonetest"
         minSdk = 29
         targetSdk = 36
-        versionCode = 20
-        versionName = "1.5.0-ugphone"
+        versionCode = 28
+        versionName = "1.6.0-ugphone"
     }
     buildFeatures { buildConfig = true }
     sourceSets.getByName("main") {
@@ -55,6 +55,7 @@ android {
         release {
             isMinifyEnabled = false
             isDebuggable = false
+            isCrunchPngs = false
             if (releaseStore != null) signingConfig = signingConfigs.getByName("publication")
         }
     }

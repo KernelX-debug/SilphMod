@@ -31,6 +31,13 @@ class SessionTransferLedger {
     const request = Object.freeze({sessionId:this.sessionId, requestId:this.sessionId+':'+(++this.sequence), encounterId, sentAt});
     this.requests.set(request.requestId, request); return request;
   }
+  abandonCapture(request) {
+    const issued = this.requests.get(request?.requestId);
+    if (this.closed || !issued || request.sessionId !== this.sessionId
+        || request.encounterId !== issued.encounterId || request.sentAt !== issued.sentAt)
+      throw Error('Invalid abandoned capture request');
+    this.requests.delete(issued.requestId);
+  }
   settleCapture(response) {
     const reject = reason => ({accepted:false,reason});
     if (this.closed || response?.sessionId !== this.sessionId) return reject('foreign_or_closed_session');

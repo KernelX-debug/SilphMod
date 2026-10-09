@@ -33,4 +33,9 @@ The Apache-2.0 license text for the Gradle wrapper is retained in
 tools/licenses/Apache-2.0.txt. Other build tools are resolved by the build.
 
 Pokémon GO and related names are trademarks of their respective owners.
+Item artwork is owned by its respective game rightsholders, including
+The Pokémon Company and Niantic, and is not covered by the project MIT license.
+32 item icons are unmodified resources extracted from the supplied app package.
+The Poffin image is an unmodified game asset archived by PokeMiners:
+https://github.com/PokeMiners/pogo_assets/blob/df0598b84318f68a5bbe5494caa4292c9b49caae/Images/Items/poffin.3.png
 Internal Java names and installed application identity are retained for upgrade compatibility.

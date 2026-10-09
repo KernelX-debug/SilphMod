@@ -113,4 +113,83 @@ public class FocusReaderTest {
         }
         assertThrows(IllegalArgumentException.class, () -> FocusReader.command("windows; am start"));
     }
+    @Test public void shadeContextIsReadFreshAndMissingContextFallsBackWithoutReusingGame() {
+        String shade = "Display: mDisplayId=0\nmCurrentFocus=Window{abc u0 StatusBar}";
+        Fake shell = new Fake(reply(shade, 0), reply(shade + "\nmFocusedApp=ActivityRecord{cc u0 "
+                + EnginePolicy.GAME + "/Main t1}", 0), reply(shade + "\nmFocusedApp=ActivityRecord{dd u0 com.other/Main t2}", 0));
+        FocusReader reader = new FocusReader(shell, () -> false, ignored -> { });
+        assertTrue(reader.read("focus_sample").focus.notificationShadeAllowed());
+        assertFalse(reader.read("focus_sample").focus.isGame());
+        assertEquals(3, shell.commands.size()); assertTrue(shell.commands.get(0).contains("mFocusedApp="));
+    }
+    @Test public void unavailableOrFailedUnderlyingAppProofNeverAuthorizesShade() {
+        String shade = "mCurrentFocus=Window{abc u0 StatusBar}";
+        for (int exit : new int[]{0, 124}) {
+            Fake shell = new Fake(reply(shade, exit), reply(shade, exit));
+            assertFalse(new FocusReader(shell, () -> false, ignored -> { }).read("focus_sample").focus.isGame());
+        }
+    }
+    @Test public void ugphoneNormalFocusIsAcceptedImmediatelyWithoutAnUnnecessaryFallback() {
+        String output = dev.rootcatch.testutil.UgphoneFocusFixture.displays(false);
+        Fake shell = new Fake(reply(output, 0)); List<FocusReader.Sample> logs = new ArrayList<>();
+        FocusReader.Reading result = new FocusReader(shell, () -> false, logs::add).read("early_startup");
+        assertTrue(result.focus.initialAttachAllowed()); assertEquals(1, shell.commands.size());
+        assertEquals(output + "\nRC_FOCUS_SOURCE_EXIT:0", logs.get(0).response);
+        assertEquals("early_startup", logs.get(0).stage);
+    }
+    @Test public void ugphoneFullFallbackAcceptsLockscreenTimeoutPropertyAndDisplayAlias() {
+        Fake shell = new Fake(reply("mTopFocusedDisplayId=0", 0),
+                reply(dev.rootcatch.testutil.UgphoneFocusFixture.full(false), 0));
+        List<FocusReader.Sample> logs = new ArrayList<>();
+        FocusReader.Reading result = new FocusReader(shell, () -> false, logs::add).read("early_startup");
+        assertTrue(result.focus.initialAttachAllowed()); assertEquals("full", result.source);
+        assertEquals(2, shell.commands.size()); assertEquals("current_window", logs.get(1).focus.reason);
+    }
+    @Test public void genuineTimeoutExceptionsAndPermissionErrorsRemainFailures() {
+        for (String error : new String[]{"DUMP TIMEOUT", "Dump timed out", "Error dumping service", "ERROR: permission denied",
+                "java.lang.SecurityException: requires permission", "Permission Denial: requires DUMP", "unknown command", "dumpsys: not found"}) {
+            String value = dev.rootcatch.testutil.UgphoneFocusFixture.full(false) + "\n" + error;
+            Fake shell = new Fake(reply(value, 0), reply(value, 0)); List<FocusReader.Sample> logs = new ArrayList<>();
+            assertFalse(error, new FocusReader(shell, () -> false, logs::add).read("early_startup").focus.isGame());
+            assertEquals(error, "source_reported_error", logs.get(0).focus.reason);
+        }
+    }
+    @Test public void fieldValuesContainingDiagnosticWordsAreNotErrorMessages() {
+        String output = "Display: mDisplayId=0\nmCurrentFocus=Window{abc u0 com.other/TimeoutExceptionActivity}\n"
+                + "mFocusedApp=ActivityRecord{cc u0 com.other/TimeoutExceptionActivity t1}\n"
+                + "mLockScreenTimeout=2147483647 mLockScreenTimerActive=false";
+        Fake shell = new Fake(reply(output, 0));
+        assertEquals(ForegroundFocus.State.OTHER, new FocusReader(shell, () -> false, ignored -> { }).read("early_startup").focus.state);
+    }
+    @Test public void shadeContinuityAndSwitchingToAnotherAppUseFreshSamplesOnly() {
+        Fake shell = new Fake(reply(dev.rootcatch.testutil.UgphoneFocusFixture.displays(false), 0),
+                reply(dev.rootcatch.testutil.UgphoneFocusFixture.displays(true), 0),
+                reply("mCurrentFocus=Window{abc u0 com.other/Main}", 0));
+        FocusReader reader = new FocusReader(shell, () -> false, ignored -> { });
+        assertTrue(reader.read("early_startup").focus.initialAttachAllowed());
+        ForegroundFocus shade = reader.read("focus_sample").focus;
+        assertTrue(shade.notificationShadeAllowed()); assertFalse(shade.initialAttachAllowed());
+        assertFalse(reader.read("focus_sample").focus.isGame()); assertEquals(3, shell.commands.size());
+    }
+    @Test public void recordedUgphoneFocusSamplesAreAcceptedWithoutFallback() {
+        String encoded = System.getenv("SILPH_FOCUS_REPLAY");
+        List<String> values = new ArrayList<>();
+        if (encoded != null && !encoded.isBlank()) {
+            for (String value : encoded.split(":"))
+                values.add(new String(java.util.Base64.getDecoder().decode(value), StandardCharsets.UTF_8));
+        } else {
+            for (boolean shade : new boolean[]{false, true})
+                values.add(dev.rootcatch.testutil.UgphoneFocusFixture.full(shade) + "\nRC_FOCUS_SOURCE_EXIT:0");
+        }
+        assertFalse(values.isEmpty());
+        for (String value : values) {
+            Fake shell = new Fake(new FocusReader.Reply(0, value));
+            List<FocusReader.Sample> logs = new ArrayList<>();
+            ForegroundFocus focus = new FocusReader(shell, () -> false, logs::add).read("early_startup").focus;
+            assertTrue(logs.get(0).focus.reason, focus.isGame());
+            assertEquals(1, shell.commands.size());
+            assertEquals(!focus.notificationShadeAllowed(), focus.initialAttachAllowed());
+        }
+        System.out.println("Ugphone focus replay: " + values.size() + " samples accepted without fallback");
+    }
 }

@@ -9,15 +9,16 @@ final class ControlPulse implements AutoCloseable {
     interface Observer { void sample(Pulse pulse, long writeMs); }
     static final class Pulse {
         final long sequence, sentAt, focusAgeMs, gapMs, maxGapMs;
-        final boolean foreground, focusFresh;
-        Pulse(long sequence, long sentAt, long focusAge, long gap, long maximum, boolean foreground, boolean fresh) {
+        final boolean foreground, focusFresh, notificationShade;
+        Pulse(long sequence, long sentAt, long focusAge, long gap, long maximum, boolean foreground, boolean fresh, boolean shade) {
             this.sequence = sequence; this.sentAt = sentAt; this.focusAgeMs = focusAge;
             this.gapMs = gap; this.maxGapMs = maximum; this.foreground = foreground; this.focusFresh = fresh;
+            this.notificationShade = foreground && shade;
         }
     }
     private static final class Focus {
-        final boolean game; final long observedAt;
-        Focus(boolean game, long observedAt) { this.game = game; this.observedAt = observedAt; }
+        final boolean game, shade; final long observedAt;
+        Focus(boolean game, boolean shade, long observedAt) { this.game = game; this.shade = game && shade; this.observedAt = observedAt; }
     }
     private final LongSupplier clock;
     private final Sender sender;
@@ -28,11 +29,12 @@ final class ControlPulse implements AutoCloseable {
     private volatile Pulse lastPulse;
     private Thread worker;
     private long sequence, lastSentAt, maxGap, nextReport;
-    private boolean previousForeground, previousFresh;
+    private boolean previousForeground, previousFresh, previousShade;
     ControlPulse(LongSupplier clock, Sender sender, Observer observer) {
         this.clock = clock; this.sender = sender; this.observer = observer;
     }
-    void publishFocus(boolean game, long queryStartedAt) { if (!stopped) focus = new Focus(game, queryStartedAt); }
+    void publishFocus(boolean game, long queryStartedAt) { publishFocus(game, false, queryStartedAt); }
+    void publishFocus(boolean game, boolean shade, long queryStartedAt) { if (!stopped) focus = new Focus(game, shade, queryStartedAt); }
     boolean focusAllowed() {
         Focus current = focus; long now = clock.getAsLong();
         return !stopped && current != null && current.game && now >= current.observedAt && now - current.observedAt <= FOCUS_FRESH_MS;
@@ -56,16 +58,17 @@ final class ControlPulse implements AutoCloseable {
         long gap = sequence == 0 || now < lastSentAt ? 0 : now - lastSentAt;
         maxGap = Math.max(maxGap, gap);
         if (sequence == Long.MAX_VALUE) throw new IllegalStateException("Control sequence exhausted");
-        Pulse pulse = new Pulse(++sequence, now, age, gap, maxGap, fresh && current.game, fresh);
+        Pulse pulse = new Pulse(++sequence, now, age, gap, maxGap, fresh && current.game, fresh, fresh && current.shade);
         sender.send(pulse);
         lastSentAt = now; lastPulse = pulse;
         // Diagnostics happen after flushing control; callers must enqueue, not perform file IO here.
-        if (now >= nextReport || gap > FOCUS_FRESH_MS || pulse.foreground != previousForeground || fresh != previousFresh) {
+        if (now >= nextReport || gap > FOCUS_FRESH_MS || pulse.foreground != previousForeground || fresh != previousFresh
+                || pulse.notificationShade != previousShade) {
             try { observer.sample(pulse, Math.max(0, clock.getAsLong() - now)); }
             catch (RuntimeException ignored) { /* Nonessential diagnostics must not stop control. */ }
             nextReport = now + REPORT_MS;
         }
-        previousForeground = pulse.foreground; previousFresh = fresh;
+        previousForeground = pulse.foreground; previousFresh = fresh; previousShade = pulse.notificationShade;
     }
     Exception failure() { return failure; }
     Pulse lastPulse() { return lastPulse; }

@@ -21,25 +21,41 @@ import rewardPolicy from './session-rewards.cjs';
 import discardResponse from './discard-response.cjs';
 // @ts-ignore Controller timing only: independent of native objects and RPC outcomes.
 import controlWatchdog from './control-watchdog.cjs';
+// @ts-ignore
+import mapObservation from './map-observation.cjs';
+// @ts-ignore
+import throwProfile from './throw-profile.cjs';
+// @ts-ignore
+import berryPolicy from './berry-policy.cjs';
+// @ts-ignore
+import uiInterruptions from './ui-interruptions.cjs';
+// @ts-ignore
+import spinObservation from './spin-observation.cjs';
+// @ts-ignore
+import sessionLimits from './session-limits.cjs';
 import {RewardDataError,captureRewardData,spinRewardData} from './response-rewards.js';
 
 type Obj = Il2Cpp.Object;
 type Location = {latitude:number; longitude:number};
 type Config = {autoCatch:boolean; autoSpin:boolean; cleanBag:boolean; readOnly:boolean;
-  maxThrows:number; actionDelayMs:number; discard:Record<string,number>; gamePackage:string;
+  maxThrows:number; actionDelayMs:number; maxCatches:number;maxSpins:number;discard:Record<string,number>; gamePackage:string;
   diagnosticTrace:boolean;encounterOnly:boolean;inspectOwned:boolean;transferEnabled:boolean;
   keepShiny:boolean;keepHundo:boolean;maxTransfers:number;sessionId:string;maxDiscardedItems:number;expectedPlayerId:string;
-  automaticPreflight:boolean;sessionAccounting:boolean;controlRecovery:boolean};
+  automaticPreflight:boolean;sessionAccounting:boolean;controlRecovery:boolean;
+  throwQuality:string;notificationShadeSupport:boolean;useBerries:boolean;berryOrder:string[];skipInterruptions:boolean};
 type CaptureRequest = {sessionId:string;requestId:string;encounterId:string;sentAt:number};
-type Pending = {kind:'encounter'|'capture'|'spin'|'discard'|'transfer'; promise:HeldReference64;
+type Pending = {kind:'encounter'|'berry'|'capture'|'spin'|'discard'|'transfer'; promise:HeldReference64;
   handles:HeldReference64[]; started:number; id:string; item?:number; count?:number; before?:number;keep?:number;
   captureRequest?:CaptureRequest;freshPromise?:boolean;sequence?:number};
 let config:Config, initialized=false, stopped=false, ready=false, lastBeat=0, allowed=false;
 let pending:Pending|null=null, target:HeldReference64|null=null, throws=0;
+let berryProfileReady=false, berryCycle:any=null;
 let nextAction=0, nextSpin=0, nextInventory=0, nextReport=0, lastTick=0;
 let hook:InvocationListener|null=null, inTick=false, container:Obj|null=null;
+let uiAdapter:any=null,unityThreadId=0;
 let containerHandle:HeldReference64|null=null, gc:GcReferences64|null=null, activity:any=null, javaReady=false;
 let lastWindowCheck=0, windowFocused=false;
+let notificationShade=false;
 let inventorySync:{name:string;remaining:number;started:number;keep:number}|null=null;
 let nextBlockedReport=0;
 let startupCleanupPending=false, nextInventoryReport=0, lastInventorySummary='';
@@ -60,6 +76,9 @@ let lastSessionCheck=0, guardMaxMs=0, nextHealth=0, sessionReadyAt=0, lastReques
 let nextCacheSweep=0, nextCaptureNotice=0, operationalState='starting';
 let capturePauseReason='', targetSelectedAt=0, skippedTargets=0, nextScanReport=0;
 let lastMapScan:Record<string,number>={};
+const mapObserver=new mapObservation.MapObserver();
+const spinObserver=new spinObservation.SpinObserver();
+let nextSpinBlockedReport=0,spinBagBlocked=false;
 let storageCache:{at:number;pokemonCount:number;maxPokemon:number;pokemonBagFull:boolean}|null=null;
 let startupGate:any=null,activationRequest:any=null;
 let locationAdapter:any=null;
@@ -69,10 +88,26 @@ const CAPTURE_RANGE_METERS=40, LOST_TARGET_COOLDOWN_MS=5000;
 let nextTraceSummary=0;
 const repeatedStages=new Map<string,number>(), stageLastEmitted=new Map<string,number>();
 const seen=new Map<string,number>(), stops=new Map<string,number>();
-const stats={caught:0,fled:0,spun:0,discarded:0,transferred:0,inspected:0,retained:0,review:0,unknown:0};
+const stats={caught:0,fled:0,spun:0,discarded:0,transferred:0,inspected:0,retained:0,review:0,unknown:0,berriesUsed:0};
+let limitStopKind='';
 const services=new Map<string,HeldReference64>();
 function statistics() {
-  return config?.sessionAccounting?{...stats,...rewards.snapshot(),rewardsAvailable,cleanupPaused,cleanupPauseReason}:stats;
+  const counts={...stats,...sessionLimits.state(config??{},stats)};
+  return config?.sessionAccounting?{...counts,...rewards.snapshot(),rewardsAvailable,cleanupPaused,cleanupPauseReason}:counts;
+}
+function captureAllowed():boolean {return stats.caught<(config.maxCatches??sessionLimits.DEFAULT_CATCHES);}
+function spinAllowed():boolean {return stats.spun<(config.maxSpins??sessionLimits.DEFAULT_SPINS);}
+function reportSessionLimits():boolean {
+  const limits=sessionLimits.state(config,stats);
+  for(const [kind,reached] of [['capture',limits.catchLimitReached],['spin',limits.spinLimitReached]] as const) {
+    if(reached) {
+      limitStopKind=kind;
+      emit('session_limit',{kind,...limits,caught:stats.caught,spun:stats.spun,scope:'SESSION',stopSession:true,closeGameRequested:true});
+      stop(kind==='capture'?'Session capture limit reached':'Session spin limit reached');
+      return true;
+    }
+  }
+  return false;
 }
 function rewardPreflight() {
   if(!config.sessionAccounting)return;
@@ -266,7 +301,8 @@ function reportHealth(now:number,counts:Record<string,number>) {
     totalItems:number(findService('Niantic.Holoholo.IItemBag').method('GetTotalItems',0).invoke()),
     maxItems:number(player.method('get_MaxItems',0).invoke()),
     itemBagFull:player.method<boolean>('get_BagIsFull',0).invoke(),...pokemonStorage(),
-    targetAgeMs:target?now-targetSelectedAt:null,skippedTargets,mapScan:lastMapScan,...statistics()});
+    targetAgeMs:target?now-targetSelectedAt:null,skippedTargets,mapScan:lastMapScan,
+    spinScan:spinObserver.snapshot(now),uiInterruptions:uiAdapter?.snapshot()??null,...statistics()});
 }
 function enumerate(sequence:Obj,limit=256):Obj[] {
   const method=sequence.tryMethod<Obj>('GetEnumerator',0)??sequence.method<Obj>('System.Collections.IEnumerable.GetEnumerator',0);
@@ -286,7 +322,8 @@ function getInventory(fullCatalog=false):{bag:Obj;counts:Record<string,number>} 
   const bag=findService('Niantic.Holoholo.IItemBag'), counts:Record<string,number>={};
   enterStage('inventory:counts');
   const item=klass('holo-protos','Holoholo.Rpc.Item');
-  const required=new Set(['PokeBall','GreatBall','UltraBall',...Object.keys(config.discard)]);
+  const required=new Set(['PokeBall','GreatBall','UltraBall',...Object.keys(config.discard),
+    ...(config.useBerries&&config.autoCatch?config.berryOrder:[])]);
   const entries=fullCatalog?itemCatalog.CATALOG:itemCatalog.CATALOG.filter((entry:any)=>required.has(entry.name));
   const snapshot:Record<string,unknown>[]=[];
   for (const entry of entries) {
@@ -570,11 +607,12 @@ function currentWindow():boolean {
   return windowFocused;
 }
 function active(forceSession=false):boolean {
-  const permitted=policy.leaseValid(Date.now(),lastBeat,allowed,true,stopped) && currentWindow();
+  const shadeAllowed=config.notificationShadeSupport && notificationShade && startupGate?.active===true;
+  const permitted=policy.leaseValid(Date.now(),lastBeat,allowed,true,stopped) && (currentWindow() || shadeAllowed);
   if(permitted)validateSession(forceSession);
   return permitted;
 }
-function releaseTarget() {target?.free();target=null;throws=0;targetSelectedAt=0;}
+function releaseTarget() {target?.free();target=null;throws=0;targetSelectedAt=0;berryCycle=null;}
 function skipTarget(reason:string,distanceMeters:number|null=null) {
   if(!target)return;
   const pokemon=inspectHeld(target,'Objetivo descartado');
@@ -594,6 +632,12 @@ function stop(reason:string) {
   // or reported as undone; polling holds no custom game callbacks.
   let observerError='';
   try {hook?.detach();}catch(error){observerError=String(error);}hook=null;
+  if(uiAdapter) {
+    try {
+      const result=uiAdapter.close();uiAdapter=null;emit('ui_interruption_cleanup',result);
+      if(!result.passed)observerError+='; GUI cleanup: '+result.errors.join('; ');
+    }catch(error){observerError+='; GUI cleanup: '+String(error);}
+  }
   let locationCleanupError='';
   if(locationAdapter){
     try {
@@ -605,14 +649,14 @@ function stop(reason:string) {
   const cleanup=gc?.close()??{passed:true,remaining:0,errors:[]};
   if(observerError){cleanup.passed=false;cleanup.errors.push(observerError);}
   if(locationCleanupError){cleanup.passed=false;cleanup.errors.push(locationCleanupError);}
-  pending=null;target=null;throws=0;services.clear();containerHandle=null;container=null;
+  pending=null;target=null;throws=0;berryCycle=null;services.clear();containerHandle=null;container=null;
   for(const [id,task] of ownedReads)emit('owned_read_pending_at_stop',{ownedId:id,encounterId:task.encounterId,transferAllowed:false});
   ownedReads.clear();
   transferSync=null;transferDispatch=null;transferLedger?.close();
   emit('gc_cleanup',{...cleanup,handleBits:64});
   if(!cleanup.passed)emit('error',{message:'Reference release not confirmed',stage:'gc:cleanup',errors:cleanup.errors});
   // Stop acknowledgement is sent AFTER releasing owned references.
-  emit('stopped',{reason,cleanupPassed:cleanup.passed,...statistics()});
+  emit('stopped',{reason,limitStopKind,cleanupPassed:cleanup.passed,...statistics()});
 }
 function poll() {
   const p=pending;if(!p) return;
@@ -621,12 +665,30 @@ function poll() {
   const failure=observed('promise:error-flags',()=>!!promise.field<boolean>('errorCalled').value || !!promise.tryField<boolean>('statusErrorCalled')?.value);
   if(failure) {
     const reason=String(promise.tryField('errorValue')?.value??promise.tryField('errorStatus')?.value??'');
+    if(p.kind==='berry') {
+      berryCycle?.reject();
+      emit('berry_rejected',{id:p.id,item:p.item,reason,elapsedMs:Date.now()-p.started,
+        retryAllowed:false,captureMayContinue:true,berryCountAdded:0});
+      pending=null;p.handles.forEach(h=>h.free());
+      nextAction=Math.max(nextAction,p.started+config.actionDelayMs);return;
+    }
     // A despawned/unavailable encounter is not a reason to retry the same object
     // forever or stop farming all other nearby objects.
     if(p.kind==='encounter') {
       emit('encounter_rejected',{id:p.id,reason});seen.set(p.id,Date.now()+LOST_TARGET_COOLDOWN_MS);
       if(config.encounterOnly){emit('probe_result',{mode:'ENCOUNTER_ONLY',outcome:'rejected',id:p.id,reason});stop('Encounter probe rejected; no ball thrown');return;}
       pending=null;skipTarget('encounter_rejected');p.handles.forEach(h=>h.free());
+      nextAction=Math.max(nextAction,p.started+config.actionDelayMs);return;
+    }
+    if(p.kind==='capture') {
+      if(config.transferEnabled) {
+        if(!p.captureRequest)throw Error('Catch has no session request');
+        transferLedger.abandonCapture(p.captureRequest);
+      }
+      emit('capture_rejected',{id:p.id,reason,attempts:throws,retryAllowed:false,
+        captureCountAdded:0,transferAllowed:false});
+      pending=null;skipTarget('capture_rejected');seen.set(p.id,Date.now()+300000);
+      p.handles.forEach(h=>h.free());
       nextAction=Math.max(nextAction,p.started+config.actionDelayMs);return;
     }
     throw Error('Response rejected: '+p.kind+' '+reason);
@@ -645,13 +707,29 @@ function poll() {
       if(result.class.fullName!=='Niantic.Holoholo.Map.PokemonEncounterResponse')
         throw Error('Incompatible encounter response class; no ball thrown');
       emit('encounter',{id:p.id});
+      if(berryProfileReady) {
+        const initialItem=number(result.field('InitialActiveItem').value);
+        berryCycle=new berryPolicy.BerryCycle(initialItem);
+        emit('berry_encounter',{id:p.id,activeItem:initialItem,berryRequestsSent:0});
+      }
       if(config.encounterOnly){emit('probe_result',{mode:'ENCOUNTER_ONLY',outcome:'response_received',id:p.id,
         responseClass:result.class.fullName,captureRequestsSent:0});stop('Encounter responded; probe finished without throwing a ball');return;}
+    }
+    else if(p.kind==='berry') {
+      if(result.class.fullName!=='Holoholo.Rpc.UseItemEncounterOutProto')throw Error('Incompatible berry response class');
+      if(!berryCycle)throw Error('Berry response has no encounter state');
+      const status=number(result.field('Status').value), activeItem=number(result.field('ActiveItem').value);
+      const verdict=berryCycle.settle(status,activeItem,p.item);
+      if(verdict.consumed)stats.berriesUsed++;
+      emit('berry_result',{id:p.id,item:p.item,status,activeItem,...verdict,elapsedMs:Date.now()-p.started,
+        confirmed:verdict.consumed,berriesUsed:stats.berriesUsed});
+      if(verdict.action==='skip')skipTarget('berry_encounter_completed');
     }
     else if(p.kind==='capture') {
       if(result.class.fullName!=='Holoholo.Rpc.CatchPokemonOutProto')throw Error('Incompatible catch response class');
       const status=number(result.field('Status').value), decision=policy.catchDecision(status,throws,config.maxThrows);
-      emit('capture',{id:p.id,status,decision});
+      emit('capture',{id:p.id,status,decision,requestedThrowQuality:config.throwQuality});
+      berryCycle?.capture(status);
       let scopeAccepted=false;
       if(config.transferEnabled) {
         if(!p.captureRequest)throw Error('Catch has no session request');
@@ -670,6 +748,7 @@ function poll() {
       if(decision==='error') throw Error('Unsupported catch result: '+status);
     } else if(p.kind==='spin') {
       const status=number(result.field('Result').value);
+      spinObserver.response(Date.now(),p.id,status);
       if(status===1) {stats.spun++;accountReward(p,result,status);}
       stops.set(p.id,Date.now()+(status===1||status===3?300000:30000));
       emit('spin',{id:p.id,status,confirmed:status===1});
@@ -713,10 +792,12 @@ function poll() {
       nextInventory=Date.now()+1500;
     }
     // Minimum spacing is measured from the request, not added again after its reply.
+    if(reportSessionLimits())return;
     nextAction=Math.max(nextAction,p.started+config.actionDelayMs);
   } finally {held.free();p.handles.forEach(h=>h.free());}
 }
-function startCapture():boolean {
+function startCapture(counts:Record<string,number>):boolean {
+  if(!captureAllowed()){releaseTarget();return false;}
   if(config.encounterOnly)throw Error('Encounter probe does not allow TryCapture');
   enterStage('capture:target');
   const pokemon=inspectHeld(target!,'Retained Pokémon');
@@ -726,19 +807,35 @@ function startCapture():boolean {
   const range=distance(playerLocation(),readLocation(pokemon.method<Il2Cpp.ValueType>('get_Location',0).invoke(),'pokemon'));
   if(!Number.isFinite(range)||range>CAPTURE_RANGE_METERS){skipTarget('out_of_range',range);return false;}
   if(pokemonStorage().pokemonBagFull){skipTarget('pokemon_storage_full',range);return false;}
-  const {counts}=getInventory();
   const ball=['PokeBall','GreatBall','UltraBall'].find(name=>counts[name]>0);
   if(!ball){releaseTarget();emit('no_balls');return false;}
+  if(berryProfileReady&&berryCycle) {
+    const name=berryCycle.choose(config.berryOrder,counts);
+    if(name) {
+      if(!active(true))return true;
+      const berryItem=klass('holo-protos','Holoholo.Rpc.Item').field(name).value;
+      const id=pokemon.method<UInt64>('get_EncounterId',0).invoke().toString();
+      enterStage('capture:UseItemForEncounter');
+      berryCycle.request();
+      const promise=object(observed('UseItemForEncounter',()=>findService('Niantic.Holoholo.IItemBag')
+        .method<Obj>('UseItemForEncounter',2).invoke(berryItem,pokemon)),'IItemBag.UseItemForEncounter');
+      emit('berry_requested',{id,name,item:berryPolicy.ITEMS[name],before:counts[name],attempt:throws+1});
+      reserve('berry',promise,id,[pokemon],{item:berryPolicy.ITEMS[name]});return true;
+    }
+  }
   const item=klass('holo-protos','Holoholo.Rpc.Item').field(ball).value;
   const data=klass('holo-game','Niantic.Holoholo.Encounter.PokeballThrow').method<Il2Cpp.ValueType>('MissedThrow',1).invoke(item);
-  data.field('Missed').value=false;data.field('HitBullseye').value=true;
-  data.field('Spinning').value=true;data.field('ReticleSize').value=0.5;
+  const profile=throwProfile.profile(config.throwQuality);
+  data.field('Missed').value=false;data.field('HitBullseye').value=profile.hitBullseye;
+  data.field('Spinning').value=true;data.field('ReticleSize').value=profile.reticleSize;
   const ar=proto('ARPlusEncounterValuesProto');
   // Conservative AR defaults, not fabricated expert/proximity bonuses.
   const id=pokemon.method<UInt64>('get_EncounterId',0).invoke().toString();
   if(!active(true))return true;
   enterStage('capture:TryCapture');
   const captureRequest:CaptureRequest|undefined=config.transferEnabled?transferLedger.issueCapture(id,Date.now()):undefined;
+  emit('throw_requested',{id,quality:config.throwQuality,grade:profile.grade,reticleSize:profile.reticleSize,
+    hitBullseye:profile.hitBullseye,curveball:true,attempt:throws+1});
   if(captureRequest)emit('capture_request',{...captureRequest,method:'MapPokemon.TryCapture'});
   const promise=object(observed('TryCapture',()=>pokemon.method<Obj>('TryCapture',2).invoke(data,ar)),'MapPokemon.TryCapture');
   // Completed-on-return may be legitimate but could be a cached response. Do not
@@ -748,6 +845,7 @@ function startCapture():boolean {
   throws++;reserve('capture',promise,id,[ar,pokemon],{captureRequest,freshPromise});return true;
 }
 function nextPokemon(directory:Obj) {
+  if(!captureAllowed())return;
   if(config.encounterOnly&&encounterAttempted)return;
   const now=Date.now();
   if(seen.size>=4096){operationalState='encounter_cache_capacity';return;}
@@ -755,26 +853,32 @@ function nextPokemon(directory:Obj) {
   const location=playerLocation();
   enterStage('capture:list');
   const scan={scanned:0,destroyed:0,cooldown:0,unsupported:0,outOfRange:0,eligible:0};
+  const reportScan=now>=nextScanReport;
+  const visible:{id:string;distanceMeters:number}[]=[];
   let nearest:HeldReference64|null=null,nearestRange=Infinity,nearestId='';
   try {for(const pokemon of enumerate(object(directory.method<Obj>('get_AllPokemon',0).invoke(),'MapDirectory.AllPokemon'))) {
     scan.scanned++;
     if(pokemon.method<boolean>('get_Destroyed',0).invoke()){scan.destroyed++;continue;}
     const id=pokemon.method<UInt64>('get_EncounterId',0).invoke().toString();
-    if((seen.get(id)??0)>now){scan.cooldown++;continue;}
+    const cooldown=(seen.get(id)??0)>now;
+    if(cooldown&&!reportScan){scan.cooldown++;continue;}
     // Only ordinary world encounters for this version, not raids/grunts/rewards.
     if(!['WildMapPokemon','IncenseMapPokemon','TroyDiskMapPlacePokemon','DailyEncounterMapPokemon','PhotobombingMapPokemon'].includes(pokemon.class.name)){scan.unsupported++;continue;}
     const range=distance(location,readLocation(pokemon.method<Il2Cpp.ValueType>('get_Location',0).invoke(),'pokemon'));
+    visible.push({id,distanceMeters:range});
+    if(cooldown){scan.cooldown++;continue;}
     if(!Number.isFinite(range)||range>CAPTURE_RANGE_METERS){scan.outOfRange++;continue;}
     scan.eligible++;
     if(range<nearestRange){const held=retain(pokemon,'capture:candidate');nearest?.free();nearest=held;nearestRange=range;nearestId=id;}
   }
   lastMapScan=scan;
-  if(now>=nextScanReport){nextScanReport=now+5000;emit('map_scan',{...scan,rangeMeters:CAPTURE_RANGE_METERS,
+  if(reportScan){nextScanReport=now+5000;emit('map_scan',{...scan,...mapObserver.observe(now,location,visible),rangeMeters:CAPTURE_RANGE_METERS,
     closestEligibleMeters:nearest?nearestRange:null,selection:'nearest_current_position',scanLimit:256});}
   if(nearest) {
     if(!active(true))return;
     const pokemon=heldObject(nearest,'Catch candidate');
     target=nearest;nearest=null;throws=0;targetSelectedAt=Date.now();seen.set(nearestId,now+30000);
+    berryCycle=null;
     // Final recheck also covers a candidate removed during the map scan.
     if(pokemon.method<boolean>('get_Destroyed',0).invoke()){skipTarget('destroyed');return;}
     const range=distance(playerLocation(),readLocation(pokemon.method<Il2Cpp.ValueType>('get_Location',0).invoke(),'pokemon'));
@@ -789,25 +893,45 @@ function nextPokemon(directory:Obj) {
   } finally {nearest?.free();}
 }
 function spin(directory:Obj) {
+  if(!spinAllowed())return;
   const now=Date.now();nextSpin=now+3000;
-  if(stops.size>=4096){operationalState='stop_cache_capacity';return;}
+  const full=findService('Niantic.Holoholo.Services.IItemBagService').method<boolean>('get_IsFull',0).invoke();
+  if(full) {
+    spinObserver.observe(now,{blocked:'item_bag_full'},emit);
+    spinBagBlocked=true;nextSpin=now+5000;
+    if(now>=nextSpinBlockedReport){nextSpinBlockedReport=now+30000;
+      emit('spin_paused',{reason:'item_bag_full',retryAfterMs:5000,capturesMayContinue:true,cleanEnabled:config.cleanBag});}
+    return;
+  }
+  if(spinBagBlocked){emit('spin_resumed',{previousReason:'item_bag_full'});spinBagBlocked=false;}
+  if(stops.size>=4096){operationalState='stop_cache_capacity';spinObserver.observe(now,{blocked:'stop_cache_capacity'},emit);return;}
   const location=playerLocation();
   const lat=location.latitude,lng=location.longitude;
   enterStage('spin:list');
-  for (const stopObject of enumerate(object(directory.method<Obj>('get_ActivePokestops',0).invoke(),'MapDirectory.ActivePokestops'))) {
+  const stopObjects=enumerate(object(directory.method<Obj>('get_ActivePokestops',0).invoke(),'MapDirectory.ActivePokestops'));
+  const scan={listed:stopObjects.length,visited:0,cooldown:0,outOfRange:0,invalidDistance:0,
+    scanLimitReached:stopObjects.length===256,complete:false,closestCheckedMeters:null as number|null,
+    earliestCooldownMs:null as number|null,selectedId:'',selectedDistanceMeters:null as number|null};
+  for (const stopObject of stopObjects) {
+    scan.visited++;
     const id=(stopObject.method<Il2Cpp.String>('get_Id',0).invoke()).content!;
-    if((stops.get(id)??0)>now) continue;
+    const until=stops.get(id)??0;
+    if(until>now) {scan.cooldown++;scan.earliestCooldownMs=Math.min(scan.earliestCooldownMs??Infinity,until-now);continue;}
     const stopLocation=readLocation(stopObject.method<Il2Cpp.ValueType>('get_Location',0).invoke(),'pokestop');
     const stopLat=stopLocation.latitude,stopLng=stopLocation.longitude;
     const dist=distance(location,stopLocation);
-    if(!Number.isFinite(dist)||dist>80) continue;
+    if(!Number.isFinite(dist)){scan.invalidDistance++;continue;}
+    scan.closestCheckedMeters=Math.min(scan.closestCheckedMeters??Infinity,dist);
+    if(dist>80){scan.outOfRange++;continue;}
     const request=proto('FortSearchProto');
     field(request,'Id',Il2Cpp.string(id));field(request,'PlayerLatDegrees',lat);field(request,'PlayerLngDegrees',lng);
     field(request,'FortLatDegrees',stopLat);field(request,'FortLngDegrees',stopLng);
     // Optional ad/quest fields are left at game schema defaults.
     if(!active(true))return;
-    reserve('spin',sendRpc(101,request,'FortSearchOutProto'),id,[request]);return;
+    reserve('spin',sendRpc(101,request,'FortSearchOutProto'),id,[request]);
+    scan.selectedId=id;scan.selectedDistanceMeters=dist;spinObserver.observe(now,scan,emit);return;
   }
+  scan.complete=true;spinObserver.observe(now,scan,emit);
 }
 // true: a surplus still needs processing; false: at floors or safety quota reached.
 function discard(counts:Record<string,number>,bagFull:boolean):boolean {
@@ -848,6 +972,27 @@ function checkPromiseLayout(response:Il2Cpp.Class,isRpc=false) {
       throw Error('Incompatible generic promise before sending actions: '+name);
   }
 }
+function berryPreflight(bag:Obj) {
+  if(!config.autoCatch||!config.useBerries||config.encounterOnly)return;
+  const method=bag.tryMethod('UseItemForEncounter',2);
+  if(!method||method.virtualAddress.isNull()||method.parameters.length!==2
+      ||method.parameters[0].type.name!=='Holoholo.Rpc.Item'
+      ||method.parameters[1].type.name!=='Niantic.Holoholo.Map.IMapPokemon') {
+    emit('berry_profile',{available:false,reason:'incompatible_method',captureMayContinue:true,
+      parameterTypes:method?.parameters.map(parameter=>parameter.type.name)??[],
+      returnType:method?.returnType.name??null,methodAddress:method?.virtualAddress.toString()??null});return;
+  }
+  const response=klass('holo-protos','Holoholo.Rpc.UseItemEncounterOutProto');
+  const initial=klass('holo-game','Niantic.Holoholo.Map.PokemonEncounterResponse').field('InitialActiveItem');
+  for(const field of [initial,response.field('Status'),response.field('ActiveItem')])
+    if(field.isStatic||field.offset<Il2Cpp.Object.headerSize)throw Error('Incompatible berry response layout');
+  checkPromiseLayout(response);
+  berryProfileReady=true;
+  emit('berry_profile',{available:true,priority:config.berryOrder,method:'IItemBag.UseItemForEncounter',
+    parameterTypes:method.parameters.map(parameter=>parameter.type.name),returnType:method.returnType.name,
+    initialActiveItemChecked:true,minimumIntervalMs:config.actionDelayMs,extraFixedWaitMs:0,
+    cleanupLimitsPreserved:true,gameRequestsSent:0});
+}
 function preflight(directory:Obj,bag:Obj) {
   bindSession(directory);
   enterStage('preflight:inventory');
@@ -872,8 +1017,9 @@ function preflight(directory:Obj,bag:Obj) {
     if(method.virtualAddress.isNull())throw Error('SendRpc/FortSearch unavailable');
     checkPromiseLayout(klass('holo-protos','Holoholo.Rpc.FortSearchOutProto'),true);
   }
-  if(config.cleanBag) {
+  if(config.autoSpin||config.cleanBag)
     findService('Niantic.Holoholo.Services.IItemBagService').method<boolean>('get_IsFull',0).invoke();
+  if(config.cleanBag) {
     const request=klass('holo-protos','Holoholo.Rpc.RecycleItemProto');
     request.field('Item');request.field('Count');
     const method=findService('Niantic.Holoholo.Rpc.IRpcHandler').method('SendRpc',5)
@@ -883,6 +1029,7 @@ function preflight(directory:Obj,bag:Obj) {
   }
   if(config.transferEnabled)transferPreflight();
   if(config.inspectOwned)inspectOwnedPreflight();
+  berryPreflight(bag);
   rewardPreflight();
   const inventoryCounts=getInventory(true).counts;
   emit('inventory_plan',{counts:inventoryCounts,limits:config.discard,
@@ -901,7 +1048,7 @@ function preflight(directory:Obj,bag:Obj) {
 }
 function tick() {
   const now=Date.now();if(stopped||inTick||now-lastTick<60)return;
-  lastTick=now;inTick=true;
+  lastTick=now;inTick=true;unityThreadId=Process.getCurrentThreadId();
   try {
     validateSession();
     // Sweep independently of action returns: continuous RPC traffic cannot
@@ -977,7 +1124,7 @@ function tick() {
     }
     if(config.inspectOwned&&pollOwnedReads(now))return;
     if(now<nextAction)return;
-    if(target&&startCapture())return;
+    if(target&&startCapture(counts))return;
     // Fair scheduling: bag check and due spin cannot starve behind captures.
     if(config.cleanBag&&!cleanupPaused&&now>=nextInventory){
       nextInventory=now+1000;
@@ -985,9 +1132,9 @@ function tick() {
       const full=findService('Niantic.Holoholo.Services.IItemBagService').method<boolean>('get_IsFull',0).invoke();
       discard(counts,full);if(pending)return;
     }
-    if(config.autoSpin&&now>=nextSpin){spin(directory);if(pending)return;}
+    if(config.autoSpin&&spinAllowed()&&now>=nextSpin){spin(directory);if(pending)return;}
     // Bounded backpressure: never outrun the 64-entry inspection/transfer queue.
-    if(config.autoCatch&&ownedReads.size<16) {
+    if(config.autoCatch&&captureAllowed()&&ownedReads.size<16) {
       const storage=pokemonStorage(),full=storage.pokemonBagFull;
       const balls=['PokeBall','GreatBall','UltraBall'].some(name=>counts[name]>0);
       if(full||!balls){
@@ -1001,16 +1148,16 @@ function tick() {
         nextPokemon(directory);
       }
     }
-    if(!pending) nextAction=now+300;
+    if(!pending) nextAction=now+Math.min(300,config.actionDelayMs);
   } catch(e){fail(e);} finally{inTick=false;}
 }
 function init(_stage:string,parameters:any) {
   if(initialized)throw Error('Session already initialized');initialized=true;
   if(parameters.gamePackage!=='com.nianticlabs.pokemongo'||parameters.version!=='0.431.0')throw Error('Unsupported profile');
   config={gamePackage:parameters.gamePackage,autoCatch:!!parameters.autoCatch,autoSpin:!!parameters.autoSpin,
-    cleanBag:!!parameters.cleanBag,readOnly:!!parameters.readOnly,
-    maxThrows:Math.min(10,Math.max(1,parameters.maxThrows|0)),
-    actionDelayMs:Math.min(3000,Math.max(150,parameters.actionDelayMs|0)),discard:parameters.discard??{},
+    cleanBag:!!parameters.cleanBag,readOnly:!!parameters.readOnly,...sessionLimits.read(parameters),
+    maxThrows:parameters.maxThrows===0?0:Math.min(10,Math.max(1,parameters.maxThrows|0)),
+    actionDelayMs:Math.min(3000,Math.max(100,parameters.actionDelayMs|0)),discard:parameters.discard??{},
     diagnosticTrace:parameters.diagnosticTrace===true,encounterOnly:parameters.encounterOnly===true,
     inspectOwned:parameters.inspectOwned===true||parameters.transferEnabled===true,
     transferEnabled:parameters.transferEnabled===true,keepShiny:parameters.keepShiny!==false,
@@ -1018,7 +1165,14 @@ function init(_stage:string,parameters:any) {
     maxDiscardedItems:parameters.maxDiscardedItems??0,expectedPlayerId:parameters.expectedPlayerId??'',
     automaticPreflight:parameters.automaticPreflight===true,
     sessionAccounting:parameters.edition==='ugphone'&&parameters.sessionAccounting===true,
-    controlRecovery:parameters.edition==='ugphone'&&parameters.automaticPreflight===true&&parameters.controlRecovery===true};
+    controlRecovery:parameters.edition==='ugphone'&&parameters.automaticPreflight===true&&parameters.controlRecovery===true,
+    throwQuality:parameters.throwQuality??'GREAT',
+    useBerries:parameters.useBerries===true,berryOrder:berryPolicy.order(parameters.berryOrder),
+    skipInterruptions:parameters.skipInterruptions===true,
+    notificationShadeSupport:parameters.edition==='ugphone'&&parameters.automaticPreflight===true
+      &&parameters.controlRecovery===true&&parameters.notificationShadeSupport===true};
+  throwProfile.profile(config.throwQuality);
+  if(config.autoCatch&&config.useBerries&&config.berryOrder.length===0)throw Error('Select berries to use');
   if(config.automaticPreflight){
     if(config.readOnly||config.encounterOnly||typeof config.sessionId!=='string'||!/^[A-Za-z0-9_-]{8,96}$/.test(config.sessionId))
       throw Error('Automatic startup requires the full engine and session identity');
@@ -1076,8 +1230,20 @@ async function setup() {
       gc=new GcReferences64(createGcApi64(Il2Cpp.module));
       emit('gc_abi',{handleBits:64,pointerSize:Process.pointerSize,adapter:'rootcatch-gc64',unity:Il2Cpp.unityVersion});
       enterStage('setup:map-observer');
-      hook=Interceptor.attach(map.virtualAddress,{onLeave(result){if(result.toInt32()!==0)tick();
+      hook=Interceptor.attach(map.virtualAddress,{onLeave(result){if(uiAdapter?.busy)return;uiAdapter?.drain();if(result.toInt32()!==0)tick();
         else if(startupGate&&!startupGate.active)startupGate.reset();}});
+      if(config.skipInterruptions)uiAdapter=uiInterruptions.install({
+        resolve:(name:string)=>klass('holo-game',name),object:(address:NativePointer)=>new Il2Cpp.Object(address),
+        retain:(controller:Obj,label:string)=>retain(controller,label),read:(reference:HeldReference64)=>heldObject(reference,'GUI interruption'),
+        number,isPointer:(value:any)=>value instanceof NativePointer,
+        attach:(address:NativePointer,callbacks:InvocationListenerCallbacks)=>Interceptor.attach(address,callbacks),
+        sameThread:()=>unityThreadId!==0&&Process.getCurrentThreadId()===unityThreadId,
+        canObserve:()=>ready&&!stopped&&!config.readOnly&&!config.encounterOnly,
+        canAct:()=>{
+          if(!ready||stopped||config.readOnly||config.encounterOnly)return false;
+          try {return active(true);}catch(error){fail(error);return false;}
+        },now:()=>Date.now(),
+      },emit);
       emit('observing',{message:'Waiting for visible map and game services'});
     },'free');
   }catch(e){fail(e);}
@@ -1100,6 +1266,10 @@ onFridaStdin(line:string){
         lastHeartbeatSequence=command.sequence;lastHeartbeatSentAt=command.sentAtElapsedMs;
       }
       lastBeat=Date.now();allowed=command.foreground===true;
+      const shade=config.notificationShadeSupport && allowed && command.notificationShade===true;
+      if(shade!==notificationShade)emit('notification_shade',{allowed:shade,
+        underlyingGameConfirmedByHost:shade,sequencedControl:config.controlRecovery});
+      notificationShade=shade;
       if(!allowed&&startupGate&&!startupGate.active)startupGate.reset();}
     if(command.type==='activate'&&!stopped){
       if(config.automaticPreflight&&config.readOnly)activationRequest=command;

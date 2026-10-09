@@ -1,0 +1,41 @@
+{
+  "sources": {
+    "suppliedPackage": "Unmodified base64 item resources from the supplied decompilation assets/web.zip",
+    "Poffin": "https://github.com/PokeMiners/pogo_assets/blob/df0598b84318f68a5bbe5494caa4292c9b49caae/Images/Items/poffin.3.png"
+  },
+  "items": [
+    {"id": 1, "file": "item_0001.png", "sha256": "40bd0252ea470471b066992f6ec5c88905c724d8745ffba82a124452cb5412b3"},
+    {"id": 2, "file": "item_0002.png", "sha256": "6d370f8b3e90af9857e1820481b46a6ff922503f609c8efa7cff77bccf5b6093"},
+    {"id": 3, "file": "item_0003.png", "sha256": "68a278b1bf12ec1eb4d51c0c224134151b07e2c8bc82813f32c7c8435ace5743"},
+    {"id": 101, "file": "item_0101.png", "sha256": "a2643e534b4c0cc64d5d68f2c3b293bc6418c3097973d0f4d2e5a45325a96c1a"},
+    {"id": 102, "file": "item_0102.png", "sha256": "b2b0706a6034be038ec52efe2a2b88d4dcdb138c005dd6dd5c4844805fc8d095"},
+    {"id": 103, "file": "item_0103.png", "sha256": "c429c61be184a8ee9d4dad1528d9cc16363670f25497b083537d0b10457e222c"},
+    {"id": 104, "file": "item_0104.png", "sha256": "12fec1eaade9a4e120510c5dd1d33fd2553cc0a1cd3e5fe8981716f6800c6e32"},
+    {"id": 201, "file": "item_0201.png", "sha256": "a6e7823432b4009ce647720d40c89716777039f524a24d636439669abb3b2c38"},
+    {"id": 202, "file": "item_0202.png", "sha256": "135fd2992eae519107ce328b179dc78de06bfdb1570438db83ea015cdb5485ad"},
+    {"id": 301, "file": "item_0301.png", "sha256": "701f4ffa8e9de951c7878ce91182b4372f683fed278bbfb15815f784925ab96d"},
+    {"id": 401, "file": "item_0401.png", "sha256": "5a14b3af64a484e53f926d86e7b2d0a30f77f07c6d664ead31e2907f26c25467"},
+    {"id": 501, "file": "item_0501.webp", "sha256": "2905c0f9a211236e499d11fcd311ddf3250ba1ae34d7c7628d04618fcea80a11"},
+    {"id": 502, "file": "item_0502.webp", "sha256": "62f0a6295136c666f3b991aae521ff67bdb0e09c7aaa3254389144c86bb9b397"},
+    {"id": 503, "file": "item_0503.webp", "sha256": "8fab513287fedce164b8a6de4f2ebf886540241076bfce7e1dc314c28427f483"},
+    {"id": 504, "file": "item_0504.webp", "sha256": "7b4eabf270715ac049d6eefbe6ba1cea8bead8b66124bfdcee723d1d59de8959"},
+    {"id": 505, "file": "item_0505.webp", "sha256": "b35a9b7e51789bb90b5080b05274580b6d2c4e17a97676cabbefb117e195bdd8"},
+    {"id": 506, "file": "item_0506.webp", "sha256": "55c33127ae133e4388239f3bb315f6d07108fde9342ac03135d7d2512a0a3176"},
+    {"id": 701, "file": "item_0701.png", "sha256": "c8c2895ac9d422b1625d0bfd54ad1c4e5ad83f6e8bddbba1c5f9b4b6b898fb0d"},
+    {"id": 703, "file": "item_0703.png", "sha256": "8bad971acd2d07d0c2aafceb0d65561fb783993b0a79bf07bb864eda6e2e0028"},
+    {"id": 705, "file": "item_0705.png", "sha256": "61a5ccb8a811f1ff4afd7bc81abacfc7f262b99b32a43ccc68a7fb8415042c7c"},
+    {"id": 706, "file": "item_0706.png", "sha256": "6c19a5c43b49bf73bffe1cb328eaef87357d32eb09a5ffd2a1a2b3f5fef65478"},
+    {"id": 708, "file": "item_0708.png", "sha256": "a786487a721b90c71ef52f42e413a93bdcee104189a0121d9729f1630a742494"},
+    {"id": 709, "file": "item_0709.png", "sha256": "3d8967f9f4af44f28a72a7d6bb7242f14e2408573d365471283ed8ee9167c36d"},
+    {"id": 1101, "file": "item_1101.png", "sha256": "5032c296fcf268cda1c4f31b463fe5938155ff74a679e414b8fcac7262d3dda7"},
+    {"id": 1102, "file": "item_1102.png", "sha256": "93b373458f78f69bd3cf1be4a340bd961cc7f2a59fda441e429e1817063e85b2"},
+    {"id": 1103, "file": "item_1103.png", "sha256": "3956e814a7fcab93d36a796fe95f14184df71c99ba38efac73329d4ed3a48356"},
+    {"id": 1104, "file": "item_1104.png", "sha256": "df96002ffd4c82458e51d2435fb27176206547b892e1ede663f27d3a0d3d1057"},
+    {"id": 1105, "file": "item_1105.png", "sha256": "4eb403b01bc467f1f098562ef106112452e327fa61623b7abd0c73ea225fdabc"},
+    {"id": 1106, "file": "item_1106.png", "sha256": "885cf04af548e40923a9e766de02e8573d1956e67fc0eacf52fd4a344da4c6ff"},
+    {"id": 1107, "file": "item_1107.png", "sha256": "079f9815097257cf7b6cb9cc6d9155bcd978d66d59e267c60ace7e450e1b51f6"},
+    {"id": 1201, "file": "item_1201.png", "sha256": "417a7b5af96630749ac1a211faf68892f6bf74e617c22d494f2128467f1c1759"},
+    {"id": 1202, "file": "item_1202.png", "sha256": "7bcad702cb6d81c40b3decc829bade5f0606e1fc79e7529c98ba00ad48bc40e9"},
+    {"id": 1404, "file": "item_1404.png", "sha256": "7e7243114027571c185a22ed2b143bd1f32aeed2717c0152b19b9effe0663bac"}
+  ]
+}

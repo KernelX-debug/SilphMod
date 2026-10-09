@@ -51,7 +51,7 @@ public final class ItemCatalog {
         new Entry("TroyDiskMossy", 503, "Mossy Lure Module", "Lure Modules", true, true),
         new Entry("TroyDiskMagnetic", 504, "Magnetic Lure Module", "Lure Modules", true, true),
         new Entry("TroyDiskRainy", 505, "Rainy Lure Module", "Lure Modules", true, true),
-        new Entry("TroyDiskSparkly", 506, "Sparkly Lure (internal name)", "Lure Modules", true, true),
+        new Entry("TroyDiskSparkly", 506, "Golden Lure Module", "Lure Modules", true, true),
         new Entry("MasterBall", 4, "Master Ball", "Protected items", false, false),
         new Entry("PremierBall", 5, "Premier Ball", "Protected items", false, false),
         new Entry("WildBall", 7, "Safari Ball / WildBall", "Protected items", false, false),

@@ -86,3 +86,22 @@ test('foreign response cannot authorize or consume a current-session request',()
   assert.equal(l.settleCapture(response(req,{sessionId:'session_B_123'})).accepted,false);
   assert.equal(l.requests.size,1);assert.equal(l.settleCapture(response(req)).accepted,true);
 });
+
+test('abandoned capture permits a new request but never grants transfer scope',()=>{
+  const l=ledger(),req=l.issueCapture('100',10000);
+  l.abandonCapture(req);
+  assert.equal(l.requests.size,0);assert.equal(l.captures.size,0);
+  assert.equal(l.settleCapture(response(req)).reason,'unissued_or_consumed_request');
+  assert.equal(l.authorize(ordinary.id,'100'),false);
+  const next=l.issueCapture('101',11000);assert.equal(next.encounterId,'101');
+  assert.throws(()=>l.abandonCapture(req));
+  l.close();assert.throws(()=>l.abandonCapture(next));
+});
+
+test('a mismatched abandonment cannot consume a valid capture request',()=>{
+  const l=ledger(),req=l.issueCapture('100',10000);
+  for(const fields of [{sessionId:'session_B_123'},{encounterId:'101'},{sentAt:9999},{requestId:'unknown'}]) {
+    assert.throws(()=>l.abandonCapture({...req,...fields}));assert.equal(l.requests.size,1);
+  }
+  l.abandonCapture(req);assert.equal(l.requests.size,0);
+});

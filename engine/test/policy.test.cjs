@@ -55,3 +55,10 @@ test('foreground, user stop and heartbeat are fail-closed', () => {
   assert.equal(leaseValid(1000,500,true,true,true),false);
   assert.equal(leaseValid(1000,500,false,true,false),false);
 });
+
+test('zero throw cap retries escapes and misses without changing terminal outcomes',()=>{
+  for(const attempt of [1,4,10,1000,1000000])
+    for(const status of [2,4])assert.equal(catchDecision(status,attempt,0),'retry');
+  for(const [status,decision] of [[1,'caught'],[3,'fled'],[0,'rejected'],[5,'replacement'],[99,'error']])
+    assert.equal(catchDecision(status,1000,0),decision);
+});

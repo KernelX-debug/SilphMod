@@ -93,6 +93,35 @@ test('actual capture response produces XP/dust from retained score and no extra 
   assert.equal(h.api.snapshot().stopped,false);assert.equal(h.api.snapshot().xp,1100);assert.equal(h.api.snapshot().stardust,150);
   assert.deepEqual(h.events.find(e=>e.event==='reward_receipt').reward,{xp:1100,stardust:150});
 });
+
+test('the terminal catch credits its real reward before closing both adapters and acknowledging the limit',async()=>{
+  const h=await harness();
+  h.api.seed(new h.ObjectValue('Holoholo.Rpc.CatchPokemonOutProto',{Status:1,Scores:h.score()}),
+    {kind:'capture',autoCatch:true,maxCatches:1,maxSpins:2});h.api.run();
+  const stopped=h.events.find(e=>e.event==='stopped');
+  assert.equal(stopped.limitStopKind,'capture');assert.equal(stopped.caught,1);
+  assert.equal(stopped.xp,1100);assert.equal(stopped.stardust,150);assert.ok(stopped.cleanupPassed);
+  assert.ok(h.events.findIndex(e=>e.event==='reward_receipt')<h.events.findIndex(e=>e.event==='session_limit'));
+  assert.equal(h.locationClosed,1);assert.equal(h.gcClosed,1);
+});
+
+test('selected throw quality never adds XP that the confirmed capture score did not award',async()=>{
+  for(const throwQuality of ['NORMAL','NICE','GREAT','EXCELLENT']) {
+    const h=await harness();
+    h.api.seed(new h.ObjectValue('Holoholo.Rpc.CatchPokemonOutProto',{Status:1,Scores:h.score([100,20],[100])}),
+      {kind:'capture',throwQuality});h.api.run();
+    assert.equal(h.api.snapshot().xp,120);assert.equal(h.api.snapshot().stardust,100);
+    assert.equal(h.api.snapshot().stopped,false);
+  }
+});
+
+test('a failed throw does not credit XP even if a score field is present',async()=>{
+  const h=await harness();
+  h.api.seed(new h.ObjectValue('Holoholo.Rpc.CatchPokemonOutProto',{Status:3,Scores:h.score()}),
+    {kind:'capture',throwQuality:'EXCELLENT'});h.api.run();
+  assert.equal(h.api.snapshot().xp,0);assert.equal(h.api.snapshot().stardust,0);
+  assert.equal(h.api.snapshot().caught,0);assert.equal(h.api.snapshot().fled,1);
+});
 test('actual spin includes XP awarded and reward loot, not physical items',async()=>{
   const h=await harness();h.api.seed(new h.ObjectValue('Holoholo.Rpc.FortSearchOutProto',
     {Result:1,XpAwarded:100,Loot:h.loot([h.item(6,500),h.item(1,4)]),BonusLoot:h.loot([h.item(2,100)])}),{kind:'spin'});h.api.run();

@@ -3,6 +3,37 @@
     <string name="enable_notifications_service">Enable service notifications</string>
     <string name="exporting">Exporting…</string>
     <string name="export_logs">Export logs</string>
+    <string name="throw_quality_selector">Throw quality · %1$s ▾</string>
+    <string name="throw_quality_title">Throw quality</string>
+    <string name="item_limits_title">Item limits</string>
+    <string name="search_items">Search items</string>
+    <string name="no_matching_items">No matching items</string>
+    <string name="keep">Keep</string>
+    <string name="keep_item">Keep %1$s</string>
+    <string name="selected_suffix">, selected</string>
+    <string name="cancel">Cancel</string>
+    <string name="apply">Apply</string>
+    <string name="save">Save</string>
+    <string name="use_berries">Use berries</string>
+    <string name="skip_interruptions">Skip interruptions</string>
+    <string name="session_limits">Session limits</string>
+    <string name="maximum_catches">Maximum catches</string>
+    <string name="maximum_spins">Maximum PokéStop spins</string>
+    <string name="berry_priority_title">Berry priority</string>
+    <string name="berry_priority_caption">Use the first available selected berry.</string>
+    <string name="select_berries">Select berries to use</string>
+    <string name="move_up_symbol">↑</string>
+    <string name="move_down_symbol">↓</string>
+    <string name="move_berry_up">Move %1$s up</string>
+    <string name="move_berry_down">Move %1$s down</string>
+    <plurals name="berry_types">
+        <item quantity="one">Berry priority · %1$d type ▾</item>
+        <item quantity="other">Berry priority · %1$d types ▾</item>
+    </plurals>
+    <plurals name="selected_item_types">
+        <item quantity="one">%1$d item type selected</item>
+        <item quantity="other">%1$d item types selected</item>
+    </plurals>
     <plurals name="item_types">
         <item quantity="one">Item limits · %1$d type</item>
         <item quantity="other">Item limits · %1$d types</item>

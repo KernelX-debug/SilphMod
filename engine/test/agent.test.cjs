@@ -1,6 +1,7 @@
 const test=require('node:test'), assert=require('node:assert/strict');
 const vm=require('node:vm'), esbuild=require('esbuild');
 const {CATALOG}=require('../src/item-catalog.cjs');
+const uiProfile=require('../src/ui-interruptions.cjs');
 // Compile the ACTUAL agent with fake bridges; these tests simulate contracts,
 // not a live Android process and not a real server-side catch.
 const compiled=esbuild.build({entryPoints:['src/agent.ts'],bundle:true,write:false,
@@ -20,7 +21,9 @@ const compiledLocation=esbuild.build({entryPoints:['src/agent.ts'],bundle:true,w
   }}]}).then(result=>result.outputFiles[0].text);
 
 async function harness(overrides={}) {
-  let now=10000, focused=true, detached=false, callback;
+  let uiCallbacks=null,uiDetached=false,uiOriginalOpens=0;
+  const uiActions=[];
+  let now=10000, focused=true, detached=false, callback, controlSequence=0;
   const events=[],calls=[],deferred=[],intervals=[],rpcRequests=[],nativeBindings=[],gcCalls=[];
   const objects=new Map(),nativeHandles=new Map(),exports=new Map();
   let objectAddress=0x7e4000000000n,handleAddress=0x7e4474a02800n;
@@ -44,7 +47,8 @@ async function harness(overrides={}) {
     method(name){if(!(name in this.methods))throw Error('Missing method '+name);const fn=this.methods[name];
       const result={virtualAddress:{isNull:()=>false},returnType:{name:
         ['get_Count','get_MaxPokemon'].includes(name)?'System.Int32':'System.Object'},invoke:(...args)=>fn(...args),
-        overload:()=>result,inflate:()=>result,parameters:[{type:{name:
+        overload:()=>result,inflate:()=>result,parameters:name==='UseItemForEncounter'?
+          [{type:{name:'Holoholo.Rpc.Item'}},{type:{name:overrides.badBerrySignature?'BadType':'Niantic.Holoholo.Map.IMapPokemon'}}]:[{type:{name:
           ['GetPokemon','GetIsBuddy'].includes(name)?'System.UInt64':name==='ReleasePokemon'?'Holoholo.Rpc.PokemonProto':
           name==='GetClass'?'IGameMasterData':'Niantic.Holoholo.Encounter.PokeballThrow'}}]};return result;}
     tryMethod(name){return name in this.methods?this.method(name):null;}
@@ -96,16 +100,21 @@ async function harness(overrides={}) {
     return value;
   }
   const playerLocation=location(overrides.playerLocation);
+  const throwData=[];
+  function recordThrow(data) {
+    assert.ok(data instanceof ValueType);assert.ok(!(data instanceof Obj));
+    throwData.push(Object.fromEntries(['Missed','HitBullseye','Spinning','ReticleSize'].map(name=>[name,data.field(name).value])));
+  }
   let encounterId='111111111111111111';
   const pokemon=new Obj('WildMapPokemon',{}, {get_Destroyed:()=>overrides.pokemonDestroyed??false,get_Location:()=>location(overrides.pokemonLocation),
     get_EncounterId:()=>({toString:()=>encounterId}),SendEncounterRequest(){calls.push('encounter');return promise('encounter');},
-    TryCapture(data){assert.ok(data instanceof ValueType);assert.ok(!(data instanceof Obj));
+    TryCapture(data){recordThrow(data);
       calls.push('capture');return promise('capture');}});
   const mapPokemon=overrides.mapPokemon?overrides.mapPokemon.map(spec=>new Obj(spec.className??'WildMapPokemon',{}, {
     get_Destroyed:()=>spec.destroyed??false,get_Location:()=>location(spec.location),
     get_EncounterId:()=>({toString:()=>spec.id}),
     SendEncounterRequest(){calls.push('encounter');return promise('encounter');},
-    TryCapture(data){assert.ok(data instanceof ValueType);calls.push('capture');return promise('capture');}
+    TryCapture(data){recordThrow(data);calls.push('capture');return promise('capture');}
   })):[pokemon];
   const stopObject=new Obj('Pokestop',{}, {get_Id:()=>({content:'stop-1'}),get_Location:()=>location(overrides.stopLocation)});
   const inventory={PokeBall:10,GreatBall:2,UltraBall:3,Potion:100,SuperPotion:0,
@@ -136,13 +145,20 @@ async function harness(overrides={}) {
   },ReleasePokemon(value){assert.equal(value,owned,'Only captured exact Pokemon may be released');
     calls.push('transfer');return promise('transfer');}});
   let itemCountReads=0;
-  const bag=new Obj('ItemBagImpl',{}, {GetItemCount:(item)=>{itemCountReads++;
-    return inventory[CATALOG.find(entry=>entry.id===item)?.name]??0;},GetTotalItems:()=>overrides.totalItems??115});
+  const berryRequests=[];
+  const bagMethods={GetItemCount:(item)=>{itemCountReads++;
+    return inventory[CATALOG.find(entry=>entry.id===item)?.name]??0;},GetTotalItems:()=>overrides.totalItems??115};
+  if(!overrides.missingBerryMethod)bagMethods.UseItemForEncounter=(item,target)=>{
+    if(overrides.berryCallThrows)throw Error('Simulated native berry failure');
+    berryRequests.push({item,id:target.method('get_EncounterId').invoke().toString()});calls.push('berry');
+    return promise('berry');
+  };
+  const bag=new Obj('ItemBagImpl',{},bagMethods);
   const directory=new Obj('Directory',{}, {get_AllPokemon:()=>sequence(mapPokemon),get_ActivePokestops:()=>sequence([stopObject])});
   const handler=new Obj('RpcHandler',{}, {SendRpc(id,request){rpcRequests.push({id,fields:{...request.fields}});
     calls.push(id===101?'spin':'discard');return promise(id===101?'spin':'discard');}});
   const services={'Niantic.Holoholo.IItemBag':bag,'Niantic.Holoholo.IPokemonBag':pokemonBag,'Niantic.Holoholo.Map.IMapPlaceDirectoryService':directory,
-    'Niantic.Holoholo.Services.IItemBagService':new Obj('BagService',{}, {get_IsFull:()=>overrides.bagFull!==false}),
+    'Niantic.Holoholo.Services.IItemBagService':new Obj('BagService',{}, {get_IsFull:()=>overrides.bagFull===true}),
     'Niantic.Holoholo.Rpc.IRpcHandler':handler,'Niantic.Holoholo.Avatar.IMapAvatar':new Obj('Avatar',{}, {get_Location:()=>playerLocation}),
     'IGameMasterData':new Obj('GameMasterData'),
     'Niantic.Holoholo.Buddy.IBuddyPokemonService':new Obj('BuddyPokemonService',{}, {GetIsBuddy:()=>overrides.buddy??false}),
@@ -153,6 +169,18 @@ async function harness(overrides={}) {
   const container=new Obj('Container',{}, {TryResolve:type=>services[type.name]});
   const context=new Obj('SceneContext',{_container:container});
   function klass(name) {
+    if(name===uiProfile.GUI_CLASS||uiProfile.TARGETS.some(target=>target.name===name)) {
+      const type={fullName:name,hierarchy:()=>[type,{fullName:uiProfile.GUI_CLASS}],tryField(field){
+        return field==='currentState'?{name:field,offset:112,isStatic:false,
+          type:{class:{isEnum:true,baseType:{name:'System.Int32'}}}}:
+          field==='m_CachedPtr'?{type:{name:'System.IntPtr'},isStatic:false}:null;
+      },tryMethod(method){
+        if(overrides.missingGuiProfile)return null;
+        return {isStatic:false,parameterCount:0,virtualAddress:new Pointer(0x999n),
+          returnType:{name:method==='get_IsTopGui'?'System.Boolean':'System.Void'},
+          bind:controller=>controller.method(method)};
+      }};return type;
+    }
     const protoFields={Id:null,PlayerLatDegrees:0,PlayerLngDegrees:0,FortLatDegrees:0,FortLngDegrees:0,Item:0,Count:0};
     return {fullName:name,type:{object:{name}},field:field=>{
       if(name==='Holoholo.Rpc.Item'&&overrides.missingItemFields?.includes(field))throw Error('Missing enum '+field);
@@ -181,7 +209,10 @@ async function harness(overrides={}) {
     Process:{id:123,arch:'arm64',pointerSize:8,getCurrentThreadId:()=>321},rpc:{exports:{}},send:msg=>{
       assert.equal(msg[0],'frida:stdout');events.push(JSON.parse(msg[1]).payload);
     },
-    Interceptor:{attach:(_address,handlers)=>{callback=handlers.onLeave;return {detach(){detached=true;}};}},
+    Interceptor:{attach:(_address,handlers)=>{
+      if(handlers.onEnter){uiCallbacks=handlers;return {detach(){uiDetached=true;}};}
+      callback=handlers.onLeave;return {detach(){detached=true;}};
+    }},
     Date:{now:()=>now},setImmediate:fn=>deferred.push(fn),setInterval:fn=>intervals.push(fn),console};
   vm.runInNewContext(await (overrides.fakeLocationLifecycle?compiledLocation:compiled),sandbox);
   const params={gamePackage:'com.nianticlabs.pokemongo',version:'0.431.0',maxThrows:2,sessionId:'mock_session_A',
@@ -190,15 +221,33 @@ async function harness(overrides={}) {
   assert.equal(sandbox.rpc.exports.init('early',params),undefined,'init must not block CLI stdin');
   deferred.forEach(fn=>fn());await new Promise(resolve=>setImmediate(resolve));
   function command(value){sandbox.rpc.exports.onFridaStdin(JSON.stringify(value));}
-  function tick(ms=300,focus=true){now+=ms;focused=focus;
-    command({type:'heartbeat',foreground:focus});if(callback&&!detached)callback({toInt32:()=>1});}
+  function tick(ms=300,focus=true,hostFocus=focus,shade=false,mapVisible=true){now+=ms;focused=focus;
+    command({type:'heartbeat',foreground:hostFocus,notificationShade:shade,
+      sequence:++controlSequence,sentAtElapsedMs:now});if(callback&&!detached)callback({toInt32:()=>mapVisible?1:0});}
   function complete(fields={}){const next=responses.shift();assert.ok(next,'Expected pending game promise');
     next.p.fields.completedValue=new Obj(next.kind==='transfer'?'Holoholo.Rpc.ReleasePokemonOutProto':
       next.kind==='capture'?(overrides.captureResponseClass??'Holoholo.Rpc.CatchPokemonOutProto'):
       next.kind==='discard'?(overrides.discardResponseClass??'Holoholo.Rpc.RecycleItemOutProto'):
-      next.kind==='encounter'?(overrides.encounterResponseClass??'Niantic.Holoholo.Map.PokemonEncounterResponse'):'Result',fields);
+      next.kind==='berry'?(overrides.berryResponseClass??'Holoholo.Rpc.UseItemEncounterOutProto'):
+      next.kind==='encounter'?(overrides.encounterResponseClass??'Niantic.Holoholo.Map.PokemonEncounterResponse'):'Result',
+      next.kind==='encounter'?{InitialActiveItem:0,...fields}:fields);
     next.p.fields.completeCalled=true;return next.kind;}
-  return {events,calls,tick,complete,inventory,command,responses,rpcRequests,nativeBindings,gcCalls,ownedLookups,
+  function openGui(name,extra={}) {
+    const gui=new Obj(name,{currentState:1,m_CachedPtr:new Pointer(1)},{get_IsTopGui:()=>extra.top!==false});
+    const target=uiProfile.TARGETS.find(value=>value.name===name);
+    if(target)gui.methods[target.action]=()=>{
+      uiActions.push({name,action:target.action,originalOpens:uiOriginalOpens});
+      overrides.onUiAction?.();
+      gui.fields.currentState=target.action==='Click'?2:3;
+    };
+    const invocation={};if(uiCallbacks&&!uiDetached)uiCallbacks.onEnter.call(invocation,[gui.handle]);
+    uiOriginalOpens++;gui.fields.currentState=2;
+    if(uiCallbacks&&!uiDetached)uiCallbacks.onLeave.call(invocation);return gui;
+  }
+  return {events,calls,tick,complete,inventory,command,responses,rpcRequests,nativeBindings,gcCalls,ownedLookups,throwData,berryRequests,
+    openGui,uiActions,get uiDetached(){return uiDetached;},
+    shadeTick(ms=300){tick(ms,false,true,true);},
+    tickWithoutHeartbeat(ms=300){now+=ms;if(callback&&!detached)callback({toInt32:()=>1});},
     get collectionReads(){return collectionReads;},get collectionMoves(){return collectionMoves;},
     get itemCountReads(){return itemCountReads;},
     get ownedId(){return ownedId;},setOwnedId(value){ownedId=value;removed=false;},
@@ -443,7 +492,7 @@ test('missing inventory synchronization is read-only, bounded and reported as un
   assert.deepEqual(h.calls,['encounter','capture']);h.command({type:'stop'});assert.equal(h.remainingHandles,0);
 });
 test('bag full without configured surpluses is diagnosed and does not delete arbitrary items',async()=>{
-  const h=await harness({autoCatch:false,cleanBag:true,discard:{Potion:200}});h.tick();h.tick(6000);
+  const h=await harness({autoCatch:false,cleanBag:true,bagFull:true,discard:{Potion:200}});h.tick();h.tick(6000);
   assert.deepEqual(h.calls,[]);assert.ok(h.events.some(e=>e.event==='bag_cleanup_blocked'));
 });
 test('configured MaxPotion cleanup preserves the floor and reconciles before continuing',async()=>{
@@ -832,11 +881,13 @@ test('zero balls does not repeatedly open encounters or prevent spinning',async(
   h.command({type:'stop'});
 });
 
-test('a full item bag without selectable excess cannot postpone the next spin forever',async()=>{
+test('full item bag pauses futile spins and resumes when capacity becomes available',async()=>{
   const h=await harness({autoCatch:false,autoSpin:true,cleanBag:true,bagFull:true,discard:{Potion:100}});
-  h.tick();assert.deepEqual(h.calls,['spin']);h.complete({Result:4});h.tick();
-  for(let i=0;i<35&&!h.responses.length;i++)h.tick(1000);
-  assert.deepEqual(h.calls,['spin','spin']);assert.ok(!h.calls.includes('discard'));h.command({type:'stop'});
+  h.tick();assert.deepEqual(h.calls,[]);
+  for(let i=0;i<35;i++)h.tick(1000);
+  assert.deepEqual(h.calls,[]);assert.ok(h.events.some(e=>e.event==='spin_paused'&&e.reason==='item_bag_full'));
+  h.setBagFull(false);h.tick(6000);assert.deepEqual(h.calls,['spin']);
+  assert.ok(h.events.some(e=>e.event==='spin_resumed'));h.command({type:'stop'});assert.equal(h.remainingHandles,0);
 });
 
 test('eight simulated hours stay bounded and emit health without any hidden session deadline',async()=>{
@@ -1025,4 +1076,422 @@ test('native JNI cleanup failure cannot acknowledge successful engine cleanup',a
 test('native location is rejected outside the explicit UGPhone automatic profile',async()=>{
   await assert.rejects(harness({nativeLocationJNI:true,edition:'default',automaticPreflight:true}),/restricted/);
   await assert.rejects(harness({nativeLocationJNI:true,edition:'ugphone',readOnly:true}),/restricted/);
+});
+
+test('unlimited throws survive thirty settled retries and only count confirmed success',async()=>{
+  const h=await harness({maxThrows:0,actionDelayMs:100,transferEnabled:true});h.tick();h.complete();h.tick(100);
+  for(let i=0;i<30;i++) {
+    assert.equal(h.responses.filter(r=>!r.p.fields.completeCalled&&!r.p.fields.errorCalled).length,1);
+    h.complete({Status:i%2?2:4});h.tick(100);
+  }
+  assert.equal(h.calls.filter(c=>c==='capture').length,31);assert.ok(!h.detached);
+  assert.ok(!h.events.some(e=>e.event==='target_skipped'&&e.reason==='capture_exhausted'));
+  h.complete({Status:1,CapturedPokemonId:{toString:()=>h.ownedId}});h.tick(100);
+  assert.ok(h.events.some(e=>e.event==='capture_scope_result'&&e.accepted));
+  h.command({type:'stop'});assert.equal(h.events.find(e=>e.event==='stopped').caught,1);assert.equal(h.remainingHandles,0);
+});
+
+test('unlimited retries still skip a target when a 25 km/h route leaves it behind',async()=>{
+  const h=await harness({maxThrows:0,actionDelayMs:100,mapPokemon:[{id:'10'},{id:'11',location:{Latitude:0.00045}}]});
+  h.tick();h.complete();h.tick(100);h.complete({Status:2});h.tick(100);
+  h.setPlayerLocation({Latitude:0.00045});h.tick(7200);
+  assert.deepEqual(h.calls,['encounter','capture','capture']);
+  h.complete({Status:2});h.tick(100);
+  assert.deepEqual(h.calls,['encounter','capture','capture','encounter']);
+  assert.equal(h.events.filter(e=>e.event==='pending').at(-1).id,'11');
+  assert.ok(h.events.some(e=>e.event==='target_skipped'&&e.reason==='out_of_range'));
+  h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+
+test('a despawn after repeated unlimited throws releases the target and selects another',async()=>{
+  const first={id:'10'},second={id:'11',location:{Latitude:0.0001}};
+  const h=await harness({maxThrows:0,mapPokemon:[first,second]});h.tick();h.complete();h.tick();
+  for(let i=0;i<6;i++){h.complete({Status:2});h.tick();}
+  first.destroyed=true;h.complete({Status:2});h.tick();
+  assert.equal(h.calls.filter(c=>c==='capture').length,7);assert.equal(h.calls.at(-1),'encounter');
+  assert.equal(h.events.filter(e=>e.event==='pending').at(-1).id,'11');
+  h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+
+test('settled capture rejection consumes its grant request without stopping the other targets',async()=>{
+  for(const flag of ['errorCalled','statusErrorCalled']) {
+    const h=await harness({maxThrows:0,transferEnabled:true,mapPokemon:[{id:'10'},{id:'11',location:{Latitude:0.0001}}]});
+    h.tick();h.complete();h.tick();const rejected=h.responses.shift();
+    rejected.p.fields[flag]=true;rejected.p.fields.errorValue='Target unavailable';h.tick();
+    assert.deepEqual(h.calls,['encounter','capture','encounter']);assert.ok(!h.detached);
+    assert.ok(h.events.some(e=>e.event==='capture_rejected'&&e.id==='10'&&!e.transferAllowed));
+    h.complete();h.tick();assert.equal(h.calls.at(-1),'capture');
+    h.complete({Status:1,CapturedPokemonId:{toString:()=>h.ownedId}});h.tick();
+    assert.ok(h.events.some(e=>e.event==='capture_scope_result'&&e.encounterId==='11'&&e.accepted));
+    h.command({type:'stop'});assert.equal(h.events.find(e=>e.event==='stopped').caught,1);assert.equal(h.remainingHandles,0);
+  }
+});
+
+test('a full item bag neither sends a spin request nor blocks captures',async()=>{
+  const h=await harness({bagFull:true,autoSpin:true,maxThrows:0});h.tick();
+  assert.deepEqual(h.calls,['encounter']);assert.ok(h.events.some(e=>e.event==='spin_paused'));
+  h.complete();h.tick();assert.deepEqual(h.calls,['encounter','capture']);
+  assert.ok(!h.calls.includes('spin'));h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+
+test('map logs expose all visible distances and measured movement without new map RPCs',async()=>{
+  const h=await harness({mapPokemon:[{id:'10',location:{Latitude:0.001}},{id:'11',location:{Latitude:0.002}}]});h.tick();
+  const first=h.events.find(e=>e.event==='map_scan');assert.equal(first.eligible,0);
+  assert.ok(first.closestVisibleMeters>100);assert.equal(first.visibleBeyond80,2);
+  h.setPlayerLocation({Latitude:0.000312267});h.tick(5000);
+  const second=h.events.filter(e=>e.event==='map_scan').at(-1);
+  assert.ok(Math.abs(second.observedSpeedKmh-25)<0.01);assert.equal(second.mapIdsUnchangedMs,5000);
+  assert.deepEqual(h.calls,[]);assert.deepEqual(h.rpcRequests,[]);h.command({type:'stop'});
+});
+
+test('requested grades change actual throw struct fields, not only the displayed setting',async()=>{
+  for(const [quality,reticle] of [['NORMAL',1.1],['NICE',0.85],['GREAT',0.5],['EXCELLENT',0.05]]) {
+    const h=await harness({throwQuality:quality});h.tick();h.complete();h.tick();
+    assert.deepEqual(h.throwData,[{Missed:false,HitBullseye:true,Spinning:true,ReticleSize:reticle}]);
+    assert.ok(h.events.some(e=>e.event==='throw_requested'&&e.quality===quality&&e.reticleSize===reticle));
+    h.complete({Status:1});h.tick();
+    assert.ok(h.events.some(e=>e.event==='capture'&&e.requestedThrowQuality===quality));
+    h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+  }
+});
+
+test('Excellent retries keep the selected reticle and do not imply successful captures',async()=>{
+  const h=await harness({throwQuality:'EXCELLENT',maxThrows:0});h.tick();h.complete();h.tick();
+  h.complete({Status:2});h.tick();h.complete({Status:3});h.tick();
+  assert.equal(h.throwData.length,2);assert.ok(h.throwData.every(data=>data.ReticleSize===0.05));
+  h.command({type:'stop'});const final=h.events.find(e=>e.event==='stopped');
+  assert.equal(final.caught,0);assert.equal(final.fled,1);assert.equal(h.remainingHandles,0);
+});
+
+test('invalid grade settings are rejected before native initialization or game actions',async()=>{
+  for(const throwQuality of ['INVALID','excellent',4])
+    await assert.rejects(harness({throwQuality}),/Invalid throw quality/);
+});
+
+const shadeParams={edition:'ugphone',controlRecovery:true,notificationShadeSupport:true};
+async function activatedShadeHarness() {
+  const h=await automaticHarness(shadeParams);
+  const proof=h.events.find(e=>e.event==='preflight_validated');assert.ok(proof);
+  h.command({type:'activate',...proof});h.tick();return h;
+}
+
+test('validated shade proof allows captures after automatic preflight despite Java focus loss',async()=>{
+  const h=await activatedShadeHarness();h.shadeTick(500);assert.deepEqual(h.calls,['encounter']);
+  h.complete();h.shadeTick(500);assert.deepEqual(h.calls,['encounter','capture']);
+  h.complete({Status:1});h.shadeTick(500);
+  assert.ok(h.events.some(e=>e.event==='notification_shade'&&e.allowed));
+  h.command({type:'stop'});assert.equal(h.events.find(e=>e.event==='stopped').caught,1);assert.equal(h.remainingHandles,0);
+});
+
+test('shade proof never replaces the visible read-only startup validation',async()=>{
+  const h=await harness({automaticPreflight:true,...shadeParams});
+  for(let i=0;i<30;i++)h.shadeTick(500);
+  assert.deepEqual(h.calls,[]);assert.ok(!h.events.some(e=>e.event==='preflight_validated'));
+  h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+
+test('another app or locked-screen negative proof revokes shade authorization immediately',async()=>{
+  const h=await activatedShadeHarness();h.shadeTick(500);h.complete();
+  h.tick(500,false,false,true);assert.deepEqual(h.calls,['encounter']);
+  assert.ok(h.events.some(e=>e.event==='notification_shade'&&!e.allowed));
+  h.tick(500,false,true,false);assert.deepEqual(h.calls,['encounter']);
+  h.tick(500,true);assert.deepEqual(h.calls,['encounter','capture']);
+  h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+
+test('legacy callers cannot opt into a shade bypass without the sequenced UGPhone startup policy',async()=>{
+  const h=await harness({notificationShadeSupport:true});h.tick();h.complete();h.shadeTick(500);
+  assert.deepEqual(h.calls,['encounter']);h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+
+test('shade authorization expires with controller loss and Stop remains effective in the shade',async()=>{
+  const h=await activatedShadeHarness();h.shadeTick(500);h.complete();
+  h.tickWithoutHeartbeat(3100);assert.deepEqual(h.calls,['encounter']);
+  h.shadeTick(500);assert.deepEqual(h.calls,['encounter','capture']);
+  h.command({type:'stop'});assert.ok(h.detached);assert.equal(h.remainingHandles,0);
+});
+
+const berryParams={useBerries:true,berryOrder:['RazzBerry','PinapBerry','NanabBerry'],inventory:{RazzBerry:3,PinapBerry:4}};
+async function berryHarness(extra={}) {
+  const h=await harness({...berryParams,...extra});h.tick();h.complete();h.tick();return h;
+}
+test('berries use the actual ItemBag facade and wait for its response before the throw',async()=>{
+  const h=await berryHarness();assert.deepEqual(h.calls,['encounter','berry']);
+  assert.deepEqual(h.berryRequests,[{item:701,id:'111111111111111111'}]);
+  assert.equal(h.throwData.length,0);h.tick();assert.equal(h.berryRequests.length,1);
+  h.complete({Status:0,ActiveItem:701});h.tick();assert.deepEqual(h.calls,['encounter','berry','capture']);
+  assert.equal(h.rpcRequests.length,0);
+  const result=h.events.find(e=>e.event==='berry_result');assert.equal(result.elapsedMs,600);assert.equal(result.confirmed,true);
+  h.complete({Status:1});h.tick();h.command({type:'stop'});
+  assert.equal(h.events.find(e=>e.event==='stopped').berriesUsed,1);assert.equal(h.remainingHandles,0);
+});
+test('berry replies add no second interval after a response that already exceeded the request interval',async()=>{
+  const h=await berryHarness({actionDelayMs:100});h.complete({Status:0,ActiveItem:701});h.tick(800);
+  assert.deepEqual(h.calls,['encounter','berry','capture']);h.command({type:'stop'});
+});
+test('stock selection uses only the selected priority and requires no discarded-item setting',async()=>{
+  const h=await berryHarness({berryOrder:['PinapBerry','RazzBerry'],discard:{}});
+  assert.equal(h.berryRequests[0].item,705);h.command({type:'stop'});
+});
+test('empty stock skips berries without an added RPC or delay',async()=>{
+  const h=await berryHarness({inventory:{RazzBerry:0,PinapBerry:0,NanabBerry:0,GoldenRazzBerry:10}});
+  assert.deepEqual(h.calls,['encounter','capture']);h.command({type:'stop'});
+});
+test('an encounter active-item response avoids feeding another berry',async()=>{
+  const h=await harness(berryParams);h.tick();h.complete({InitialActiveItem:708});h.tick();
+  assert.deepEqual(h.calls,['encounter','capture']);h.command({type:'stop'});
+});
+test('a breakout reapplies a berry whereas a missed throw keeps the previous effect',async()=>{
+  const h=await berryHarness({maxThrows:0});h.complete({Status:0,ActiveItem:701});h.tick();
+  h.complete({Status:4});h.tick();assert.deepEqual(h.calls,['encounter','berry','capture','capture']);
+  h.complete({Status:2});h.tick();assert.deepEqual(h.calls,['encounter','berry','capture','capture','berry']);
+  h.complete({Status:0,ActiveItem:701});h.tick();assert.equal(h.calls.at(-1),'capture');
+  h.complete({Status:3});h.tick();h.command({type:'stop'});
+  assert.equal(h.events.find(e=>e.event==='stopped').berriesUsed,2);assert.equal(h.remainingHandles,0);
+});
+test('active-item-exists and no-stock responses still proceed to capture without false consumption',async()=>{
+  for(const [Status,ActiveItem] of [[2,708],[3,0],[4,0],[7,0],[0,0]]) {
+    const h=await berryHarness();h.complete({Status,ActiveItem});h.tick();
+    assert.equal(h.calls.at(-1),'capture');h.command({type:'stop'});
+    assert.equal(h.events.find(e=>e.event==='stopped').berriesUsed,0);assert.equal(h.remainingHandles,0);
+  }
+});
+test('already-completed encounters move on without throwing a ball',async()=>{
+  const h=await berryHarness();h.complete({Status:1,ActiveItem:0});h.tick();
+  assert.deepEqual(h.calls,['encounter','berry']);assert.ok(h.events.some(e=>e.event==='target_skipped'&&e.reason==='berry_encounter_completed'));
+  h.command({type:'stop'});
+});
+test('a rejected berry promise does not break farming or endlessly repeat the berry',async()=>{
+  const h=await berryHarness({maxThrows:0});const rejected=h.responses.shift();rejected.p.fields.errorCalled=true;
+  rejected.p.fields.errorValue='network failure';h.tick();assert.equal(h.calls.at(-1),'capture');
+  h.complete({Status:2});h.tick();assert.deepEqual(h.calls,['encounter','berry','capture','capture']);
+  assert.ok(h.events.some(e=>e.event==='berry_rejected'&&e.retryAllowed===false));
+  assert.ok(!h.events.some(e=>e.event==='error'));h.command({type:'stop'});
+});
+test('a target that left range during the berry reply is not thrown at',async()=>{
+  const h=await berryHarness();h.setPlayerLocation({Latitude:0.001});h.complete({Status:0,ActiveItem:701});h.tick();
+  assert.deepEqual(h.calls,['encounter','berry']);assert.ok(h.events.some(e=>e.event==='target_skipped'&&e.reason==='out_of_range'));
+  h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+test('a destroyed target during the berry reply is skipped without a capture',async()=>{
+  const h=await berryHarness();h.setPokemonDestroyed(true);h.complete({Status:0,ActiveItem:701});h.tick();
+  assert.equal(h.throwData.length,0);h.command({type:'stop'});
+});
+test('focus loss while a berry is pending prevents the subsequent ball until focus returns',async()=>{
+  const h=await berryHarness();h.complete({Status:0,ActiveItem:701});h.tick(500,false);
+  assert.deepEqual(h.calls,['encounter','berry']);h.tick(500,true);assert.equal(h.calls.at(-1),'capture');
+  h.command({type:'stop'});
+});
+test('Stop releases full-width berry promise and target references without sending a ball',async()=>{
+  const h=await berryHarness();h.command({type:'stop'});assert.deepEqual(h.calls,['encounter','berry']);
+  assert.equal(h.remainingHandles,0);assert.ok(h.events.find(e=>e.event==='gc_cleanup').passed);
+});
+test('unavailable or incompatible berry facade disables only feeding before sending a request',async()=>{
+  for(const extra of [{missingBerryMethod:true},{badBerrySignature:true}]) {
+    const h=await berryHarness(extra);assert.deepEqual(h.calls,['encounter','capture']);
+    assert.ok(h.events.some(e=>e.event==='berry_profile'&&e.available===false));
+    assert.ok(!h.events.some(e=>e.event==='error'));h.command({type:'stop'});
+  }
+});
+test('native berry failures and wrong response classes are not hidden as ordinary rejection',async()=>{
+  const failed=await berryHarness({berryCallThrows:true});assert.ok(failed.events.some(e=>e.event==='error'&&/native berry/.test(e.message)));
+  const wrong=await berryHarness({berryResponseClass:'WrongResult'});wrong.complete({Status:0,ActiveItem:701});wrong.tick();
+  assert.ok(wrong.events.some(e=>e.event==='error'&&/berry response class/.test(e.message)));assert.equal(wrong.throwData.length,0);
+});
+test('read-only and encounter-only modes do not send berries',async()=>{
+  const read=await harness({...berryParams,readOnly:true});read.tick();assert.deepEqual(read.calls,[]);read.command({type:'stop'});
+  const probe=await harness({...berryParams,encounterOnly:true});probe.tick();probe.complete();probe.tick();
+  assert.deepEqual(probe.calls,['encounter']);assert.equal(probe.remainingHandles,0);
+});
+test('turning berries off preserves the old capture sequence even with berries in stock',async()=>{
+  const h=await berryHarness({useBerries:false});assert.deepEqual(h.calls,['encounter','capture']);h.command({type:'stop'});
+});
+test('cleanup keeps its configured surplus deletion before using the remaining berries',async()=>{
+  const h=await harness({...berryParams,cleanBag:true,discard:{RazzBerry:2},inventory:{RazzBerry:7}});h.tick();
+  assert.deepEqual(h.calls,['discard']);assert.equal(h.rpcRequests[0].fields.Item,701);assert.equal(h.rpcRequests[0].fields.Count,5);
+  h.inventory.RazzBerry=2;h.complete({Result:1,NewCount:2});h.tick(2000);h.tick(1600);
+  assert.equal(h.calls.at(-1),'encounter');h.complete();h.tick();assert.equal(h.calls.at(-1),'berry');
+  assert.equal(h.events.find(e=>e.event==='berry_requested').before,2);h.command({type:'stop'});
+});
+test('capture shares the fresh frame inventory instead of repeating six native count calls',async()=>{
+  const h=await berryHarness({discard:{}});h.complete({Status:0,ActiveItem:701});
+  const before=h.itemCountReads;h.tick();assert.equal(h.calls.at(-1),'capture');assert.equal(h.itemCountReads-before,6);
+  h.command({type:'stop'});
+});
+test('invalid berry configuration cannot reach a game request',async()=>{
+  for(const berryOrder of [[],['MasterBall'],['RazzBerry','RazzBerry']])
+    await assert.rejects(harness({...berryParams,berryOrder}),/Select berries|Invalid berry/);
+});
+
+test('a spin-only session does not require selected berries or send a berry request',async()=>{
+  const h=await harness({...berryParams,autoCatch:false,autoSpin:true,berryOrder:[]});h.tick();
+  assert.deepEqual(h.calls,['spin']);h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+
+test('automatic berries continue with validated notification-shade focus on the same connection',async()=>{
+  const h=await automaticHarness({...shadeParams,...berryParams});
+  const proof=h.events.find(e=>e.event==='preflight_validated');assert.ok(proof);
+  h.command({type:'activate',...proof});h.tick();h.shadeTick(500);
+  h.complete();h.shadeTick(500);assert.deepEqual(h.calls,['encounter','berry']);
+  h.complete({Status:0,ActiveItem:701});h.shadeTick(500);assert.equal(h.calls.at(-1),'capture');
+  h.complete({Status:1});h.shadeTick(500);h.command({type:'stop'});
+  const stopped=h.events.find(e=>e.event==='stopped');assert.equal(stopped.caught,1);assert.equal(stopped.berriesUsed,1);
+  assert.equal(h.remainingHandles,0);
+});
+
+test('the actual GUI adapter acts after original opening without altering the pending capture',async()=>{
+  const h=await harness({...berryParams,skipInterruptions:true});h.tick();h.complete();h.tick();
+  assert.deepEqual(h.calls,['encounter','berry']);
+  h.openGui(uiProfile.TARGETS[0].name);assert.equal(h.uiActions.length,1);
+  assert.equal(h.uiActions[0].originalOpens,1);assert.equal(h.responses.length,1);
+  assert.deepEqual(h.calls,['encounter','berry']);
+  h.complete({Status:0,ActiveItem:701});h.tick();h.complete({Status:1});h.tick();h.command({type:'stop'});
+  assert.equal(h.events.find(event=>event.event==='stopped').caught,1);assert.equal(h.remainingHandles,0);
+  assert.ok(h.uiDetached);assert.ok(h.events.find(event=>event.event==='ui_interruption_cleanup').passed);
+});
+
+test('a native map callback inside our GUI action cannot reenter the capture engine',async()=>{
+  let h;h=await harness({...berryParams,skipInterruptions:true,onUiAction:()=>h.tick(500)});
+  h.tick();h.complete();h.tick();h.complete({Status:0,ActiveItem:701});
+  h.openGui(uiProfile.TARGETS[0].name);assert.deepEqual(h.calls,['encounter','berry']);
+  h.tick();assert.deepEqual(h.calls,['encounter','berry','capture']);h.command({type:'stop'});
+  assert.equal(h.remainingHandles,0);
+});
+
+test('queued GUI actions can resume while the map reports hidden but cannot run in another app',async()=>{
+  const h=await harness({skipInterruptions:true});h.tick();h.tick(300,false);
+  h.openGui(uiProfile.TARGETS[1].name);assert.equal(h.uiActions.length,0);
+  h.tick(500,false,false,false,false);assert.equal(h.uiActions.length,0);
+  h.tick(500,true,true,false,false);assert.equal(h.uiActions.length,1);
+  assert.deepEqual(h.calls,['encounter']);h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+
+test('read-only startup and disabled UI settings cannot dismiss interruptions',async()=>{
+  for(const options of [{skipInterruptions:true,readOnly:true},{skipInterruptions:false}]) {
+    const h=await harness(options);h.tick();h.openGui(uiProfile.TARGETS[0].name);
+    assert.equal(h.uiActions.length,0);h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+  }
+});
+
+test('unsupported GUI metadata disables only the optional UI layer and leaves captures functional',async()=>{
+  const h=await harness({skipInterruptions:true,missingGuiProfile:true});h.tick();h.complete();h.tick();
+  assert.deepEqual(h.calls,['encounter','capture']);
+  assert.ok(h.events.some(event=>event.event==='ui_interruption_profile'&&!event.available));
+  assert.ok(!h.events.some(event=>event.event==='error'));h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+
+test('Stop with an unfocused queued GUI releases both the UI hook and its full-width handle',async()=>{
+  const h=await harness({skipInterruptions:true});h.tick();h.tick(300,false);
+  h.openGui(uiProfile.TARGETS[0].name);assert.equal(h.uiActions.length,0);
+  h.command({type:'stop'});assert.equal(h.remainingHandles,0);assert.ok(h.uiDetached);
+  const cleanup=h.events.find(event=>event.event==='ui_interruption_cleanup');assert.ok(cleanup.passed);
+  assert.equal(cleanup.remainingReferences,0);h.tick();assert.equal(h.uiActions.length,0);
+});
+
+test('an account change on an interruption cannot authorize a GUI action or preserve old references',async()=>{
+  const h=await harness({skipInterruptions:true});h.tick();h.setPlayerId('mock_player_B');
+  h.openGui(uiProfile.TARGETS[0].name);assert.equal(h.uiActions.length,0);
+  assert.ok(h.events.some(event=>event.event==='session_changed'));
+  assert.ok(h.events.some(event=>event.event==='stopped'));assert.equal(h.remainingHandles,0);assert.ok(h.uiDetached);
+});
+
+test('validated notification-shade authorization applies to GUI events without restarting the connection',async()=>{
+  const h=await automaticHarness({...shadeParams,skipInterruptions:true});
+  const proof=h.events.find(event=>event.event==='preflight_validated');assert.ok(proof);
+  h.command({type:'activate',...proof});h.tick();h.shadeTick(500);
+  h.openGui(uiProfile.TARGETS[0].name);assert.equal(h.uiActions.length,1);
+  h.command({type:'stop'});assert.equal(h.remainingHandles,0);assert.ok(h.uiDetached);
+});
+
+test('spin telemetry distinguishes a stop outside range without sending additional game requests',async()=>{
+  const h=await harness({autoSpin:true,autoCatch:false,stopLocation:{Latitude:0.001}});h.tick();
+  const scan=h.events.find(event=>event.event==='spin_scan').scan;
+  assert.equal(scan.reason,'out_of_range');assert.equal(scan.outOfRange,1);
+  assert.ok(scan.closestCheckedMeters>100);assert.equal(scan.complete,true);
+  assert.deepEqual(h.rpcRequests,[]);h.command({type:'stop'});
+});
+
+test('spin telemetry records real cooldowns without changing the five-minute scheduling rule',async()=>{
+  const h=await harness({autoSpin:true,autoCatch:false});h.tick();h.complete({Result:1});h.tick();h.tick(3000);
+  const scan=h.events.filter(event=>event.event==='spin_scan').at(-1).scan;
+  assert.equal(scan.reason,'cooldown');assert.equal(scan.cooldown,1);assert.ok(scan.earliestCooldownMs>290000);
+  assert.equal(h.rpcRequests.length,1);h.tick(301000);assert.equal(h.rpcRequests.length,2);
+  h.command({type:'stop'});assert.equal(h.remainingHandles,0);
+});
+
+test('spin bag-full telemetry has no stop enumeration or unwanted spin request',async()=>{
+  const h=await harness({autoSpin:true,bagFull:true});h.tick();
+  assert.equal(h.events.find(event=>event.event==='spin_scan').scan.reason,'item_bag_full');
+  assert.deepEqual(h.calls,['encounter']);h.command({type:'stop'});
+});
+
+test('berry use preserves session-only transfer authorization and inventory reconciliation',async()=>{
+  const h=await berryHarness({transferEnabled:true,collectionAccessThrows:true,
+    ownedFields:{individualAttack_:4,individualDefense_:8,individualStamina_:9}});
+  h.complete({Status:0,ActiveItem:701});h.tick();
+  h.complete({Status:1,CapturedPokemonId:{toString:()=>h.ownedId}});h.tick();h.tick(600);
+  assert.equal(h.calls.filter(call=>call==='transfer').length,1);assert.equal(h.collectionReads,0);
+  assert.ok(h.events.some(event=>event.event==='transfer_decision'&&event.transferAllowed&&event.origin==='session'));
+  h.complete({Status:1});h.tick();h.removeOwned();h.tick(600);h.command({type:'stop'});
+  const stopped=h.events.find(e=>e.event==='stopped');assert.equal(stopped.transferred,1);assert.equal(stopped.berriesUsed,1);
+  assert.equal(h.remainingHandles,0);
+});
+
+test('capture quota prevents further encounters, throws and berries after a confirmed catch',async()=>{
+  const h=await harness({maxCatches:1,useBerries:true,inventory:{RazzBerry:10}});
+  h.tick();h.complete();h.tick();assert.equal(h.complete({Status:0,ActiveItem:701}),'berry');h.tick();
+  assert.equal(h.complete({Status:1}),'capture');h.tick();
+  h.setEncounterId('18446744073709551613');for(let i=0;i<20;i++)h.tick(301000);
+  assert.deepEqual(h.calls,['encounter','berry','capture']);
+  assert.equal(h.events.filter(e=>e.event==='session_limit'&&e.kind==='capture').length,1);
+  const stopped=h.events.find(e=>e.event==='stopped');assert.equal(stopped.caught,1);
+  assert.equal(stopped.limitStopKind,'capture');assert.ok(stopped.cleanupPassed);
+  assert.ok(!h.events.some(e=>e.event==='error'));assert.equal(h.remainingHandles,0);
+});
+
+test('spin quota stops the whole engine before any encounter or throw can be sent',async()=>{
+  const h=await harness({maxSpins:1,maxCatches:1,autoSpin:true,skipInterruptions:true});
+  h.tick();assert.equal(h.complete({Result:1}),'spin');h.tick();
+  h.setEncounterId('18446744073709551613');for(let i=0;i<10;i++)h.tick(301000);
+  assert.deepEqual(h.calls,['spin']);
+  assert.equal(h.events.filter(e=>e.event==='session_limit').length,1);
+  const stopped=h.events.find(e=>e.event==='stopped');assert.equal(stopped.limitStopKind,'spin');
+  assert.equal(stopped.spun,1);assert.ok(stopped.cleanupPassed);
+  h.openGui(uiProfile.TARGETS[0].name);assert.equal(h.uiActions.length,0);assert.ok(h.uiDetached);
+  assert.ok(!h.events.some(e=>e.event==='error'));
+  assert.equal(h.remainingHandles,0);
+});
+
+test('capture quota does not dispatch a queued transfer after the terminal response',async()=>{
+  const h=await caughtForTransfer({maxCatches:1,maxSpins:2});
+  h.setEncounterId('18446744073709551613');h.tick(301000);
+  assert.equal(h.calls.filter(c=>c==='capture').length,1);
+  assert.equal(h.calls.filter(c=>c==='transfer').length,0);
+  assert.ok(h.events.some(e=>e.event==='owned_read_pending_at_stop'&&!e.transferAllowed));
+  assert.ok(!h.events.some(e=>e.event==='error'));assert.equal(h.remainingHandles,0);
+  assert.equal(h.events.find(e=>e.event==='stopped').transferred,0);
+});
+
+test('failed throws do not consume the catch quota and existing retry policy is preserved',async()=>{
+  const h=await harness({maxCatches:1,maxThrows:0});h.tick();h.complete();h.tick();
+  h.complete({Status:2});h.tick();assert.equal(h.calls.filter(c=>c==='capture').length,2);
+  assert.ok(!h.events.some(e=>e.event==='session_limit'));h.complete({Status:1});h.tick();h.tick(301000);
+  assert.equal(h.calls.filter(c=>c==='capture').length,2);assert.equal(h.events.find(e=>e.event==='session_limit').caught,1);
+  h.command({type:'stop'});
+});
+
+test('failed spins do not consume the quota and success disables only later spins',async()=>{
+  const h=await harness({maxSpins:1,autoSpin:true,autoCatch:false});h.tick();h.complete({Result:2});h.tick();h.tick(31000);
+  assert.equal(h.calls.length,2);assert.ok(!h.events.some(e=>e.event==='session_limit'));
+  h.complete({Result:1});h.tick();h.tick(301000);assert.equal(h.calls.length,2);
+  assert.equal(h.events.find(e=>e.event==='session_limit').spun,1);h.command({type:'stop'});
+});
+
+test('session quotas do not survive a new engine session or change read-only startup',async()=>{
+  for(let i=0;i<2;i++) {
+    const h=await harness({maxCatches:1});h.tick();h.complete();h.tick();h.complete({Status:1});h.tick();
+    assert.equal(h.events.find(e=>e.event==='session_limit').caught,1);h.command({type:'stop'});
+  }
+  const h=await harness({maxCatches:1,maxSpins:1,readOnly:true,autoSpin:true});h.tick();h.tick(301000);
+  assert.equal(h.calls.length,0);assert.ok(!h.events.some(e=>e.event==='session_limit'));h.command({type:'stop'});
 });

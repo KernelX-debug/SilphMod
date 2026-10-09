@@ -11,6 +11,16 @@ public final class HostCompositionTest {
     private String read(String path) throws Exception {
         return new String(Files.readAllBytes(Path.of(System.getProperty("user.dir"), path)), StandardCharsets.UTF_8);
     }
+    @Test public void throwLimitIsNotEditableAndLegacyLimitCannotRestrictTheEngine() throws Exception {
+        String ui = read("src/main/java/dev/rootcatch/ugphone/MainActivity.java");
+        String config = read("src/main/java/dev/rootcatch/automation/AutomationConfig.java");
+        assertFalse(ui.contains("Throws per encounter")); assertFalse(ui.contains("throwsCount"));
+        assertTrue(ui.contains(".putInt(\"max_throws\", 0)"));
+        assertFalse(config.contains("p.getInt(\"max_throws\""));
+        assertTrue(config.contains("clamp(p.getInt(\"delay\", 150), 100, 3000),"));
+        assertTrue(config.contains("SessionLimits.DEFAULT_SPINS),\n                0,"));
+        assertTrue(ui.contains("read(delay, 100, 3000, \"Interval\")"));
+    }
     @Test public void publishedUiOmitsSessionQuotaInputsAndMigratesOldPreferencesToZero() throws Exception {
         String ui = read("src/main/java/dev/rootcatch/ugphone/MainActivity.java");
         assertFalse(ui.contains("maxTransfers")); assertFalse(ui.contains("maxDiscard"));
@@ -75,7 +85,7 @@ public final class HostCompositionTest {
     @Test public void controlWorkerDoesNotDependOnFocusQueriesOrLogFileWrites() throws Exception {
         String runner = read("src/main/java/dev/rootcatch/nativeengine/NativeEngineRunner.java");
         assertTrue(runner.contains("ControlPulse pulses = new ControlPulse"));
-        assertTrue(runner.contains("pulses.publishFocus(observedGame, focusStarted)"));
+        assertTrue(runner.contains("pulses.publishFocus(observedGame, observedFocus.notificationShadeAllowed(), focusStarted)"));
         assertTrue(runner.contains("pulses.failure() != null"));
         assertTrue(runner.contains("\"host_control_pulse\""));
         assertTrue(runner.contains(".put(\"controlRecovery\", true)"));
@@ -117,5 +127,90 @@ public final class HostCompositionTest {
         assertTrue(exporter.contains("Download/SilphMod"));
         assertTrue(exporter.contains("\"rawLogs\", true")); assertTrue(exporter.contains("bundle-index.json"));
         assertTrue(exporter.contains("\"sha256\", digest"));
+    }
+    @Test public void shadeExceptionRequiresUnderlyingGameFreshControlAndAnUnlockedInteractiveScreen() throws Exception {
+        String runner = read("src/main/java/dev/rootcatch/nativeengine/NativeEngineRunner.java");
+        assertTrue(runner.contains("observedFocus.isGame() && screenAllowsActions()"));
+        assertTrue(runner.contains("power.isInteractive() && !keyguard.isKeyguardLocked()"));
+        assertTrue(runner.contains(".put(\"notificationShade\", pulse.notificationShade)"));
+        assertTrue(runner.contains(".put(\"notificationShadeSupport\", true)"));
+    }
+    @Test public void throwChoiceIsPersistedPassedToTheEngineAndIncludedInSessionLogs() throws Exception {
+        String ui = read("src/main/java/dev/rootcatch/ugphone/MainActivity.java");
+        String config = read("src/main/java/dev/rootcatch/automation/AutomationConfig.java");
+        String runner = read("src/main/java/dev/rootcatch/nativeengine/NativeEngineRunner.java");
+        String session = read("src/main/java/dev/rootcatch/ugphone/FarmSession.java");
+        assertTrue(ui.contains("R.string.throw_quality_selector")); assertTrue(ui.contains("settings.add(throwSelector)"));
+        assertTrue(ui.contains(".putString(\"throw_quality\", throwQuality.name())"));
+        assertTrue(config.contains("ThrowQuality.fromSavedValue(p.getString(\"throw_quality\", \"GREAT\")).name()"));
+        assertTrue(runner.contains(".put(\"throwQuality\", config.throwQuality)"));
+        assertTrue(session.contains(".put(\"throwQuality\", config.throwQuality)"));
+    }
+    @Test public void initialFocusQueryIsLoggedWithActualSourceResponseIdentityAndWaitTime() throws Exception {
+        String session = read("src/main/java/dev/rootcatch/ugphone/FarmSession.java");
+        String runner = read("src/main/java/dev/rootcatch/nativeengine/NativeEngineRunner.java");
+        assertTrue(session.contains("NativeEngineRunner.gameFocused(root, () -> stopping, sample ->"));
+        assertTrue(session.contains("record(\"startup_focus\", new JSONObject(sample).put(\"pid\", candidate).put(\"startTicks\", ticks)"));
+        assertTrue(session.contains(".put(\"startupWaitMs\", SystemClock.elapsedRealtime() - waitingSince)"));
+        assertTrue(runner.contains(".read(\"early_startup\").focus.initialAttachAllowed()"));
+        assertTrue(runner.contains(".put(\"raw\", sample.response).put(\"command\", sample.command)"));
+        assertTrue(runner.contains("focusReader.read(\"before_attach\").focus.initialAttachAllowed()"));
+    }
+    @Test public void berryChoicesArePersistedPassedToTheEngineAndLoggedWithoutChangingDiscardLimits() throws Exception {
+        String ui = read("src/main/java/dev/rootcatch/ugphone/MainActivity.java");
+        String config = read("src/main/java/dev/rootcatch/automation/AutomationConfig.java");
+        String runner = read("src/main/java/dev/rootcatch/nativeengine/NativeEngineRunner.java");
+        String session = read("src/main/java/dev/rootcatch/ugphone/FarmSession.java");
+        assertTrue(ui.contains("settings.add(berrySelector)"));
+        assertTrue(ui.contains(".putBoolean(\"use_berries\", useBerries.isChecked()).putString(\"berry_order\", berryOrder)"));
+        assertTrue(ui.contains("new SettingsDialogs(this).berriesDialog(berryOrder"));
+        assertTrue(config.contains("p.getBoolean(\"use_berries\", true)"));
+        for (String host : new String[]{runner, session}) {
+            assertTrue(host.contains(".put(\"useBerries\", config.useBerries).put(\"berryOrder\", new org.json.JSONArray(config.berryOrder))"));
+        }
+        assertTrue(runner.contains(".put(\"discard\", new JSONObject(limits))"));
+        assertFalse(runner.contains("limits.remove("));
+    }
+    @Test public void sessionLimitsAreEditablePersistedPassedToEngineAndLogged() throws Exception {
+        String ui = read("src/main/java/dev/rootcatch/ugphone/MainActivity.java");
+        String config = read("src/main/java/dev/rootcatch/automation/AutomationConfig.java");
+        assertTrue(ui.contains("section(advancedOptions, getString(R.string.session_limits))"));
+        assertTrue(ui.contains(".putInt(\"max_catches\", catchLimit).putInt(\"max_spins\", spinLimit)"));
+        assertTrue(config.contains("SessionLimits.DEFAULT_CATCHES"));
+        assertTrue(config.contains("SessionLimits.DEFAULT_SPINS"));
+        for (String path : new String[]{"nativeengine/NativeEngineRunner.java", "ugphone/FarmSession.java"})
+            assertTrue(read("src/main/java/dev/rootcatch/" + path).contains(".put(\"maxCatches\", config.maxCatches).put(\"maxSpins\", config.maxSpins)"));
+    }
+    @Test public void limitClosureWaitsForEngineCompletionAndStopsIdentityMonitoringBeforeClosingTheGame() throws Exception {
+        String session = read("src/main/java/dev/rootcatch/ugphone/FarmSession.java");
+        int completed = session.indexOf("runner.run();");
+        int limit = session.indexOf("if (!runner.sessionLimitReached().isEmpty())", completed);
+        int monitor = session.indexOf("monitorRoot.close();", limit);
+        int close = session.indexOf("limitStop.close(pid, startTicks)", limit);
+        int collect = session.indexOf("collector.finish();", close);
+        assertTrue(completed >= 0 && limit > completed && monitor > limit && close > monitor && collect > close);
+        String runner = read("src/main/java/dev/rootcatch/nativeengine/NativeEngineRunner.java");
+        assertTrue(runner.contains("agentStopped && sessionLimitAcknowledged && cleanupConfirmed && nativeLocationCleanupConfirmed && !requestedStop"));
+        assertTrue(runner.contains("sessionLimitKind.equals(payload.optString(\"limitStopKind\"))"));
+        assertTrue(session.contains("record(\"session_limit_completed\""));
+    }
+    @Test public void interruptionChoiceIsPersistedPassedToTheEngineAndIncludedInSessionLogs() throws Exception {
+        String ui = read("src/main/java/dev/rootcatch/ugphone/MainActivity.java");
+        String config = read("src/main/java/dev/rootcatch/automation/AutomationConfig.java");
+        assertTrue(ui.contains("R.string.skip_interruptions"));
+        assertTrue(ui.contains(".putBoolean(\"skip_interruptions\", skipInterruptions.isChecked())"));
+        assertTrue(config.contains("p.getBoolean(\"skip_interruptions\", true)"));
+        for (String path : new String[]{"nativeengine/NativeEngineRunner.java", "ugphone/FarmSession.java"})
+            assertTrue(read("src/main/java/dev/rootcatch/" + path).contains(".put(\"skipInterruptions\", config.skipInterruptions)"));
+    }
+    @Test public void closureDiagnosticsDoNotReplaceTheConfirmedSessionLimitReason() throws Exception {
+        String session = read("src/main/java/dev/rootcatch/ugphone/FarmSession.java");
+        assertTrue(session.contains("limitReason = dev.rootcatch.automation.SessionLimits.reason(runner.sessionLimitReached())"));
+        assertTrue(session.contains(".put(\"closureStatus\", closure.status).put(\"closureError\", closure.error)"));
+        assertTrue(session.contains("limitReason.isEmpty() ? \"Engine: \" + error.getMessage() : limitReason"));
+        assertTrue(session.contains("record(\"session_limit_finalize_error\""));
+        assertFalse(session.contains("result += \" · game closure unconfirmed\""));
+        String close = read("src/main/java/dev/rootcatch/ugphone/SessionLimitStop.java");
+        assertFalse(close.contains("GameStartCheck.PROC"));
     }
 }

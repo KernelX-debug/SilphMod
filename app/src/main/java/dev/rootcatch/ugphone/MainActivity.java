@@ -2,7 +2,6 @@ package dev.rootcatch.ugphone;
 
 import android.Manifest;
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
@@ -30,27 +29,28 @@ import android.widget.TextView;
 import android.widget.Toast;
 import dev.rootcatch.R;
 import dev.rootcatch.automation.AutomationConfig;
+import dev.rootcatch.automation.BerryOptions;
+import dev.rootcatch.automation.SessionLimits;
+import dev.rootcatch.automation.ThrowQuality;
 import dev.rootcatch.nativeengine.EnginePolicy;
-import dev.rootcatch.nativeengine.ItemCatalog;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
-/** Original native UI; settings are frozen while the worker closes or exports. */
 public final class MainActivity extends Activity {
     private static final int BACKGROUND = Color.rgb(16, 21, 30), PANEL = Color.rgb(26, 35, 48),
             TEXT = Color.rgb(242, 247, 251), MUTED = Color.rgb(153, 170, 189), ACCENT = Color.rgb(97, 233, 182);
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<View> settings = new ArrayList<>();
     private SharedPreferences prefs;
-    private Switch capture, spin, transfer, clean;
+    private Switch capture, spin, transfer, clean, useBerries, skipInterruptions;
     private CheckBox keepShiny, keepHundo, resolveError12;
-    private EditText delay, throwsCount;
-    private LinearLayout transferOptions, cleanOptions, advancedOptions;
+    private EditText delay, maxCatches, maxSpins;
+    private LinearLayout transferOptions, cleanOptions, advancedOptions, berryOptions;
     private TextView status, elapsed, caught, spun, transferred, discarded, xp, stardust;
-    private Button start, export, items, advanced;
+    private Button start, export, items, advanced, throwSelector, berrySelector;
+    private ThrowQuality throwQuality;
     private String limits;
+    private String berryOrder;
     private boolean starting;
     private boolean visible;
     private long startingAt;
@@ -61,7 +61,9 @@ public final class MainActivity extends Activity {
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(AutomationConfig.PREFS, MODE_PRIVATE);
+        throwQuality = ThrowQuality.fromSavedValue(prefs.getString("throw_quality", "GREAT"));
         limits = prefs.getString("discard_limits", EnginePolicy.DEFAULT_LIMITS);
+        berryOrder = BerryOptions.fromSavedValue(prefs.getString("berry_order", BerryOptions.DEFAULT_ORDER));
         FarmService.restoreLast(this);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(BACKGROUND);
         LinearLayout page = column(); page.setPadding(dp(22), dp(20), dp(22), dp(26)); scroll.addView(page);
@@ -93,7 +95,32 @@ public final class MainActivity extends Activity {
         resolveError12 = check(features, "Fix error 12", prefs.getBoolean("resolve_error_12", false));
         resolveError12.setTextSize(16);
         capture = toggle(features, "Catches", prefs.getBoolean("catch", true));
+        throwSelector = button(getString(R.string.throw_quality_selector, throwQuality.label), false);
+        settings.add(throwSelector); features.addView(throwSelector);
+        throwSelector.setOnClickListener(view -> {
+            if (FarmService.isBusy() || starting) return;
+            new SettingsDialogs(this).throwsDialog(throwQuality, selected -> {
+                throwQuality = selected;
+                prefs.edit().putString("throw_quality", selected.name()).apply();
+                throwSelector.setText(getString(R.string.throw_quality_selector, selected.label));
+            });
+        });
+        useBerries = toggle(features, getString(R.string.use_berries), prefs.getBoolean("use_berries", true));
+        berryOptions = column(); features.addView(berryOptions);
+        berrySelector = button("", false); settings.add(berrySelector); berryOptions.addView(berrySelector);
+        updateBerryLabel();
+        berrySelector.setOnClickListener(view -> {
+            if (FarmService.isBusy() || starting) return;
+            new SettingsDialogs(this).berriesDialog(berryOrder, selected -> {
+                berryOrder = selected;
+                prefs.edit().putString("berry_order", selected).apply();
+                updateBerryLabel();
+            });
+        });
+        useBerries.setOnCheckedChangeListener((view, checked) -> berryOptions.setVisibility(checked ? View.VISIBLE : View.GONE));
+        berryOptions.setVisibility(useBerries.isChecked() ? View.VISIBLE : View.GONE);
         spin = toggle(features, "Spin PokéStops", prefs.getBoolean("spin", true));
+        skipInterruptions = toggle(features, getString(R.string.skip_interruptions), prefs.getBoolean("skip_interruptions", true));
         transfer = toggle(features, "Transfer new catches", prefs.getBoolean("transfer", false));
         transferOptions = column(); transferOptions.setPadding(dp(8), 0, dp(8), dp(12)); features.addView(transferOptions);
         keepShiny = check(transferOptions, "Keep shiny", prefs.getBoolean("keep_shiny", true));
@@ -109,8 +136,12 @@ public final class MainActivity extends Activity {
         space(page, 14);
         advanced = button("Engine settings ▾", false); page.addView(advanced); settings.add(advanced);
         advancedOptions = card(); advancedOptions.setVisibility(View.GONE); page.addView(advancedOptions);
-        delay = numeric(advancedOptions, "Action interval · ms", prefs.getInt("delay", 300));
-        throwsCount = numeric(advancedOptions, "Throws per encounter", prefs.getInt("max_throws", 4));
+        delay = numeric(advancedOptions, "Action interval · ms", prefs.getInt("delay", 150));
+        section(advancedOptions, getString(R.string.session_limits));
+        maxCatches = numeric(advancedOptions, getString(R.string.maximum_catches),
+                SessionLimits.savedLimit(prefs.getInt("max_catches", SessionLimits.DEFAULT_CATCHES), SessionLimits.DEFAULT_CATCHES));
+        maxSpins = numeric(advancedOptions, getString(R.string.maximum_spins),
+                SessionLimits.savedLimit(prefs.getInt("max_spins", SessionLimits.DEFAULT_SPINS), SessionLimits.DEFAULT_SPINS));
         advanced.setOnClickListener(view -> {
             boolean visible = advancedOptions.getVisibility() != View.VISIBLE;
             advancedOptions.setVisibility(visible ? View.VISIBLE : View.GONE);
@@ -159,20 +190,26 @@ public final class MainActivity extends Activity {
                     .putExtra("keepHundo", keepHundo.isChecked());
             starting = true; startingAt = android.os.SystemClock.elapsedRealtime(); renderState();
             startForegroundService(service);
-            // With treatment selected the visible Activity waits for prepared
-            // resources and an absent game, then launches exactly once.
             if (!resolveError12.isChecked()) moveTaskToBack(true);
         } catch (Exception error) { starting = false; Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show(); }
     }
     private void saveSettings() {
         FarmPolicy.validate(capture.isChecked(), spin.isChecked(), clean.isChecked(), transfer.isChecked(), limits);
-        int actionDelay = read(delay, 250, 3000, "Interval"), throwCap = read(throwsCount, 1, 10, "Throws");
+        if (capture.isChecked() && useBerries.isChecked() && BerryOptions.parse(berryOrder).isEmpty())
+            throw new IllegalArgumentException(getString(R.string.select_berries));
+        int actionDelay = read(delay, 100, 3000, "Interval");
+        int catchLimit = read(maxCatches, 1, Integer.MAX_VALUE, getString(R.string.maximum_catches));
+        int spinLimit = read(maxSpins, 1, Integer.MAX_VALUE, getString(R.string.maximum_spins));
         prefs.edit().putString("package", EnginePolicy.GAME).putBoolean("internal_engine", true)
+                .putString("throw_quality", throwQuality.name())
+                .putBoolean("use_berries", useBerries.isChecked()).putString("berry_order", berryOrder)
+                .putBoolean("skip_interruptions", skipInterruptions.isChecked())
+                .putInt("max_catches", catchLimit).putInt("max_spins", spinLimit)
                 .putBoolean("catch", capture.isChecked()).putBoolean("spin", spin.isChecked()).putBoolean("clean", clean.isChecked())
                 .putBoolean("resolve_error_12", resolveError12.isChecked())
                 .putBoolean("transfer", transfer.isChecked()).putBoolean("keep_shiny", keepShiny.isChecked()).putBoolean("keep_hundo", keepHundo.isChecked())
                 .putInt("max_transfers", 0).putString("discard_limits", EnginePolicy.limitsKey(limits))
-                .putInt("max_discarded_items", 0).putInt("delay", actionDelay).putInt("max_throws", throwCap).apply();
+                .putInt("max_discarded_items", 0).putInt("delay", actionDelay).putInt("max_throws", 0).apply();
     }
     private void saveDraft() {
         if (!FarmService.isBusy() && !starting && prefs != null && capture != null) {
@@ -225,43 +262,20 @@ public final class MainActivity extends Activity {
         }, "rootcatch-export").start();
     }
     private void itemDialog() {
-        if (FarmService.isBusy()) return;
-        Map<String, Integer> current = EnginePolicy.parseLimits(limits);
-        Map<ItemCatalog.Entry, CheckBox> chosen = new LinkedHashMap<>();
-        Map<ItemCatalog.Entry, EditText> floors = new LinkedHashMap<>();
-        LinearLayout body = column(); body.setPadding(dp(12), 0, dp(12), dp(12)); String lastGroup = "";
-        for (ItemCatalog.Entry entry : ItemCatalog.ENTRIES) {
-            if (!entry.discardable()) continue;
-            if (!lastGroup.equals(entry.group())) { section(body, entry.group()); lastGroup = entry.group(); }
-            LinearLayout line = row(); CheckBox select = check(line, entry.label(), current.containsKey(entry.name()));
-            settings.remove(select);
-            LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, -2, 1); select.setLayoutParams(nameParams);
-            EditText keep = new EditText(this); keep.setSingleLine(true); keep.setTextColor(TEXT); keep.setTextSize(16);
-            keep.setInputType(InputType.TYPE_CLASS_NUMBER); keep.setText(String.valueOf(current.getOrDefault(entry.name(), 0)));
-            keep.setContentDescription("Keep " + entry.label()); line.addView(keep, new LinearLayout.LayoutParams(dp(75), dp(54)));
-            keep.setEnabled(select.isChecked()); select.setOnCheckedChangeListener((button, selected) -> keep.setEnabled(selected));
-            body.addView(line); chosen.put(entry, select); floors.put(entry, keep);
-        }
-        ScrollView scroll = new ScrollView(this); scroll.addView(body);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Items · amount to keep")
-                .setView(scroll).setNegativeButton("Cancel", null).setPositiveButton("Save", null).create();
-        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
-            try {
-                StringBuilder selected = new StringBuilder();
-                for (Map.Entry<ItemCatalog.Entry, CheckBox> choice : chosen.entrySet()) {
-                    if (!choice.getValue().isChecked()) continue;
-                    if (selected.length() > 0) selected.append(',');
-                    selected.append(choice.getKey().name()).append('=').append(read(floors.get(choice.getKey()), 0, 10000, choice.getKey().label()));
-                }
-                limits = EnginePolicy.limitsKey(selected.toString()); prefs.edit().putString("discard_limits", limits).apply();
-                updateItemLabel(); dialog.dismiss();
-            } catch (IllegalArgumentException error) { Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show(); }
-        }));
-        dialog.show();
+        if (FarmService.isBusy() || starting) return;
+        new SettingsDialogs(this).itemsDialog(limits, selected -> {
+            limits = selected;
+            prefs.edit().putString("discard_limits", selected).apply();
+            updateItemLabel();
+        });
     }
     private void updateItemLabel() {
         int count = EnginePolicy.parseLimits(limits).size();
         items.setText(getResources().getQuantityString(R.plurals.item_types, count, count));
+    }
+    private void updateBerryLabel() {
+        int count = BerryOptions.parse(berryOrder).size();
+        berrySelector.setText(getResources().getQuantityString(R.plurals.berry_types, count, count));
     }
     private Switch toggle(LinearLayout parent, String label, boolean value) {
         Switch control = new Switch(this); control.setText(label); control.setTextColor(TEXT); control.setTextSize(16);

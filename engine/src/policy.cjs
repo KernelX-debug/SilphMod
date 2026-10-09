@@ -14,7 +14,7 @@ function discardPlan(limits, counts, maxBatch=50) {
 function catchDecision(status, attempt, maxAttempts) {
   if (status === 1) return 'caught';
   if (status === 3) return 'fled';
-  if ([2,4].includes(status) && attempt < maxAttempts) return 'retry';
+  if ([2,4].includes(status) && (maxAttempts === 0 || attempt < maxAttempts)) return 'retry';
   if ([2,4].includes(status)) return 'exhausted';
   if (status === 0) return 'rejected';
   if (status === 5) return 'replacement';

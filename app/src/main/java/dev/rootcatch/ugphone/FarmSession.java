@@ -70,6 +70,7 @@ final class FarmSession implements Runnable {
     }
     @Override public void run() {
         String result = "Engine did not start";
+        String limitReason = "";
         try {
             report = FarmReports.create(context.getFilesDir());
             trace = new RollingLog(report, "farm-session.jsonl", 1024 * 1024, 2);
@@ -84,6 +85,10 @@ final class FarmSession implements Runnable {
                     .put("transferPolicy", transfers.proofKey()).put("cleanupLimits", EnginePolicy.limitsKey(config.discardLimits))
                     .put("maxDiscardedItems", config.maxDiscardedItems).put("cleanupTrigger", EnginePolicy.CLEANUP_TRIGGER)
                     .put("actionDelayMs", config.actionDelayMs).put("maxThrows", config.maxThrows)
+                    .put("throwQuality", config.throwQuality)
+                    .put("useBerries", config.useBerries).put("berryOrder", new org.json.JSONArray(config.berryOrder))
+                    .put("skipInterruptions", config.skipInterruptions)
+                    .put("maxCatches", config.maxCatches).put("maxSpins", config.maxSpins)
                     .put("expectedAgentSha256", FarmPolicy.EXPECTED_AGENT_SHA).put("externalEnhancerRequired", !resolveError12)
                     .put("edition", "ugphone").put("resolveError12", resolveError12).put("locationImplementation", "rootcatch-profile7-v2")
                     .put("attachPhase", resolveError12 ? "startup" : "warm").put("rootModulesModified", false)
@@ -91,6 +96,7 @@ final class FarmSession implements Runnable {
                     .put("startupAuthorization", userApprovedGameStop ? "USER_START_BUTTON" : "NONE")
                     .put("controlRecovery", true).put("controlStopAfterMs", 10000).put("actionLeaseMs", 2200));
             FarmPolicy.validate(config.autoCatch, config.autoSpin, config.cleanBag, transfers.enabled, config.discardLimits);
+            if(config.autoCatch&&config.useBerries&&config.berryOrder.isEmpty())throw new IllegalArgumentException("Select berries to use");
             listener.status("Requesting root…");
             if (!root.isAvailable()) throw new IllegalStateException("Root permission unavailable");
             if (stopping) return;
@@ -177,9 +183,29 @@ final class FarmSession implements Runnable {
             monitor.setDaemon(true); monitor.start();
             runner.run();
             result = stopReason != null ? stopReason : ending;
+            if (!runner.sessionLimitReached().isEmpty()) {
+                limitReason = dev.rootcatch.automation.SessionLimits.reason(runner.sessionLimitReached());
+                result = limitReason;
+                stopping = true;
+                monitorRoot.close();
+                if (monitor != null) { monitor.interrupt(); monitor.join(1500); }
+                listener.status("Closing Pokémon GO…");
+                SessionLimitStop limitStop = new SessionLimitStop((command, timeout) -> {
+                    RootShell.Result reply = root.execute(command, timeout);
+                    return new GameStartCheck.Reply(reply.code, reply.output);
+                }, (event, values) -> record(event, new JSONObject(values)), Thread::sleep);
+                SessionLimitStop.Result closure = limitStop.close(pid, startTicks);
+                record("session_limit_completed", new JSONObject().put("kind", runner.sessionLimitReached())
+                        .put("maxCatches", config.maxCatches).put("maxSpins", config.maxSpins)
+                        .put("caught", counters.caught).put("spun", counters.spun)
+                        .put("gameClosed", closure.gameClosed).put("closureCommandAccepted", closure.commandAccepted)
+                        .put("closureStatus", closure.status).put("closureError", closure.error)
+                        .put("closureObservations", closure.observations).put("engineStoppedBeforeGameClose", true));
+            }
         } catch (Exception error) {
-            result = stopReason != null ? stopReason : "Engine: " + error.getMessage();
-            record("session_error", detail(result));
+            result = stopReason != null ? stopReason : limitReason.isEmpty() ? "Engine: " + error.getMessage() : limitReason;
+            if (limitReason.isEmpty()) record("session_error", detail(result));
+            else record("session_limit_finalize_error", detail(error.toString()));
         } finally {
             stopping = true;
             listener.launchReady("");
@@ -203,7 +229,7 @@ final class FarmSession implements Runnable {
         }
     }
     private void awaitEarlyProcess() throws Exception {
-        long until = SystemClock.elapsedRealtime() + 150_000;
+        long waitingSince = SystemClock.elapsedRealtime(), until = waitingSince + 150_000;
         int observedPid = 0; long observedTicks = 0;
         while (!stopping && SystemClock.elapsedRealtime() < until) {
             RootShell.Result found = root.execute("pidof " + EnginePolicy.GAME, 2000);
@@ -217,7 +243,12 @@ final class FarmSession implements Runnable {
                     record("game_observed", new JSONObject().put("pid", candidate).put("startTicks", ticks));
                 }
                 RootShell.Result status = root.execute("cat /proc/" + candidate + "/status", 2000);
-                if (status.code == 0 && AttachGuard.tracerPid(status.output) == 0 && NativeEngineRunner.gameFocused(root)) {
+                if (status.code == 0 && AttachGuard.tracerPid(status.output) == 0
+                        && NativeEngineRunner.gameFocused(root, () -> stopping, sample -> {
+                    try { record("startup_focus", new JSONObject(sample).put("pid", candidate).put("startTicks", ticks)
+                            .put("startupWaitMs", SystemClock.elapsedRealtime() - waitingSince)); }
+                    catch (Exception ignored) { }
+                })) {
                     pid = candidate; startTicks = ticks; return;
                 }
             } else if (observedPid > 1) throw new IllegalStateException("The game ended during startup");

@@ -13,7 +13,7 @@ final class FocusReader {
     static final String EXIT_MARKER = "RC_FOCUS_SOURCE_EXIT:";
     private static final Pattern EXIT = Pattern.compile("^RC_FOCUS_SOURCE_EXIT:([0-9]+)$", Pattern.MULTILINE);
     private static final Pattern ERROR = Pattern.compile(
-            "permission denial|permission denied|access denied|exception|error:|error dumping|dump timed out|timeout|not found|unknown command|unrecognized command",
+            "\\b(?:permission denial|permission denied|access denied|[a-z0-9_.$]*exception\\b|error\\s*:|error dumping|dump timed out|timeout\\b|not found|unknown command|unrecognized command)",
             Pattern.CASE_INSENSITIVE);
     interface Shell { Reply read(String command, long timeoutMs) throws Exception; }
     static final class Reply {
@@ -57,7 +57,7 @@ final class FocusReader {
         // Preserve dumpsys's exit status despite the filtering pipeline. Always drain the pipe.
         return "{ dumpsys -t 2 window" + (source.equals("displays") ? " displays" : "")
                 + " 2>&1; rc_focus_exit=$?; printf '\\nRC_FOCUS_SOURCE_EXIT:%s\\n' \"$rc_focus_exit\"; }"
-                + " | grep -E '(^|[[:space:]])(Display:|Display #[0-9]|mCurrentFocus=|mTopFocusedDisplayId=)"
+                + " | grep -E '(^|[[:space:]])(Display:|Display #[0-9]|mCurrentFocus=|mFocusedApp=|mTopFocusedDisplayId=)"
                 + "|RC_FOCUS_SOURCE_EXIT:|[Pp]ermission|[Dd]enied|[Ee]rror|[Ee]xception|[Tt][Ii][Mm][Ee][Oo][Uu][Tt]"
                 + "|[Tt]imed out|not found|[Uu]nknown command|[Uu]nrecognized command'"
                 + " | { head -c " + (MAX_BYTES + 1) + "; cat >/dev/null; }";
@@ -86,7 +86,7 @@ final class FocusReader {
                         focus = ForegroundFocus.unavailable("invalid_source_exit_marker");
                     else if (code != 0 || sourceCode != 0)
                         focus = ForegroundFocus.unavailable("command_failed");
-                    else if (ERROR.matcher(output.substring(0, markerStart)).find())
+                    else if (sourceReportedError(output.substring(0, markerStart)))
                         focus = ForegroundFocus.unavailable("source_reported_error");
                     else focus = ForegroundFocus.parse(output.substring(0, markerStart));
                 }
@@ -98,5 +98,15 @@ final class FocusReader {
                 (System.nanoTime() - began) / 1_000_000, focus);
         observer.accept(sample);
         return sample;
+    }
+    private static boolean sourceReportedError(String output) {
+        for (String raw : output.split("\\R")) {
+            String line = raw.trim();
+            if (line.startsWith("mCurrentFocus=") || line.startsWith("mFocusedApp=")
+                    || line.startsWith("mTopFocusedDisplayId=") || line.startsWith("Display: mDisplayId=")
+                    || line.startsWith("Display #")) continue;
+            if (ERROR.matcher(line).find()) return true;
+        }
+        return false;
     }
 }
