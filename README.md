@@ -2,13 +2,13 @@
 
 # SilphMod
 
-[Español](spanish.md)
+[ESPAÑOL](spanish.md)
 
-Local automation for the original Pokémon GO app on a **rooted UGPhone instance running Android 10**. It catches nearby Pokémon, spins PokéStops, transfers new catches according to your filters, and keeps your item bag within the limits you choose.
+Local automation for the original Pokémon GO in a **rooted UGPhone instance running Android 10**. It catches nearby Pokémon, spins PokéStops, transfers new catches according to your filters, and keeps the item bag within your chosen limits.
 
-Configure the features, press **Start service**, and follow the progress through the notification. **Stop** and **Export logs** let you end the session and review its results. The interface, notifications, and visual assets are in English.
+Configure the features, press **Start service**, and follow the progress from the notification. **Stop** and **Export logs** let you end the session and review its results. The interface, notifications, and visual assets are in English.
 
-**Edition:** `1.5.0-ugphone` · **License for original code:** [MIT](LICENSE) · **Reference environment:** UGPhone Android 10, ARM64. **THIS EDITION HAS NOT YET BEEN TESTED ON OTHER ANDROID VERSIONS OR OUTSIDE UGPHONE**. Broader compatibility is planned.
+**Edition:** `1.6.0-ugphone` · **License for original code:** [MIT](LICENSE) · **Reference environment:** UGPhone Android 10, ARM64. **NOT YET TESTED ON OTHER ANDROID VERSIONS OR OUTSIDE UGPHONE**. Broader compatibility will be pursued in future updates.
 
 [Features](#features) · [Usage](#usage) · [Architecture](#architecture) · [Building](#building) · [Status and upcoming improvements](#status-and-upcoming-improvements)
 
@@ -28,22 +28,27 @@ Configure the features, press **Start service**, and follow the progress through
 | Optional Error 12 treatment | Limited to **SDK 29** in this edition |
 | Installed package identity | `dev.rootcatch.ugphonetest`, retained to update previous installations |
 
-Compatibility refers to the **Android version of the instance**; the reports do not identify the UGPhone client version. Later Android versions, other ROMs, physical phones, and different game profiles require independent validation.
+Compatibility refers to the **Android version of the instance**. Later Android versions, other ROMs, physical phones, and different game profiles require independent validation.
 
 ## Features
 
 | Feature | Current behavior |
 | --- | --- |
-| Auto-catch | Selects the eligible target closest to the current position and checks its existence and distance again before throwing. |
+| Auto-catch | Selects the eligible target closest to the current position and checks its existence and distance again before throwing. Retries while the encounter remains valid; if it disappears or moves out of range, it proceeds to the next target. |
+| Throw quality | Choose **Normal**, **Nice**, **Great**, or **Excellent**. Throws retain the curveball spin. |
+| Berries | Uses the first available berry according to the configured selection and priority, confirms its application, and proceeds with the throw. Preserves the limits set in Item limits. |
 | PokéStops | Sends spin requests for targets within the range configured in the engine and counts successful responses. |
+| Session limits | Configurable catch and spin maximums, initially **4,800** and **2,400**. Reaching either ends the session, closes Pokémon GO, and saves the logs. |
+| Skip interruptions | Selectively handles medals, trainer level-ups, XP rewards, the Daily Adventure Incense recap, and egg hatches through the actions provided by their controllers. |
 | Transfers | Only Pokémon caught by **this SilphMod session**, with a verified capture response and exact ID. |
 | Keep shiny / 15/15/15 | Two independent filters. Meeting either enabled filter prevents that Pokémon from being transferred. |
 | Item bag cleanup | Removes excess quantities of selected item types **from the start** and maintains those limits throughout the session. It does not need to wait until the bag is full. |
 | Fix error 12 | Location treatment inside the game process, optional and tied to the session. |
 | Statistics | Catches, flees, spins, transfers, discarded items, XP, Stardust, and time. |
+| Notification shade | Catches and spins continue while it is expanded, provided Pokémon GO remains the underlying app and the screen is unlocked. |
 | Logs | Manual export of up to three recent sessions, with a file-size and SHA-256 index. |
 
-There is no built-in route planner or joystick: SilphMod works with the position the game receives. It also does not include worldwide maps, spawn databases, or a shiny prediction service.
+There is no built-in route planner or joystick: SilphMod works with a mock-location joystick app.
 
 ### Transfers without touching your existing collection
 
@@ -53,7 +58,7 @@ In addition to the selected filters, favorites, buddies, eggs, deployed Pokémon
 
 Transfers are disabled by default and **have no total per-session quota**. The engine receives `maxTransfers = 0`; old preferences do not restore a limit. Authorizations are not carried over between sessions, accounts, or restarts.
 
-![Actual transfer authorization code](docs/assets/session-transfer.png)
+![Transfer authorization excerpt](docs/assets/session-transfer.png)
 
 *This is an excerpt from [session-transfers.cjs](engine/src/session-transfers.cjs), generated from the repository's code.*
 
@@ -71,23 +76,31 @@ There are **33 selectable types**, including three common Poké Balls, four poti
 
 Cleanup is disabled by default. The engine receives `maxDiscardedItems = 0`, regardless of previous preferences. It can discard items already in the bag, according to the selected types and minimum quantities. An ambiguous response or a known rejection pauses cleanup without repeating the request; the other features can continue.
 
+### Catch and spin limits
+
+In **Engine settings → Session limits**, **Maximum catches** starts at **4800** and **Maximum PokéStop spins** at **2400**. These values can be changed. Both accept a positive maximum and retain the selected value for subsequent sessions.
+
+The counters start at zero when the service starts. Only successful responses to actions issued by SilphMod count toward the limits: failed attempts, flees, and manual catches do not. These are session limits, not daily account counters.
+
+When either maximum is reached, no further actions are sent. The agent removes its hooks, releases its references, and confirms that it has stopped; Android then verifies the process identity, closes Pokémon GO, and saves the logs with the reason and final results. **Export logs** lets you retrieve the ZIP. Closing the game does not clear its cache, storage, or configuration.
+
 ## Usage
 
 Before starting, make sure you have a properly configured GPS joystick app.
 
 1. Install the APK from the releases section, open it, and grant root and notification permissions if requested. Keep your joystick configured and running. Do not run other automation tools or injectors at the same time.
-2. Select **Catches**, **Spin PokéStops**, transfer filters, and **Items to keep**. Transfers and discards have no total per-session maximum: there is no limit on the total number of items you have configured for discarding.
+2. Select **Catches**, **Throw quality**, **Use berries**, **Berry priority**, **Spin PokéStops**, transfer filters, and **Item limits**. Adjust the catch and spin maximums in **Engine settings**. Transfers and discards have no separate total per-session maximum: they can discard an unlimited total quantity of the items you have configured for discarding while the session remains active.
 3. Set a **walking route** in your GPS joystick app, or simply use that app's joystick to move around the map. A **walking route** is recommended for more effective automation over longer periods.
 4. If your instance needs the location treatment (UGPHONE), enable **Fix error 12** and press **Start service**. Stay in SilphMod during preparation; opening the game may take a few seconds. The app may close only the game once and reopen it to install the treatment early. It does not clear the cache, storage, or joystick settings.
 
-   If you press **Start service** and the game process does not open, this can happen and is not a reason to panic. Wait for the error logs to be saved, then press **Start service** again. Repeat as needed until the game opens and loads the map.
+   If you press **Start service**, wait for the game to open, and it closes on the loading screen before reaching the map, this can happen and is not a reason to panic. Wait for the error logs to be saved, then press **Start service** again. Repeat as needed until the game opens and loads the map.
 
-5. Wait for **Active**. The map, player, and references are checked automatically before any actions are sent. With the location checkbox disabled, open the game yourself and wait for the map before starting the service.
-6. Press **Stop service** or **Stop** in the notification. If you want to save an error report, wait for **Saving logs…** to finish and use **Export logs**. The ZIP is saved to `Downloads/SilphMod/`.
+5. Wait for **Active**. The map, player, and references are checked automatically before any actions are sent.
+6. Press **Stop service** or **Stop** in the notification when you want to end the session. Only if you want to save an error report, wait for **Saving logs…** to finish and use **Export logs**. The ZIP is saved to `Downloads/SilphMod/`.
 
 The service has no 30/60-second timer or fixed hourly limit. To stop it, open the app's notification and press Stop, or close Pokémon GO and return to the mod's app.
 
-Switching apps pauses actions; losing the game process, switching accounts, or an extended loss of the controller ends the session. Opening the notification shade may pause actions if Android gives it focus: **this edition does not yet distinguish that panel from other instances of focus loss**.
+Switching apps pauses actions; losing the game process, switching accounts, or an extended loss of the controller ends the session. Opening the notification shade lets you check statistics without pausing catches or spins, as long as the game remains underneath the panel and the screen is unlocked. Switching to another app or locking the screen pauses actions. (In UGPHONE, the game can keep running in the background if you close the instance, but not if you close Pokémon GO or SilphMod.)
 
 If Pokémon storage fills up, catches are paused and the status is reported; SilphMod does not delete your existing collection to make room. When the item bag is full and there are no authorized excess items, it does not discard other items on its own. Stopping cannot undo an operation that has already been sent.
 
@@ -108,7 +121,7 @@ When the location option is enabled, the agent prepares the JNI adapter first an
 
 Activation uses a single-use authorization tied to the process, session, and player. There is no disconnect/reinjection between validation and farming. Actions run on the Unity thread; retained objects are released when the session ends.
 
-The controller sends heartbeats every **500 ms** on a thread independent of focus queries and log writing. Only a positive focus reading no older than **1,500 ms** can authorize actions. Authorization for new actions expires after **2,200 ms**; a brief delay can recover within the same connection, while a continuous loss of control exceeding **10 seconds** ends the session. **The game is not automatically restarted after a failure.**
+The controller sends heartbeats every **500 ms** on a thread independent of focus queries and log writing. Only a positive focus reading no older than **1,500 ms** can authorize actions; the notification shade is allowed when the game remains the underlying activity. Authorization for new actions expires after **2,200 ms**; a brief delay can recover within the same connection, while a continuous loss of control exceeding **10 seconds** ends the session. **The game is not automatically restarted after a failure.**
 
 ### Captures and game calls
 
@@ -120,6 +133,7 @@ Reverse engineering was used to identify contracts, structures, and signatures f
 | Read position | `Niantic.Holoholo.Avatar.IMapAvatar.get_Location`, `Niantic.LatLng` structure |
 | Read targets | `IMapPlaceDirectoryService.get_AllPokemon` / `get_ActivePokestops` |
 | Open encounter | `MapPokemon.SendEncounterRequest()` |
+| Apply berry | `IItemBag.UseItemForEncounter(Item, MapPokemon)` and the `UseItemEncounterOutProto` response |
 | Throw | `MapPokemon.TryCapture(PokeballThrow, ARPlusEncounterValuesProto)` |
 | Spin | `IRpcHandler.SendRpc<FortSearchProto, FortSearchOutProto>`; operation ID `101` |
 | Recycle items | `IRpcHandler.SendRpc<RecycleItemProto, RecycleItemOutProto>`; ID `137` |
@@ -127,11 +141,9 @@ Reverse engineering was used to identify contracts, structures, and signatures f
 
 The engine's distance thresholds are **40 m for selecting catches** and **80 m for spins**; these are local thresholds, not a promise that the server will accept an action. The target is revalidated before each throw, which is important when the joystick is following a route.
 
-The current throw enables a hit and spin, with `ReticleSize = 0.5`. **There is not yet an Excellent/Great throw selector**, and no specific reward classification is guaranteed. Ball selection uses the first available ball in the order Poké Ball → Great Ball → Ultra Ball.
+The throw enables a hit and spin and applies the selected **Throw quality** profile. **Great** retains the previous value, `ReticleSize = 0.5`, and remains the default. Ball selection uses the first available ball in the order Poké Ball → Great Ball → Ultra Ball.
 
-Future updates will introduce expanded features and throw options. Catches always use curveball throws.
-
-Only one action request can be pending at a time. The **250–3000 ms** interval, initially **300 ms** in the interface, separates requests; it does not mean one catch every 300 ms. Responses, checks, target availability, and reconciliation also take time.
+Only one action request can be pending at a time. **Action interval** allows **100–3000 ms**, initially **150 ms** in the interface. It separates requests; it does not mean one catch every 150 ms. Responses, checks, target availability, and reconciliation also take time.
 
 ```ts
 // Engine excerpt: open the encounter and retain its promise.
@@ -145,14 +157,104 @@ reserve(
 
 *Simplified excerpt from [agent.ts](engine/src/agent.ts): the full file includes checks, traces, and error handling around the call.*
 
-### Transfers and discards: confirm before counting
+### Throw quality: from the IL2CPP contract to the throw
+
+The `Niantic.Holoholo.Encounter.PokeballThrow` contract distinguishes the grades **Normal = 1**, **Nice = 2**, **Great = 3**, and **Excellent = 4**. The `ReticleSize`, `HitBullseye`, `Missed`, and `Spinning` fields were identified, along with the signature that receives this structure in `MapPokemon.TryCapture`.
+
+Quality is not applied by tapping the screen or writing a reward label. SilphMod prepares the throw structure used by the game, with a specific reticle size for each profile:
+
+```js
+const PROFILES = Object.freeze({
+  NORMAL: Object.freeze({grade: 1, reticleSize: 1.1, hitBullseye: true}),
+  NICE: Object.freeze({grade: 2, reticleSize: 0.85, hitBullseye: true}),
+  GREAT: Object.freeze({grade: 3, reticleSize: 0.5, hitBullseye: true}),
+  EXCELLENT: Object.freeze({grade: 4, reticleSize: 0.05, hitBullseye: true})
+});
+```
+
+*[throw-profile.cjs](engine/src/throw-profile.cjs). `grade` identifies the profile in the traces; it is not written as a field in the game's structure.*
+
+The engine creates `PokeballThrow`, applies those fields, and passes the structure to the capture call:
+
+```ts
+const data=klass('holo-game','Niantic.Holoholo.Encounter.PokeballThrow').method<Il2Cpp.ValueType>('MissedThrow',1).invoke(item);
+const profile=throwProfile.profile(config.throwQuality);
+data.field('Missed').value=false;data.field('HitBullseye').value=profile.hitBullseye;
+data.field('Spinning').value=true;data.field('ReticleSize').value=profile.reticleSize;
+const ar=proto('ARPlusEncounterValuesProto');
+```
+
+```ts
+const promise=object(observed('TryCapture',()=>pokemon.method<Obj>('TryCapture',2).invoke(data,ar)),'MapPokemon.TryCapture');
+```
+
+*Two excerpts from [agent.ts](engine/src/agent.ts). Between them, active control and the encounter ID are checked, and the request and attempt are recorded.*
+
+On **October 8, 2026**, the logs show **Excellent** requests, `ReticleSize = 0.05`, and curveballs, followed by capture receipts with `Exp = [100, 1000, 20, 50]`: **1,170 XP** awarded by the game. The session recorded **33 catches and 10 spins**; during one of the intervals with the notification shade open, **10 catches and 2 spins** were confirmed. The counter adds the rewards received, not a fixed amount associated with the selector.
+
+### Berries: confirm the effect before throwing
+
+`PokemonEncounterResponse.InitialActiveItem`, the two-argument `IItemBag.UseItemForEncounter` method, and the `Status` and `ActiveItem` fields of `UseItemEncounterOutProto` were identified. The agent validates those contracts and uses the game's service.
+
+All five berries can be selected and prioritized:
+
+| Berry | Contract identifier |
+| --- | ---: |
+| Razz Berry · `RazzBerry` | 701 |
+| Nanab Berry · `NanabBerry` | 703 |
+| Pinap Berry · `PinapBerry` | 705 |
+| Golden Razz Berry · `GoldenRazzBerry` | 706 |
+| Silver Pinap Berry · `GoldenPinapBerry` | 708 |
+
+The default priority is **Razz → Pinap → Nanab**; the two special berries must be explicitly selected. The first selected berry with available units is used, rather than applying multiple berries in succession for the same active effect.
+
+```ts
+const name=berryCycle.choose(config.berryOrder,counts);
+```
+
+```ts
+const berryItem=klass('holo-protos','Holoholo.Rpc.Item').field(name).value;
+const id=pokemon.method<UInt64>('get_EncounterId',0).invoke().toString();
+enterStage('capture:UseItemForEncounter');
+berryCycle.request();
+const promise=object(observed('UseItemForEncounter',()=>findService('Niantic.Holoholo.IItemBag')
+  .method<Obj>('UseItemForEncounter',2).invoke(berryItem,pokemon)),'IItemBag.UseItemForEncounter');
+emit('berry_requested',{id,name,item:berryPolicy.ITEMS[name],before:counts[name],attempt:throws+1});
+reserve('berry',promise,id,[pokemon],{item:berryPolicy.ITEMS[name]});return true;
+```
+
+*Excerpts from [agent.ts](engine/src/agent.ts). Active-control authorization is checked between them.*
+
+The engine retains the promise and waits for its response before throwing. For this contract, **Status = 0** means the berry was applied; it is not confused with the success code for a capture. The policy also checks the active item and only then increments the counter:
+
+```ts
+const status=number(result.field('Status').value), activeItem=number(result.field('ActiveItem').value);
+const verdict=berryCycle.settle(status,activeItem,p.item);
+if(verdict.consumed)stats.berriesUsed++;
+```
+
+*Code from [agent.ts](engine/src/agent.ts), with the decision in [berry-policy.cjs](engine/src/berry-policy.cjs).*
+
+If a berry is already active, another is not applied. When the capture response indicates that the Pokémon broke out of the ball, the cycle allows another berry to be applied before the next attempt. A rejected berry does not trigger a chain of retries; the capture can continue without it. The target's existence and distance are checked again before acting.
+
+No fixed wait is added for the berry animation: **Action interval** and a single pending request are preserved. Using berries adds the actual request and response, so it does take communication time. **Item limits** continues to discard the selected excess items; captures use the remaining units. XP still comes from the capture receipt, not from an invented bonus for applying a berry.
+
+### Interruptions and map continuity
+
+**Skip interruptions**, enabled by default, observes when supported screens finish opening. It preserves the original opening behavior and uses `Dismiss()`, `Click()`, or `LuckyBonusSkipButtonClicked()` according to the validated controller. For egg hatches, the normal sequence is started with `Click()` and its subsequent scenes are handled; responses from the service that processes eggs or rewards are not suppressed.
+
+Actions run on the Unity thread, with the same session and focus control as farming. There is no continuous polling of every window: only a bounded queue is retained when a recognized screen appears. Screens outside that list are not closed automatically.
+
+The `spin_scan` logs explain PokéStop selection, distance, cooldown, a full item bag, and the traversal limit of the loaded list. This observation reuses the existing scan and does not add game requests or change the radius or cooldowns.
+
+### Transfers and discards:
 
 64-bit identifiers remain exact strings or `UInt64` values, never JavaScript numbers that could lose precision. Authorization combines an issued request, a recent successful response, the correct class, the captured ID, and the current session.
 
 The item bag policy is independent of animations or whether the bag visually appears full:
 
 ```js
-// Actual excerpt from engine/src/policy.cjs
+// Excerpt from engine/src/policy.cjs
 const count = counts[name];
 if (!Number.isInteger(count) || count <= keep) continue;
 return {
@@ -163,34 +265,19 @@ return {
 
 A transfer does not increment the counter merely because it was requested: the Pokémon must also disappear from the inventory after the accepted response. Unknown results do not authorize retries of irreversible operations.
 
-### Location and Error 12: the checkbox's actual scope
+### Location and Error 12:
 
 The adapter uses the JNI ABI to identify `android.location.Location.isFromMockProvider()` and, if present, `isMock()`. It treats only the boolean responses corresponding to those methods inside **the process it connected to**. It does not modify coordinates, `Location` objects, AppOps, Google services, SELinux, or system modules.
 
 This is a temporary, session-bound treatment, not a permanent device repair or a universal solution for every cause of Error 12. When the session stops and the hooks are removed, the error may return. This feature's implementation is in [engine/location](engine/location).
 
-### XP and Stardust
+This option is intended to work on **Android 10 - SDK 29**. Higher or lower Android versions will not work with **Fix Error 12**. Work is underway to expand this feature.
+
+### XP and Stardust counters
 
 Rewards from successful **catches and spins in this session** are counted: `CaptureScoreProto.Exp`, `Stardust`, temporary/mega evolution rewards, and `FortSearchOutProto.XpAwarded`, `Loot`, and `BonusLoot`, according to the validated contract.
 
 The account balance is not subtracted, and rewards are not estimated by multiplying catches by a constant. Amounts are not multiplied again by bonuses the game may already have applied. An increasing sequence prevents duplicates; Android totals use `long`. `—` indicates an unavailable reading, and `+` a partial total with missing rewards.
-
-## Current operational evidence
-
-The report reviewed on **October 7, 2026** documents a **1.3.1-ugphone** session with approximately **2 h 6 min 31 s of activity**, calculated using the controller's monotonic clock up to its stop request.
-
-| Confirmed result | Total |
-| --- | ---: |
-| Catches | 1,365 |
-| Flees | 34 |
-| Spins | 532 |
-| Transfers | 1,362 |
-| Item units discarded | 634 |
-| XP | 416,800 |
-| Stardust | 360,650 |
-| Recorded unreadable reward receipts | 0 |
-
-File sizes and SHA-256 hashes for **60 indexed files** were verified, with no discrepancies. The session ended because **the game process identity changed**. The logs are rotated and do not retain every historical event.
 
 ## Building
 
@@ -214,22 +301,6 @@ Without a signing configuration, the release output is **unsigned**. To sign it,
 
 Android output: `app/build/outputs/apk/release/`. The APK, `node_modules`, caches, logs, keys, and downloaded runtime are excluded from Git.
 
-### Checks
-
-Node tests exercise policies and contracts with synthetic objects, as well as the actual bundled agent with simulated bridges. JVM tests cover configuration, control, focus, export, and startup. **They do not replace native execution on Android.** Bash syntax tests are explicitly skipped if Bash is unavailable.
-
-The audit for this version is in [build-1.5.0.json](docs/validation/build-1.5.0.json). The changes focus on translation and presentation; capture calls, filters, reconciliation, and control deadlines are preserved.
-
-Local validation: **252 Node tests passed**, **123 JVM tests passed and 2 were skipped** due to Windows symbolic-link restrictions, a successful TypeScript check, and **0 lint issues**. Agent integrity and the APK signature are also verified. Testing this version on UGPhone is still pending.
-
-To audit a signed APK against its assets, permissions, signature, JVM tests, and lint:
-
-```powershell
-python tools/verify_apk.py app/build/outputs/apk/release/app-release.apk
-```
-
-To prepare a source folder and ZIP without build files, use `tools/package_source.py --directory ../SilphMod-public --zip ../SilphMod-source.zip`. It refuses to overwrite existing distributions and excludes native binaries, keys, installed dependencies, and logs. Visual assets are included; the code image can be regenerated with `tools/render_code.py --font /path/to/a/monospaced-font.ttf` and Pillow.
-
 ## Logs and privacy
 
 Export is local and manual. It includes final state, configuration, engine events, health, startup, accessible Android sources, logcat, and crash reports, with time/size limits and rotation. It does not collect all memory or preserve every line of a session indefinitely. Old sessions are not deleted automatically: check the available storage.
@@ -247,9 +318,8 @@ SilphMod/
 │   ├── test/             # Engine tests
 │   └── location-test/    # Adapter tests
 ├── docs/
-│   ├── assets/           # Identity, architecture, and code excerpt
-│   └── validation/       # Aggregate evidence and build audit
-├── tools/                # Native preparation and source distribution
+│   └── assets/           # Identity, architecture, and code excerpt
+├── tools/                # Native preparation
 ├── gradle/               # Build wrapper
 ├── LICENSE
 ├── NOTICE
@@ -258,13 +328,13 @@ SilphMod/
 
 ## Status and upcoming improvements
 
-**1.5.0 includes the interface and visual assets** and removes total transfer and discard quotas. It retains the engine from the previous standalone distribution.
+**1.6.0 introduces selectable throw quality**, prioritized berry use, selective interruption handling, session catch and spin limits, continuity while the notification shade is expanded, and an action interval of **100–3000 ms**, initially **150 ms**. Transfers and discards retain their own unlimited total quotas; the entire session ends when either the catch or spin maximum is reached.
 
 It is worth noting that the **engine**, not SilphMod itself, was tested on multiple Android versions with positive results. This does not mean it works correctly on every device: compatibility issues and native `SIGSEGV / SEGV_ACCERR` errors with calls in `libNianticLabsPlugin.so` still exist and will continue to be investigated.
 
-The next phase is to measure response and reconciliation times, focus/control latency, and logging overhead. Distinguishing the notification shade from other apps and expanding the device matrix also remain pending.
+The next phase is to measure response and reconciliation times, focus/control latency, and logging overhead, as well as expand the device matrix.
 
-A better interface for selecting items to discard is planned, along with options to choose throw quality and the ball selection priority.
+A configurable Poké Ball priority order is planned, rather than the default: 1. Poké Ball; 2. Great Ball; 3. Ultra Ball.
 
 Another pending improvement is to expand the catalog of Pokémon configured to be kept, identifying them by background, Dynamax status, nundo IVs (0/0/0), and other attributes.
 
