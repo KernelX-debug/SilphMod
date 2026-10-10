@@ -14,7 +14,7 @@
         </activity>
         <service android:name="dev.rootcatch.ugphone.FarmService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="User-started continuous root automation, opt-in process-local location treatment during user-visible game launch, automatic preflight, notification counters and Stop, local diagnostic export; no automatic restart" />
+                android:value="User-started root automation with notification counters and Stop, process-local location treatment, automatic preflight, recovery after five minutes of confirmed empty nearby map readings and local diagnostic export" />
         </service>
     </application>
 </manifest>

@@ -9,8 +9,18 @@ function transferVerdict(data, options) {
       || typeof options.keepShiny !== 'boolean' || typeof options.keepHundo !== 'boolean')
     return {decision:'unknown',reasons:['transfer_protection_data_invalid'],transferAllowed:false};
   const reasons = [];
+  for (const [option, field] of [['keepDynamax','dynamax'],['keepHatched','hatched'],
+    ['keepBackground','background'],['keepShinyBackground','background']]) {
+    if (options[option] !== undefined && typeof options[option] !== 'boolean'
+        || options[option] === true && typeof data[field] !== 'boolean')
+      return {decision:'unknown',reasons:['transfer_protection_data_invalid'],transferAllowed:false};
+  }
   if (data.shiny && options.keepShiny) reasons.push('shiny');
   if (inspected.hundo && options.keepHundo) reasons.push('hundo');
+  if (options.keepDynamax && data.dynamax) reasons.push('dynamax');
+  if (options.keepHatched && data.hatched) reasons.push('hatched');
+  if (options.keepBackground && data.background) reasons.push('background');
+  if (options.keepShinyBackground && data.shiny && data.background) reasons.push('shiny_background');
   for (const key of ['favorite','egg','deployed','buddy','fusion','limited']) if (data[key]) reasons.push(key);
   if (data.pokemonClass !== 0) reasons.push('special_class');
   return {decision:reasons.length ? 'retain' : 'candidate',reasons:reasons.length ? reasons : ['session_candidate'],

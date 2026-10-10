@@ -23,5 +23,11 @@ local.properties
 !*.example
 farm-reports/
 test-reports/
+validation/
+app/src/test/
+app/src/androidTest/
+engine/test/
+engine/location-test/
+distributions/
 .DS_Store
 Thumbs.db

@@ -21,13 +21,12 @@ and included in the APK. The Frida executable is not committed: the build
 preparation script downloads or unpacks the exact pinned upstream binary.
 It is not a game library or a proprietary automation agent.
 
-Build/test tools:
+Build tools:
 - Gradle wrapper 9.3.1: Apache-2.0. Source: https://github.com/gradle/gradle
 - Android Gradle Plugin 9.1.1: Apache-2.0. Source: https://android.googlesource.com/platform/tools/base/
 - esbuild 0.28.2: MIT. Source: https://github.com/evanw/esbuild
 - TypeScript 5.9.3: Apache-2.0. Source: https://github.com/microsoft/TypeScript
 - @types/frida-gum 19.0.0: MIT. Source: https://github.com/DefinitelyTyped/DefinitelyTyped
-- JUnit 4.13.2: EPL-1.0. Source: https://github.com/junit-team/junit4
 
 The Apache-2.0 license text for the Gradle wrapper is retained in
 tools/licenses/Apache-2.0.txt. Other build tools are resolved by the build.

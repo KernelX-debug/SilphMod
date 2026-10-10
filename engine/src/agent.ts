@@ -40,7 +40,8 @@ type Location = {latitude:number; longitude:number};
 type Config = {autoCatch:boolean; autoSpin:boolean; cleanBag:boolean; readOnly:boolean;
   maxThrows:number; actionDelayMs:number; maxCatches:number;maxSpins:number;discard:Record<string,number>; gamePackage:string;
   diagnosticTrace:boolean;encounterOnly:boolean;inspectOwned:boolean;transferEnabled:boolean;
-  keepShiny:boolean;keepHundo:boolean;maxTransfers:number;sessionId:string;maxDiscardedItems:number;expectedPlayerId:string;
+  keepShiny:boolean;keepHundo:boolean;keepDynamax:boolean;keepHatched:boolean;keepBackground:boolean;keepShinyBackground:boolean;
+  maxTransfers:number;sessionId:string;maxDiscardedItems:number;expectedPlayerId:string;
   automaticPreflight:boolean;sessionAccounting:boolean;controlRecovery:boolean;
   throwQuality:string;notificationShadeSupport:boolean;useBerries:boolean;berryOrder:string[];skipInterruptions:boolean};
 type CaptureRequest = {sessionId:string;requestId:string;encounterId:string;sentAt:number};
@@ -51,6 +52,7 @@ let config:Config, initialized=false, stopped=false, ready=false, lastBeat=0, al
 let pending:Pending|null=null, target:HeldReference64|null=null, throws=0;
 let berryProfileReady=false, berryCycle:any=null;
 let nextAction=0, nextSpin=0, nextInventory=0, nextReport=0, lastTick=0;
+let nextPresence=0;
 let hook:InvocationListener|null=null, inTick=false, container:Obj|null=null;
 let uiAdapter:any=null,unityThreadId=0;
 let containerHandle:HeldReference64|null=null, gc:GcReferences64|null=null, activity:any=null, javaReady=false;
@@ -475,6 +477,18 @@ function transferPreflight() {
   const type=klass('holo-protos','Holoholo.Rpc.PokemonProto');
   for(const name of ['isFusion_','limitedPokemonIdentifier_'])
     if(type.field(name).offset<Il2Cpp.Object.headerSize)throw Error('Incompatible transfer protection: '+name);
+  if(config.keepHatched && (type.field('hatchedFromEgg_').type.name!=='System.Boolean'
+      ||type.field('hatchedFromEgg_').offset<Il2Cpp.Object.headerSize))throw Error('Incompatible hatch protection');
+  if(config.keepDynamax||config.keepBackground||config.keepShinyBackground) {
+    const display=klass('holo-protos','Holoholo.Rpc.PokemonDisplayProto');
+    if(type.field('pokemonDisplay_').type.name!=='Holoholo.Rpc.PokemonDisplayProto'
+        ||type.field('pokemonDisplay_').offset<Il2Cpp.Object.headerSize)throw Error('Incompatible display protection');
+    for(const name of [...(config.keepDynamax?['get_IsAnyBreadPokemon']:[]),
+      ...(config.keepBackground||config.keepShinyBackground?['get_HasLocationCard','get_IsNaturalArtPokemon']:[])]) {
+      const method=display.method<boolean>(name,0);
+      if(method.virtualAddress.isNull()||method.returnType.name!=='System.Boolean')throw Error('Incompatible protection: '+name);
+    }
+  }
   klass('holo-protos','Holoholo.Rpc.ReleasePokemonOutProto').field('Status');
   checkPromiseLayout(klass('holo-protos','Holoholo.Rpc.ReleasePokemonOutProto'));
   transferLedger=new transferPolicy.SessionTransferLedger(config.sessionId,config.maxTransfers);
@@ -482,14 +496,22 @@ function transferPreflight() {
   emit('transfer_scope',{mode:'CURRENT_SESSION_CAPTURE_RESPONSES',sessionId:config.sessionId,
     existingCollectionScan:false,queuePersisted:false,queueEmpty:true,transferRequestsSent:0});
   emit('transfer_preflight',{passed:true,keepShiny:config.keepShiny,keepHundo:config.keepHundo,
-    maxTransfers:config.maxTransfers,transferRequestsSent:0});
+    keepDynamax:config.keepDynamax,keepHatched:config.keepHatched,keepBackground:config.keepBackground,
+    keepShinyBackground:config.keepShinyBackground,maxTransfers:config.maxTransfers,transferRequestsSent:0});
 }
 function readTransferData(pokemon:Obj) {
   const id=pokemon.field<UInt64>('id_').value.toString();
   const fort=pokemon.field<Il2Cpp.String>('deployedFortId_').value;
   const station=pokemon.field<Il2Cpp.String>('deployedStationId_').value;
   const limited=pokemon.field<Il2Cpp.String>('limitedPokemonIdentifier_').value;
+  const display=config.keepDynamax||config.keepBackground||config.keepShinyBackground
+    ?pokemon.field<Obj>('pokemonDisplay_').value:null;
+  const validDisplay=display instanceof Il2Cpp.Object&&!display.isNull()&&display.class.fullName==='Holoholo.Rpc.PokemonDisplayProto';
   return {id,dexId:number(pokemon.field('pokemonId_').value),
+    hatched:config.keepHatched?pokemon.field<boolean>('hatchedFromEgg_').value:undefined,
+    dynamax:config.keepDynamax&&validDisplay?display!.method<boolean>('get_IsAnyBreadPokemon',0).invoke():undefined,
+    background:(config.keepBackground||config.keepShinyBackground)&&validDisplay
+      ?display!.method<boolean>('get_HasLocationCard',0).invoke()||display!.method<boolean>('get_IsNaturalArtPokemon',0).invoke():undefined,
     attack:number(pokemon.field('individualAttack_').value),defense:number(pokemon.field('individualDefense_').value),
     stamina:number(pokemon.field('individualStamina_').value),shiny:pokemon.method<boolean>('get_IsShinyPokemon',0).invoke(),
     favorite:pokemon.field<boolean>('favorite_').value,egg:pokemon.field<boolean>('isEgg_').value,
@@ -523,7 +545,8 @@ function tryTransfer(id:string,encounterId:string) {
     const data=readTransferData(pokemon);
     const verdict=transferPolicy.transferVerdict(data,config);
     emit('transfer_decision',{origin:'session',encounterId,...data,...verdict,
-      keepShiny:config.keepShiny,keepHundo:config.keepHundo});
+      keepShiny:config.keepShiny,keepHundo:config.keepHundo,keepDynamax:config.keepDynamax,
+      keepHatched:config.keepHatched,keepBackground:config.keepBackground,keepShinyBackground:config.keepShinyBackground});
     if(!verdict.transferAllowed) {transferLedger.finish(id,false);return;}
     if(!active(true))throw Error('Transfer paused by focus/lease; not retried');
     // Consume the single-session grant BEFORE calling the game. No retries on an
@@ -1046,11 +1069,28 @@ function preflight(directory:Obj,bag:Obj) {
     capture:config.autoCatch,spin:config.autoSpin,discard:config.cleanBag,inspectOwned:config.inspectOwned,
     transferEnabled:config.transferEnabled});
 }
+function observePresence(now:number) {
+  if(!ready||config.readOnly||now<nextPresence)return;
+  nextPresence=now+5000;
+  if(!active()){emit('map_presence',{active:false,complete:false,nearby:-1});return;}
+  const directory=findService('Niantic.Holoholo.Map.IMapPlaceDirectoryService'),location=playerLocation();
+  const pokemon=enumerate(object(directory.method<Obj>('get_AllPokemon',0).invoke(),'MapDirectory.AllPokemon'));
+  let nearby=0;
+  for(const value of pokemon) {
+    if(value.method<boolean>('get_Destroyed',0).invoke())continue;
+    if(!['WildMapPokemon','IncenseMapPokemon','TroyDiskMapPlacePokemon','DailyEncounterMapPokemon','PhotobombingMapPokemon'].includes(value.class.name))continue;
+    const range=distance(location,readLocation(value.method<Il2Cpp.ValueType>('get_Location',0).invoke(),'presence'));
+    if(!Number.isFinite(range))throw Error('Invalid map presence location');
+    if(range<=CAPTURE_RANGE_METERS)nearby++;
+  }
+  emit('map_presence',{active:true,complete:pokemon.length<256,nearby,scanned:pokemon.length,radiusMeters:CAPTURE_RANGE_METERS});
+}
 function tick() {
   const now=Date.now();if(stopped||inTick||now-lastTick<60)return;
   lastTick=now;inTick=true;unityThreadId=Process.getCurrentThreadId();
   try {
     validateSession();
+    observePresence(now);
     // Sweep independently of action returns: continuous RPC traffic cannot
     // bypass TTL cleanup indefinitely. Never evict unexpired cooldowns.
     if(now>=nextCacheSweep){runtimePolicy.pruneExpired(seen,now);runtimePolicy.pruneExpired(stops,now);nextCacheSweep=now+15000;}
@@ -1161,7 +1201,9 @@ function init(_stage:string,parameters:any) {
     diagnosticTrace:parameters.diagnosticTrace===true,encounterOnly:parameters.encounterOnly===true,
     inspectOwned:parameters.inspectOwned===true||parameters.transferEnabled===true,
     transferEnabled:parameters.transferEnabled===true,keepShiny:parameters.keepShiny!==false,
-    keepHundo:parameters.keepHundo!==false,maxTransfers:parameters.maxTransfers??0,sessionId:parameters.sessionId,
+    keepHundo:parameters.keepHundo!==false,keepDynamax:parameters.keepDynamax===true,keepHatched:parameters.keepHatched===true,
+    keepBackground:parameters.keepBackground===true,keepShinyBackground:parameters.keepShinyBackground===true,
+    maxTransfers:parameters.maxTransfers??0,sessionId:parameters.sessionId,
     maxDiscardedItems:parameters.maxDiscardedItems??0,expectedPlayerId:parameters.expectedPlayerId??'',
     automaticPreflight:parameters.automaticPreflight===true,
     sessionAccounting:parameters.edition==='ugphone'&&parameters.sessionAccounting===true,

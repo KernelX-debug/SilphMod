@@ -23,6 +23,13 @@ public final class SessionLimits {
         throw new IllegalArgumentException("Invalid session limit kind");
     }
 
+    public static String startBlock(int caught, int spun, int maxCatches, int maxSpins) {
+        if (maxCatches <= 0 || maxSpins <= 0) return "Set valid limits";
+        if (caught >= maxCatches) return "Capture limit reached";
+        if (spun >= maxSpins) return "Spin limit reached";
+        return "";
+    }
+
     public static boolean reached(String kind, int caught, int spun, int maxCatches, int maxSpins,
                                   boolean autoCatch, boolean autoSpin) {
         return maxCatches > 0 && maxSpins > 0 && caught >= 0 && spun >= 0

@@ -77,6 +77,7 @@ public final class NativeEngineRunner implements Runnable {
     private int expectedGamePid;
     private long expectedGameStart;
     private boolean nativeCrashReported;
+    private boolean startupInterrupted, processStarted, transportClosed = true;
     private boolean nativeLocationJNI, nativeLocationReady;
     private boolean nativeLocationCleanupConfirmed = true;
     private File preparedAgent;
@@ -91,9 +92,40 @@ public final class NativeEngineRunner implements Runnable {
     private RewardTotals rewards = new RewardTotals();
     private String sessionLimitKind = "";
     private boolean sessionLimitAcknowledged;
+    private int priorCaught, priorSpun;
+    private boolean emptyMapRecoveryEnabled, emptyMapRecoveryRequested, emptyMapRecoveryAcknowledged, recoveryFailed;
+    private long lastPresenceTime;
+    private static final String EMPTY_MAP_REASON = "No nearby Pokémon for 5 minutes";
+    private final EmptyMapWatchdog emptyMapWatchdog = new EmptyMapWatchdog();
+
+    public void accumulatedCounts(int caught, int spun, boolean recoverEmptyMap) {
+        if (process != null || attached || caught < 0 || spun < 0
+                || caught >= config.maxCatches || spun >= config.maxSpins)
+            throw new IllegalArgumentException("Invalid accumulated statistics");
+        priorCaught = caught; priorSpun = spun; emptyMapRecoveryEnabled = recoverEmptyMap;
+    }
+    private int captureBudget() { return config.maxCatches - priorCaught; }
+    private int spinBudget() { return config.maxSpins - priorSpun; }
+    public String playerIdentity() { return validatedPlayerId; }
+    public boolean startupRetryCandidate() { return !ready && (startupInterrupted || nativeCrashReported); }
+    public boolean startupTransportClosed() throws Exception {
+        if (!transportClosed || process != null || outputReader != null && outputReader.isAlive()) return false;
+        if (!processStarted) return true;
+        if (helperPid <= 1 || helperPid == gamePid) return false;
+        RootShell.Result reply = shell.execute("if [ ! -d /proc/" + helperPid + " ]; then printf 'ABSENT'; "
+                + "elif rc_exe=$(readlink /proc/" + helperPid + "/exe); then "
+                + "if [ \"$rc_exe\" = " + EnginePolicy.quote(binary) + " ]; then printf 'ACTIVE'; else printf 'REPLACED'; fi; "
+                + "elif [ ! -d /proc/" + helperPid + " ]; then printf 'ABSENT'; else printf 'UNVERIFIED'; fi", 2500);
+        return reply.code == 0 && ("ABSENT".equals(reply.output) || "REPLACED".equals(reply.output));
+    }
+    public boolean emptyMapRecoveryReady() {
+        return emptyMapRecoveryRequested && emptyMapRecoveryAcknowledged && !recoveryFailed && agentStopped && cleanupConfirmed && nativeLocationCleanupConfirmed
+                && !nativeCrashReported && sessionLimitKind.isEmpty() && identityValidated;
+    }
 
     public String sessionLimitReached() {
-        return agentStopped && sessionLimitAcknowledged && cleanupConfirmed && nativeLocationCleanupConfirmed && !requestedStop ? sessionLimitKind : "";
+        return agentStopped && sessionLimitAcknowledged && cleanupConfirmed && nativeLocationCleanupConfirmed
+                && (!requestedStop || emptyMapRecoveryRequested) ? sessionLimitKind : "";
     }
 
     /** Process-local location option, restricted to this edition. */
@@ -253,7 +285,7 @@ public final class NativeEngineRunner implements Runnable {
                     .put("throwQuality", config.throwQuality).put("notificationShadeSupport", true)
                     .put("useBerries", config.useBerries).put("berryOrder", new org.json.JSONArray(config.berryOrder))
                     .put("skipInterruptions", config.skipInterruptions)
-                    .put("maxCatches", config.maxCatches).put("maxSpins", config.maxSpins)
+                    .put("maxCatches", captureBudget()).put("maxSpins", spinBudget())
                     .put("automaticPreflight", automaticPreflight)
                     .put("nativeLocationJNI", false).put("edition", "ugphone")
                     .put("resolveError12", nativeLocationJNI).put("sdk", Build.VERSION.SDK_INT)
@@ -261,6 +293,8 @@ public final class NativeEngineRunner implements Runnable {
                     .put("inspectOwned", inspectOwned)
                     .put("transferEnabled", transfers.enabled).put("keepShiny", transfers.keepShiny)
                     .put("keepHundo", transfers.keepHundo).put("maxTransfers", transfers.maximum)
+                    .put("keepDynamax", transfers.keepDynamax).put("keepHatched", transfers.keepHatched)
+                    .put("keepBackground", transfers.keepBackground).put("keepShinyBackground", transfers.keepShinyBackground)
                     .put("maxDiscardedItems", config.maxDiscardedItems)
                     .put("cleanupTrigger", EnginePolicy.CLEANUP_TRIGGER)
                     .put("actionDelayMs", config.actionDelayMs).put("discard", new JSONObject(limits))
@@ -305,6 +339,7 @@ public final class NativeEngineRunner implements Runnable {
             Process local = new ProcessBuilder("su", "-c", EnginePolicy.attachCommand(binary,
                     agent.getAbsolutePath(), gamePid, params.toString())).redirectErrorStream(true).start();
             process = local;
+            processStarted = true; transportClosed = false;
             control = new BufferedWriter(new OutputStreamWriter(local.getOutputStream(), StandardCharsets.UTF_8));
             Thread reader = new Thread(() -> readLines(local), "rootcatch-native-reader");
             outputReader = reader;
@@ -331,7 +366,10 @@ public final class NativeEngineRunner implements Runnable {
             while (!stopping) {
                 long now = SystemClock.elapsedRealtime();
                 if (overflow) throw new IllegalStateException("Agent output exceeded limit; stopping");
-                if (pulses.failure() != null) throw new IllegalStateException("Control transport failed", pulses.failure());
+                if (pulses.failure() != null) {
+                    startupInterrupted = !ready;
+                    throw new IllegalStateException("Control transport failed", pulses.failure());
+                }
                 if (now >= nextFocus) {
                     long focusStarted = SystemClock.elapsedRealtime();
                     ForegroundFocus observedFocus = focusReader.read("focus_sample").focus;
@@ -339,6 +377,7 @@ public final class NativeEngineRunner implements Runnable {
                     if (stopping) break;
                     pulses.publishFocus(observedGame, observedFocus.notificationShadeAllowed(), focusStarted);
                     boolean focus = pulses.focusAllowed();
+                    if (!focus) emptyMapWatchdog.pause();
                     nextFocus = SystemClock.elapsedRealtime() + 500;
                     if (previousFocus && !focus) listener.onStatus("Internal paused: game not in foreground");
                     if (!previousFocus && focus && ready) listener.onStatus("Internal resumed: game in foreground");
@@ -350,12 +389,16 @@ public final class NativeEngineRunner implements Runnable {
                 for (int i = 0; i < 31 && !stopping; i++) {
                     line = lines.poll(); if (line == null) break; handle(line);
                 }
-                if (eof && lines.isEmpty() && !stopping)
+                if (eof && lines.isEmpty() && !stopping) {
+                    startupInterrupted = !ready;
                     throw new IllegalStateException(nativeCrashReported
                             ? "The game reported a native crash; wait for logs to finish, then export the ZIP"
                             : "Injector exited before session completion");
-                if (!ready && now - started > (automaticPreflight ? 180000 : 45000))
+                }
+                if (!ready && now - started > (automaticPreflight ? 180000 : 45000)) {
+                    startupInterrupted = true;
                     throw new IllegalStateException("Could not validate map/services; export logs");
+                }
                 if (readOnly && ready && readOnlyStopAt == 0 && now - readyAt >= observeReadOnlyMs) {
                     if (diagnosticTrace && observeReadOnlyMs >= 10_000 && !stabilityValidated)
                         throw new IllegalStateException("Insufficient stable readings with the map visible; actions disabled");
@@ -367,9 +410,11 @@ public final class NativeEngineRunner implements Runnable {
                     throw new IllegalStateException("Reference release not confirmed within 5 s; actions disabled");
             }
         } catch (InterruptedException e) {
+            recoveryFailed = true;
             Thread.currentThread().interrupt(); ending = "Stopped by user";
         } catch (Exception e) {
             boolean expected = EnginePolicy.expectedPipeClose(requestedStop, e);
+            if (!expected) recoveryFailed = true;
             if (!expected) ending = "Internal engine: " + e.getMessage();
             try { record(new JSONObject().put("event", expected ? "host_stop_transport_closed" : "host_error")
                     .put("message", e.toString()).put("reason", ending).toString()); }
@@ -393,6 +438,9 @@ public final class NativeEngineRunner implements Runnable {
                     .put("resolveError12", nativeLocationJNI).put("locationCleanupConfirmed", nativeLocationCleanupConfirmed)
                     .put("caught", caught).put("fled", fled).put("spun", spun).put("discarded", discarded)
                     .put("transferred", transferred)
+                    .put("priorCaught", priorCaught).put("priorSpun", priorSpun)
+                    .put("emptyMapRecoveryRequested", emptyMapRecoveryRequested)
+                    .put("emptyMapRecoveryAcknowledged", emptyMapRecoveryAcknowledged).put("recoveryFailed", recoveryFailed)
                     .put("xp", rewards.xp).put("stardust", rewards.stardust)
                     .put("missingRewardReceipts", rewards.missing).put("rewardsAvailable", rewards.available)
                     .put("logRotations", log == null ? 0 : log.rotations()).toString());
@@ -480,6 +528,23 @@ public final class NativeEngineRunner implements Runnable {
                 throw new IllegalStateException("Player identity changed during startup");
             validatedPlayerId = player;
             healthLog.write(payload.toString());
+        } else if ("map_presence".equals(event)) {
+            ControlPulse pulses = controlPulse;
+            boolean focused = pulses != null && pulses.focusAllowed();
+            long observedAt = payload.optLong("time", 0);
+            boolean fresh = observedAt > lastPresenceTime && Math.abs(System.currentTimeMillis() - observedAt) <= 10_000;
+            lastPresenceTime = Math.max(lastPresenceTime, observedAt);
+            if (!payload.optBoolean("active") || !fresh) emptyMapWatchdog.pause();
+            if (emptyMapRecoveryEnabled && ready && !readOnly && !requestedStop && sessionLimitKind.isEmpty()
+                    && fresh && payload.optInt("radiusMeters", -1) == 40
+                    && emptyMapWatchdog.observe(SystemClock.elapsedRealtime(), payload.optInt("nearby", -1),
+                    payload.optBoolean("complete") && payload.optBoolean("active"), focused)) {
+                emptyMapRecoveryRequested = true;
+                record(new JSONObject().put("event", "empty_map_recovery_requested").put("emptyMs", EmptyMapWatchdog.EMPTY_MS)
+                        .put("pid", gamePid).put("playerId", validatedPlayerId).toString());
+                listener.onStatus("Restarting Pokémon GO: no nearby Pokémon");
+                requestStop(EMPTY_MAP_REASON);
+            }
         } else if ("health".equals(event)) {
             healthLog.write(payload.toString());
             statistics(payload);
@@ -506,9 +571,9 @@ public final class NativeEngineRunner implements Runnable {
         } else if ("session_limit".equals(event)) {
             if (!ready || readOnly || !"SESSION".equals(payload.optString("scope"))
                     || !payload.optBoolean("stopSession") || !payload.optBoolean("closeGameRequested")
-                    || payload.optInt("maxCatches") != config.maxCatches || payload.optInt("maxSpins") != config.maxSpins
+                    || payload.optInt("maxCatches") != captureBudget() || payload.optInt("maxSpins") != spinBudget()
                     || !dev.rootcatch.automation.SessionLimits.reached(payload.optString("kind"),
-                    payload.optInt("caught", -1), payload.optInt("spun", -1), config.maxCatches, config.maxSpins,
+                    payload.optInt("caught", -1), payload.optInt("spun", -1), captureBudget(), spinBudget(),
                     config.autoCatch, config.autoSpin)) throw new IllegalStateException("Invalid session limit completion");
             sessionLimitKind = payload.optString("kind");
             listener.onStatus(sessionLimitStatus(payload));
@@ -550,10 +615,13 @@ public final class NativeEngineRunner implements Runnable {
             cleanupConfirmed = gcCleanup(payload);
             if (!cleanupConfirmed) throw new IllegalStateException("Reference release unconfirmed: " + payload);
         } else if ("error".equals(event)) {
+            recoveryFailed = true;
             String stage = payload.optString("stage");
             throw new IllegalStateException((stage.isEmpty() ? "" : "[" + stage + "] ") + payload.optString("message"));
         } else if ("stopped".equals(event)) {
             agentStopped = true;
+            emptyMapRecoveryAcknowledged = emptyMapRecoveryRequested && EMPTY_MAP_REASON.equals(payload.optString("reason"))
+                    && payload.optString("limitStopKind").isEmpty();
             if (!cleanupConfirmed || !nativeLocationCleanupConfirmed || !payload.optBoolean("cleanupPassed"))
                 throw new IllegalStateException("Agent ended without confirming reference release");
             statistics(payload);
@@ -561,7 +629,7 @@ public final class NativeEngineRunner implements Runnable {
                 throw new IllegalStateException("Session limit stop was not acknowledged");
             sessionLimitAcknowledged = !sessionLimitKind.isEmpty()
                     && dev.rootcatch.automation.SessionLimits.reached(sessionLimitKind, caught, spun,
-                    config.maxCatches, config.maxSpins, config.autoCatch, config.autoSpin);
+                    captureBudget(), spinBudget(), config.autoCatch, config.autoSpin);
             ending = readOnly && ready && readOnlyStopAt > 0
                     ? "Check passed. Export logs; no actions sent"
                     : payload.optString("reason", "Agent stopped");
@@ -660,20 +728,12 @@ public final class NativeEngineRunner implements Runnable {
             while (!agentStopped && SystemClock.elapsedRealtime() < drainUntil && (!eof || !lines.isEmpty())) {
                 String line = lines.poll(100, TimeUnit.MILLISECONDS);
                 if (line == null) continue;
-                record(line);
                 try {
-                    JSONObject message = new JSONObject(line);
-                    JSONObject payload = "send".equals(message.optString("type")) ? message.optJSONObject("payload") : null;
-                    if (payload != null && payload.optInt("protocol") == 1) {
-                        if ("gc_cleanup".equals(payload.optString("event"))) cleanupConfirmed = gcCleanup(payload);
-                        if ("native_location_cleanup".equals(payload.optString("event"))) nativeLocationCleanupConfirmed = locationCleanup(payload);
-                        if ("stopped".equals(payload.optString("event"))) {
-                            agentStopped = true;
-                            if (!payload.optBoolean("cleanupPassed")) cleanupConfirmed = false;
-                            statistics(payload);
-                        }
-                    }
-                } catch (Exception ignored) { }
+                    handle(line);
+                } catch (Exception error) {
+                    recoveryFailed = true;
+                    record(new JSONObject().put("event", "host_shutdown_error").put("message", error.toString()).toString());
+                }
             }
             closeControl();
             if (!local.waitFor(1200, TimeUnit.MILLISECONDS) && helperPid > 1 && helperPid != gamePid) {
@@ -689,7 +749,14 @@ public final class NativeEngineRunner implements Runnable {
             if (!agentStopped || !cleanupConfirmed || !nativeLocationCleanupConfirmed)
                 ending += " · cleanup unconfirmed; restart Pokémon GO";
         } catch (Exception ignored) { local.destroy(); }
-        finally { if (interrupted) Thread.currentThread().interrupt(); control = null; process = null; }
+        finally {
+            if (local.isAlive()) {
+                local.destroy();
+                try { local.waitFor(1000, TimeUnit.MILLISECONDS); } catch (InterruptedException error) { interrupted = true; }
+            }
+            transportClosed = !local.isAlive() && (outputReader == null || !outputReader.isAlive());
+            if (interrupted) Thread.currentThread().interrupt(); control = null; process = null;
+        }
     }
 
     private void record(String text) throws Exception {

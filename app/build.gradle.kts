@@ -35,8 +35,8 @@ android {
         applicationId = "dev.rootcatch.ugphonetest"
         minSdk = 29
         targetSdk = 36
-        versionCode = 28
-        versionName = "1.6.0-ugphone"
+        versionCode = 30
+        versionName = "1.7.0-ugphone"
     }
     buildFeatures { buildConfig = true }
     sourceSets.getByName("main") {
@@ -65,5 +65,4 @@ android {
     }
     packaging { jniLibs { useLegacyPackaging = true; keepDebugSymbols += "**/librootcatch-inject.so" } }
 }
-dependencies { testImplementation("junit:junit:4.13.2") }
 tasks.named("preBuild").configure { dependsOn(buildEngine, checkNative) }

@@ -2,7 +2,6 @@ package dev.rootcatch.ugphone;
 
 import java.util.Locale;
 
-/** Immutable confirmed totals. Rewards reset per run, not when an Activity is recreated. */
 final class SessionCounters {
     final int caught, fled, spun, discarded, transferred;
     final long xp, stardust, missingRewardReceipts;
@@ -31,7 +30,13 @@ final class SessionCounters {
     }
     SessionCounters rewards(long experience, long dust, long missing, boolean available) {
         return new SessionCounters(caught, fled, spun, discarded, transferred,
-                Math.max(xp, experience), Math.max(stardust, dust), Math.max(missingRewardReceipts, missing), available);
+                Math.max(xp, experience), Math.max(stardust, dust), Math.max(missingRewardReceipts, missing), rewardsAvailable || available);
+    }
+    static int add(int base, int value) { return (int) Math.min(Integer.MAX_VALUE, (long) base + Math.max(0, value)); }
+    static long add(long base, long value) { return base > Long.MAX_VALUE - Math.max(0, value) ? Long.MAX_VALUE : base + Math.max(0, value); }
+    SessionCounters merge(SessionCounters value) {
+        return update(value.caught, value.fled, value.spun, value.discarded).transfers(value.transferred)
+                .rewards(value.xp, value.stardust, value.missingRewardReceipts, value.rewardsAvailable);
     }
     String rewardText(long value) {
         return !rewardsAvailable ? "—" : String.format(Locale.ROOT, "%,d", value) + (missingRewardReceipts > 0 ? "+" : "");

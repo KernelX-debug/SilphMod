@@ -43,11 +43,11 @@ public final class MainActivity extends Activity {
     private final List<View> settings = new ArrayList<>();
     private SharedPreferences prefs;
     private Switch capture, spin, transfer, clean, useBerries, skipInterruptions;
-    private CheckBox keepShiny, keepHundo, resolveError12;
+    private CheckBox keepShiny, keepHundo, keepDynamax, keepHatched, keepBackground, keepShinyBackground, resolveError12;
     private EditText delay, maxCatches, maxSpins;
     private LinearLayout transferOptions, cleanOptions, advancedOptions, berryOptions;
     private TextView status, elapsed, caught, spun, transferred, discarded, xp, stardust;
-    private Button start, export, items, advanced, throwSelector, berrySelector;
+    private Button start, export, clearStatistics, items, advanced, throwSelector, berrySelector;
     private ThrowQuality throwQuality;
     private String limits;
     private String berryOrder;
@@ -89,7 +89,12 @@ public final class MainActivity extends Activity {
         LinearLayout first = row(); caught = metric(first, "Catches"); spun = metric(first, "Spins"); metrics.addView(first);
         space(metrics, 10); LinearLayout second = row(); transferred = metric(second, "Transferred"); discarded = metric(second, "Items deleted"); metrics.addView(second);
         space(metrics, 10); LinearLayout rewards = row(); xp = metric(rewards, "XP"); stardust = metric(rewards, "Stardust"); metrics.addView(rewards);
-        page.addView(metrics); space(page, 24);
+        page.addView(metrics); space(page, 10);
+        clearStatistics = button("Clear statistics", false); page.addView(clearStatistics);
+        clearStatistics.setOnClickListener(view -> {
+            if (!starting && FarmService.clearStatistics(this)) renderState();
+        });
+        space(page, 24);
         section(page, "Features");
         LinearLayout features = card(); page.addView(features);
         resolveError12 = check(features, "Fix error 12", prefs.getBoolean("resolve_error_12", false));
@@ -125,6 +130,10 @@ public final class MainActivity extends Activity {
         transferOptions = column(); transferOptions.setPadding(dp(8), 0, dp(8), dp(12)); features.addView(transferOptions);
         keepShiny = check(transferOptions, "Keep shiny", prefs.getBoolean("keep_shiny", true));
         keepHundo = check(transferOptions, "Keep 15/15/15", prefs.getBoolean("keep_hundo", true));
+        keepDynamax = check(transferOptions, "Keep Dynamax", prefs.getBoolean("keep_dynamax", true));
+        keepHatched = check(transferOptions, "Keep hatched", prefs.getBoolean("keep_hatched", true));
+        keepBackground = check(transferOptions, "Keep background", prefs.getBoolean("keep_background", true));
+        keepShinyBackground = check(transferOptions, "Keep shiny + background", prefs.getBoolean("keep_shiny_background", false));
         clean = toggle(features, "Clean item bag", prefs.getBoolean("clean", false));
         cleanOptions = column(); cleanOptions.setPadding(dp(8), 0, dp(8), dp(10)); features.addView(cleanOptions);
         items = button("Items to keep", false); settings.add(items); cleanOptions.addView(items); updateItemLabel();
@@ -174,6 +183,8 @@ public final class MainActivity extends Activity {
         if (FarmService.isBusy() || starting || !visible) return;
         try {
             saveSettings();
+            String block = startBlock();
+            if (!block.isEmpty()) { status.setText(block); return; }
             if (!FarmService.notificationsVisible(this)) {
                 status.setText(R.string.enable_notifications_service);
                 startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, getPackageName()));
@@ -187,7 +198,9 @@ public final class MainActivity extends Activity {
                     .putExtra("userApprovedGameStop", resolveError12.isChecked())
                     .putExtra("startupAuthorization", "USER_START_BUTTON")
                     .putExtra("transfer", transfer.isChecked()).putExtra("keepShiny", keepShiny.isChecked())
-                    .putExtra("keepHundo", keepHundo.isChecked());
+                    .putExtra("keepHundo", keepHundo.isChecked()).putExtra("keepDynamax", keepDynamax.isChecked())
+                    .putExtra("keepHatched", keepHatched.isChecked()).putExtra("keepBackground", keepBackground.isChecked())
+                    .putExtra("keepShinyBackground", keepShinyBackground.isChecked());
             starting = true; startingAt = android.os.SystemClock.elapsedRealtime(); renderState();
             startForegroundService(service);
             if (!resolveError12.isChecked()) moveTaskToBack(true);
@@ -208,6 +221,8 @@ public final class MainActivity extends Activity {
                 .putBoolean("catch", capture.isChecked()).putBoolean("spin", spin.isChecked()).putBoolean("clean", clean.isChecked())
                 .putBoolean("resolve_error_12", resolveError12.isChecked())
                 .putBoolean("transfer", transfer.isChecked()).putBoolean("keep_shiny", keepShiny.isChecked()).putBoolean("keep_hundo", keepHundo.isChecked())
+                .putBoolean("keep_dynamax", keepDynamax.isChecked()).putBoolean("keep_hatched", keepHatched.isChecked())
+                .putBoolean("keep_background", keepBackground.isChecked()).putBoolean("keep_shiny_background", keepShinyBackground.isChecked())
                 .putInt("max_transfers", 0).putString("discard_limits", EnginePolicy.limitsKey(limits))
                 .putInt("max_discarded_items", 0).putInt("delay", actionDelay).putInt("max_throws", 0).apply();
     }
@@ -240,11 +255,21 @@ public final class MainActivity extends Activity {
         elapsed.setText(SessionCounters.elapsed(FarmService.elapsed()));
         status.setText(starting ? "Preparing…" : FarmService.status());
         boolean busy = FarmService.isBusy() || starting, closing = FarmService.isClosing();
+        String block = busy ? "" : startBlock();
+        if (!block.isEmpty()) status.setText(block);
         for (View setting : settings) { setting.setEnabled(!busy); setting.setAlpha(busy ? 0.5f : 1); }
         start.setText(closing ? "Saving logs…" : FarmService.isRunning() ? "Stop service" : "Start service");
-        start.setEnabled(!closing && !starting && (!busy || FarmService.isRunning()));
+        start.setEnabled(!closing && !starting && (!busy || FarmService.isRunning()) && block.isEmpty());
         export.setEnabled(!busy);
+        clearStatistics.setEnabled(!busy); clearStatistics.setAlpha(!busy ? 1 : 0.5f);
         start.setAlpha(start.isEnabled() ? 1 : 0.5f); export.setAlpha(export.isEnabled() ? 1 : 0.5f);
+    }
+    private String startBlock() {
+        try {
+            SessionCounters totals = FarmService.counters();
+            return SessionLimits.startBlock(totals.caught, totals.spun,
+                    read(maxCatches, 1, Integer.MAX_VALUE, "Capture limit"), read(maxSpins, 1, Integer.MAX_VALUE, "Spin limit"));
+        } catch (IllegalArgumentException error) { return "Set valid limits"; }
     }
     private void exportLogs() {
         if (!FarmService.beginExport()) return;

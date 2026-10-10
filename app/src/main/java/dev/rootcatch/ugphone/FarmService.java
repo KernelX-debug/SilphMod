@@ -15,9 +15,9 @@ import android.os.PowerManager;
 import android.os.SystemClock;
 import dev.rootcatch.R;
 import dev.rootcatch.automation.AutomationConfig;
+import dev.rootcatch.automation.SessionLimits;
 import dev.rootcatch.nativeengine.TransferOptions;
 
-/** Explicit user start, accessible stop, no sticky restart or persisted capture queue. */
 public final class FarmService extends Service {
     static final String START = "dev.rootcatch.ugphone.START", STOP = "dev.rootcatch.ugphone.STOP";
     private static final String CHANNEL = "rootcatch-farm";
@@ -33,6 +33,13 @@ public final class FarmService extends Service {
     private long ownEpoch, nextWakeRenew, lastUpdate;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private FarmSession session;
+    private AutomationConfig config;
+    private TransferOptions transfers;
+    private boolean resolveError12, approvedGameStop, userStopped;
+    private String userStopReason = "Stopped by user";
+    private long cycle;
+    private final RecoveryAttempts recovery = new RecoveryAttempts();
+    private Runnable pendingRecovery;
     private PowerManager.WakeLock wakeLock;
 
     static boolean isRunning() { return running; }
@@ -49,7 +56,14 @@ public final class FarmService extends Service {
         if (current != null) current.noteGameLaunch(ticket);
     }
     static long elapsed() {
-        return readyAt == 0 ? savedElapsed : Math.max(0, (stoppedAt > 0 ? stoppedAt : SystemClock.elapsedRealtime()) - readyAt);
+        return SessionCounters.add(savedElapsed, readyAt == 0 ? 0 : Math.max(0, SystemClock.elapsedRealtime() - readyAt));
+    }
+    static synchronized boolean clearStatistics(Context context) {
+        if (isBusy()) return false;
+        counters = new SessionCounters(); savedElapsed = 0; readyAt = 0; stoppedAt = 0; status = "Ready";
+        persist(context);
+        context.getSystemService(NotificationManager.class).cancel(NOTIFICATION);
+        return true;
     }
     static synchronized boolean beginExport() { if (isBusy()) return false; exporting = true; return true; }
     static synchronized void endExport() { exporting = false; }
@@ -66,7 +80,7 @@ public final class FarmService extends Service {
     private final Runnable tick = new Runnable() {
         @Override public void run() {
             if (!running) return;
-            if (session != null && !session.isStopping() && !notificationsVisible(FarmService.this)) stopSession("Notifications disabled");
+            if (!userStopped && !notificationsVisible(FarmService.this)) stopSession("Notifications disabled");
             if (wakeLock != null && SystemClock.elapsedRealtime() >= nextWakeRenew) {
                 wakeLock.acquire(120_000L); nextWakeRenew = SystemClock.elapsedRealtime() + 60_000;
             }
@@ -75,13 +89,14 @@ public final class FarmService extends Service {
     };
     @Override public void onCreate() {
         super.onCreate();
+        restoreLast(this);
         getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel(CHANNEL,
                 "SilphMod service", NotificationManager.IMPORTANCE_LOW));
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null) { if (!running) stopSelf(); return START_NOT_STICKY; }
         if (STOP.equals(intent.getAction())) {
-            if (session != null) stopSession(intent.getStringExtra("reason") == null ? "Stopped by user" : intent.getStringExtra("reason"));
+            if (running || session != null) stopSession(intent.getStringExtra("reason") == null ? "Stopped by user" : intent.getStringExtra("reason"));
             else { getSystemService(NotificationManager.class).cancel(NOTIFICATION); stopSelf(); }
             return START_NOT_STICKY;
         }
@@ -93,68 +108,112 @@ public final class FarmService extends Service {
             if (exporting || workerAlive) { stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY; }
             running = true; closing = false; ownEpoch = ++epoch;
         }
-        TransferOptions transfers;
-        AutomationConfig config = AutomationConfig.load(this);
+        config = AutomationConfig.load(this);
         try {
             transfers = new TransferOptions(intent.getBooleanExtra("transfer", false), intent.getBooleanExtra("keepShiny", true),
-                    intent.getBooleanExtra("keepHundo", true), 0);
+                    intent.getBooleanExtra("keepHundo", true), intent.getBooleanExtra("keepDynamax", true),
+                    intent.getBooleanExtra("keepHatched", true), intent.getBooleanExtra("keepBackground", true),
+                    intent.getBooleanExtra("keepShinyBackground", false), 0);
             FarmPolicy.validate(config.autoCatch, config.autoSpin, config.cleanBag, transfers.enabled, config.discardLimits);
+            String block = SessionLimits.startBlock(counters.caught, counters.spun, config.maxCatches, config.maxSpins);
+            if (!block.isEmpty()) throw new IllegalArgumentException(block);
             if (!notificationsVisible(this)) throw new IllegalArgumentException("Enable service notifications");
         } catch (IllegalArgumentException error) { finish(error.getMessage()); return START_NOT_STICKY; }
-        counters = new SessionCounters(); readyAt = 0; stoppedAt = 0; savedElapsed = 0; launchReadySession = "";
+        readyAt = 0; stoppedAt = 0; launchReadySession = ""; userStopped = false; userStopReason = "Stopped by user";
+        cancelRecovery(); recovery.clear();
+        resolveError12 = intent.getBooleanExtra("resolveError12", false);
+        approvedGameStop = intent.getBooleanExtra("userApprovedGameStop", false)
+                && "USER_START_BUTTON".equals(intent.getStringExtra("startupAuthorization"));
         status = "Preparing…"; cleanupNote = ""; update(true);
         wakeLock = getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SilphMod:Farm");
         wakeLock.setReferenceCounted(false); wakeLock.acquire(120_000L);
         nextWakeRenew = SystemClock.elapsedRealtime() + 60_000;
-        long token = ownEpoch;
-        FarmSession current = new FarmSession(this, config, transfers, intent.getBooleanExtra("resolveError12", false),
-                intent.getBooleanExtra("userApprovedGameStop", false)
-                        && "USER_START_BUTTON".equals(intent.getStringExtra("startupAuthorization")), new FarmSession.Listener() {
+        startCycle(false, "");
+        handler.postDelayed(tick, 2000);
+        return START_NOT_STICKY;
+    }
+    private void startCycle(boolean automaticRestart, String expectedPlayerId) {
+        if (userStopped || !running) return;
+        long token = ownEpoch, round = ++cycle;
+        closing = false; cleanupNote = "";
+        FarmSession current = new FarmSession(this, config, transfers, resolveError12, approvedGameStop,
+                automaticRestart, automaticRestart ? recovery.attempt() : 0, expectedPlayerId, counters, new FarmSession.Listener() {
             @Override public void launchReady(String ticket) { handler.post(() -> {
-                if (currentEpoch(token) && !closing) launchReadySession = ticket; }); }
+                if (currentCycle(token, round) && !userStopped) launchReadySession = ticket; }); }
             @Override public void status(String message) { handler.post(() -> {
-                if (currentEpoch(token)) { status = message; update(false); } }); }
+                if (currentCycle(token, round) && !userStopped) { status = message; update(false); } }); }
             @Override public void ready() { handler.post(() -> {
-                if (currentEpoch(token) && readyAt == 0) { readyAt = SystemClock.elapsedRealtime(); status = "Active"; update(true); } }); }
+                if (currentCycle(token, round) && !userStopped && readyAt == 0) { readyAt = SystemClock.elapsedRealtime(); status = "Active"; update(true); } }); }
             @Override public void stats(int caught, int fled, int spun, int discarded) { handler.post(() -> {
-                if (currentEpoch(token)) { counters = counters.update(caught, fled, spun, discarded); update(false); } }); }
+                if (currentCycle(token, round)) { counters = counters.update(caught, fled, spun, discarded); persistLast(); update(false); } }); }
             @Override public void transfers(int confirmed) { handler.post(() -> {
-                if (currentEpoch(token)) { counters = counters.transfers(confirmed); update(false); } }); }
+                if (currentCycle(token, round)) { counters = counters.transfers(confirmed); persistLast(); update(false); } }); }
             @Override public void rewards(long xp, long stardust, long missing, boolean available) { handler.post(() -> {
-                if (currentEpoch(token)) { counters = counters.rewards(xp, stardust, missing, available); update(false); } }); }
+                if (currentCycle(token, round)) { counters = counters.rewards(xp, stardust, missing, available); persistLast(); update(false); } }); }
             @Override public void cleanupPaused(String reason) { handler.post(() -> {
-                if (currentEpoch(token)) { cleanupNote = "Item cleanup paused"; update(true); } }); }
+                if (currentCycle(token, round)) { cleanupNote = "Item cleanup paused"; update(true); } }); }
             @Override public void engineStopped() { handler.post(() -> {
-                if (currentEpoch(token)) { closing = true; stoppedAt = SystemClock.elapsedRealtime(); status = "Saving logs…"; update(true); } }); }
+                if (currentCycle(token, round)) { freezeElapsed(); status = "Saving logs…"; persistLast(); update(true); } }); }
             @Override public void finished(String reason) { handler.post(() -> {
-                // onDestroy may have invalidated UI callbacks; the worker still owns the export lock until here.
+                FarmSession ended = session;
+                if (ended != null) counters = counters.merge(ended.totals());
                 synchronized (FarmService.class) { workerAlive = false; launchReadySession = ""; activeSession = null; }
-                if (currentEpoch(token)) finish(reason);
+                if (currentCycle(token, round)) {
+                    boolean recover = !userStopped && ended != null && ended.recoveryReady();
+                    String block = SessionLimits.startBlock(counters.caught, counters.spun, config.maxCatches, config.maxSpins);
+                    if (recover && block.isEmpty()) {
+                        recovery.begin(ended.playerIdentity());
+                        status = "Restarting Pokémon GO…"; update(true); persistLast();
+                        startCycle(true, ended.playerIdentity());
+                    } else if (!userStopped && automaticRestart && ended != null && ended.startupRetryReady() && block.isEmpty()) {
+                        if (recovery.retry()) scheduleRecovery(token, round);
+                        else finish("Startup failed after " + RecoveryAttempts.MAX_ATTEMPTS + " attempts");
+                    } else finish(userStopped ? userStopReason : recover && !block.isEmpty() ? block : reason);
+                }
                 else { closing = false; status = reason; persistLast(); }
             }); }
         });
-        session = current; activeSession = current; workerAlive = true; handler.postDelayed(tick, 2000);
+        session = current; activeSession = current; workerAlive = true;
         new Thread(current, "rootcatch-farm").start();
-        return START_NOT_STICKY;
+    }
+    private void scheduleRecovery(long token, long round) {
+        session = null;
+        status = "Restarting Pokémon GO · " + recovery.attempt() + "/" + RecoveryAttempts.MAX_ATTEMPTS;
+        persistLast(); update(true);
+        pendingRecovery = () -> {
+            pendingRecovery = null;
+            if (!userStopped && currentCycle(token, round)) startCycle(true, recovery.playerId());
+        };
+        handler.postDelayed(pendingRecovery, recovery.delayMillis());
+    }
+    private void cancelRecovery() {
+        if (pendingRecovery != null) handler.removeCallbacks(pendingRecovery);
+        pendingRecovery = null;
     }
     private void stopSession(String reason) {
-        if (session == null || session.isStopping()) return;
-        closing = true; launchReadySession = ""; status = "Stopping…"; update(true); session.requestStop(reason);
+        userStopReason = reason; userStopped = true; closing = true; launchReadySession = ""; status = "Stopping…"; update(true);
+        cancelRecovery();
+        if (session != null) session.requestStop(reason); else finish(reason);
     }
+    private boolean currentCycle(long token, long round) { return currentEpoch(token) && round == cycle; }
+    private static void freezeElapsed() { savedElapsed = elapsed(); readyAt = 0; stoppedAt = 0; }
     private void finish(String reason) {
-        handler.removeCallbacks(tick); status = reason; running = false; closing = false; session = null; activeSession = null; launchReadySession = "";
-        if (stoppedAt == 0) stoppedAt = SystemClock.elapsedRealtime();
-        savedElapsed = elapsed();
+        handler.removeCallbacks(tick); cancelRecovery(); recovery.clear();
+        status = reason; running = false; closing = false; session = null; activeSession = null; launchReadySession = "";
+        freezeElapsed();
         persistLast();
         releaseWake(); stopForeground(STOP_FOREGROUND_DETACH); update(true); stopSelf();
     }
     private void persistLast() {
-        getSharedPreferences("farm_last_result", 0).edit().putString("status", status).putString("status_language", "en")
+        persist(this);
+    }
+    private static void persist(Context context) {
+        context.getSharedPreferences("farm_last_result", 0).edit().putString("status", status).putString("status_language", "en")
                 .putInt("caught", counters.caught).putInt("fled", counters.fled).putInt("spun", counters.spun)
                 .putInt("discarded", counters.discarded).putInt("transferred", counters.transferred)
                 .putLong("xp", counters.xp).putLong("stardust", counters.stardust)
                 .putLong("missing_rewards", counters.missingRewardReceipts).putBoolean("rewards_available", counters.rewardsAvailable)
-                .putLong("elapsed", savedElapsed).apply();
+                .putLong("elapsed", elapsed()).apply();
     }
     private boolean currentEpoch(long token) { synchronized (FarmService.class) { return running && token == epoch; } }
     static boolean notificationsVisible(Context context) {
@@ -190,13 +249,14 @@ public final class FarmService extends Service {
     }
     @Override public void onDestroy() {
         handler.removeCallbacks(tick);
+        cancelRecovery();
+        userStopped = true;
         launchReadySession = ""; activeSession = null;
         if (session != null) session.requestStop("Service stopped");
         synchronized (FarmService.class) {
-            if (session != null && ownEpoch == epoch) {
-                epoch++; running = false; closing = true; status = "Saving logs…";
-                if (stoppedAt == 0) stoppedAt = SystemClock.elapsedRealtime();
-                savedElapsed = elapsed(); persistLast();
+            if (running && ownEpoch == epoch) {
+                epoch++; running = false; closing = session != null; status = session != null ? "Saving logs…" : "Service stopped";
+                freezeElapsed(); persistLast();
             }
         }
         releaseWake(); super.onDestroy();

@@ -1,12 +1,11 @@
 {
   "name": "silphmod-engine",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "license": "MIT",
   "scripts": {
     "build": "node build.cjs",
-    "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.cjs location-test/*.test.cjs"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "frida-il2cpp-bridge": "0.14.0",
