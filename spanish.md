@@ -2,15 +2,44 @@
 
 # SilphMod
 
-[ENGLISH](README.md)
+**[English](README.md) · Español**
 
 Automatización local para Pokémon GO original en una instancia **UGPhone con root Android 10**. Captura Pokémon cercanos, gira Poképaradas, transfiere nuevas capturas según tus filtros y mantiene la mochila dentro de los límites que elijas.
 
 Configuras las funciones, pulsas **Start service** y sigues el progreso desde la notificación. **Stop** y **Export logs** permiten detener la sesión y revisar sus resultados. La interfaz, las notificaciones y los recursos visuales están en inglés.
 
-**Edición:** `1.6.0-ugphone` · **Licencia del código propio:** [MIT](LICENSE) · **Entorno de referencia:** UGPhone Android 10, ARM64. **AÚN NO ESTÁ PROBADO EN OTRAS VERSIONES DE ADNROID O FUERA DE UGPHONE**. Próximamente se buscará ampliar la compatibilidad.
+**Edición:** `1.7.0-ugphone` · [MIT](LICENSE)
 
-[Funciones](#funciones) · [Uso](#uso) · [Arquitectura](#arquitectura) · [Compilación](#compilación) · [Estado y próximas mejoras](#estado-y-próximas-mejoras)
+**Entorno de referencia:** UGPhone Android 10, ARM64.
+
+> **AÚN NO ESTÁ PROBADO EN OTRAS VERSIONES DE ADNROID O FUERA DE UGPHONE**. Próximamente se buscará ampliar la compatibilidad.
+
+<details>
+<summary>Contenido</summary>
+
+- [Cómo funciona](#cómo-funciona)
+- [Compatibilidad](#compatibilidad)
+- [Funciones](#funciones)
+  - [Transferir sin tocar la colección anterior](#transferir-sin-tocar-la-colección-anterior)
+  - [Mochila: límites por tipo, no borrado indiscriminado](#mochila-límites-por-tipo-no-borrado-indiscriminado)
+  - [Límites de captura y giros](#límites-de-captura-y-giros)
+- [Uso](#uso)
+- [Arquitectura](#arquitectura)
+  - [Inicio y continuidad](#inicio-y-continuidad)
+  - [Recuperación automática del mapa](#recuperación-automática-del-mapa)
+  - [Capturas y llamadas del juego](#capturas-y-llamadas-del-juego)
+  - [Throw quality](#throw-quality-del-contrato-il2cpp-al-lanzamiento)
+  - [Bayas](#bayas-confirmar-el-efecto-antes-de-lanzar)
+  - [Interrupciones y continuidad del mapa](#interrupciones-y-continuidad-del-mapa)
+  - [Transferencias y borrado](#transferencias-y-borrado)
+  - [Ubicación y Error 12](#ubicación-y-error-12)
+  - [Contador XP y polvo estelar](#contador-xp-y-polvo-estelar)
+- [Compilación](#compilación)
+- [Registros y privacidad](#registros-y-privacidad)
+- [Estructura](#estructura)
+- [Estado y próximas mejoras](#estado-y-próximas-mejoras)
+
+</details>
 
 ## Cómo funciona
 
@@ -38,29 +67,39 @@ La compatibilidad se describe por el **Android de la instancia**. Android poster
 | Throw quality | Selecciona **Normal**, **Nice**, **Great** o **Excellent**. Los lanzamientos mantienen el giro de bola curva. |
 | Bayas | Usa la primera baya disponible según la selección y prioridad configuradas, confirma su aplicación y continúa con el lanzamiento. Mantiene los límites de Item limits. |
 | Poképaradas | Envía giros para objetivos dentro del alcance configurado en el motor y contabiliza respuestas exitosas. |
-| Límites de sesión | Máximos configurables de capturas y giros, inicialmente **4.800** y **2.400**. Alcanzar cualquiera termina la sesión, cierra Pokémon GO y guarda los registros. |
+| Límites de sesión | Máximos configurables de capturas y giros, inicialmente **4.800** y **2.400**, aplicados a las estadísticas acumuladas. Alcanzar cualquiera detiene el farmeo, cierra Pokémon GO y guarda los registros. |
 | Skip interruptions | Manejo selectivo de medallas, subida de nivel, recompensas de XP, resumen del incienso diario y eclosiones, mediante las acciones propias de sus controladores. |
 | Transferencias | Solo Pokémon capturados por **esta sesión de SilphMod**, con respuesta de captura acreditada e ID exacto. |
 | Conservar shiny / 15/15/15 | Dos filtros independientes. Cumplir cualquiera de los filtros activos impide transferir ese Pokémon. |
+| Conservar Dynamax / eclosionados / fondo | Nuevos filtros de protección para las capturas autorizadas por el servicio. No recorren ni modifican la colección anterior. |
+| Conservar shiny + fondo | Protege los Pokémon que cumplen ambas condiciones. Se combina con los demás filtros de conservación. |
 | Limpiar mochila | Elimina excedentes de los tipos seleccionados **desde el inicio**, y mantiene esos límites durante la sesión. No necesita esperar a que la mochila se llene. |
 | Solucionar error 12 | Tratamiento de ubicación dentro del proceso del juego, opcional y vinculado a la sesión. |
-| Estadísticas | Capturas, huidas, giros, transferencias, objetos eliminados, XP, polvo estelar y tiempo. |
+| Estadísticas | Capturas, huidas, giros, transferencias, objetos eliminados, XP, polvo estelar y tiempo activo acumulados. Se conservan al detener, volver a iniciar y recuperar el mapa. |
+| Clear statistics | Restablece los contadores únicamente al pulsarlo con el servicio detenido. Se encuentra debajo de las estadísticas. |
+| Recuperación del mapa | Tras cinco minutos de lecturas válidas sin Pokémon en un radio de **40 m**, reinicia el juego y vuelve a conectar el motor. Hasta **10 intentos de arranque por recuperación**, cancelables con Stop. |
 | Barra de notificaciones | Las capturas y los giros continúan al desplegarla si Pokémon GO sigue siendo la app subyacente y la pantalla está desbloqueada. |
 | Registros | Exportación manual de hasta tres sesiones recientes, con índice de tamaños y SHA-256. |
 
 No hay ruta o joystick integrado: SilphMod trabaja con aplicación Joistick de ubicación ficticia.
 
-### Transferir sin tocar tu colección anterior
+### Transferir sin tocar la colección anterior
 
 La cola de transferencias nace vacía. Un Pokémon entra únicamente cuando una petición de captura emitida por esta sesión obtiene una respuesta válida y exitosa con su ID de almacenamiento. Encontrar un ID en la colección **no basta** para autorizar su transferencia.
 
 Además de los filtros elegidos, se conservan favoritos, compañeros, huevos, Pokémon desplegados, fusiones, clases especiales y registros cuya información de protección no puede validarse. Desmarcar **Keep shiny** o **Keep 15/15/15** permite transferir esas nuevas capturas si no existe otra protección.
 
+La versión **1.7.0** añade **Keep Dynamax**, **Keep hatched**, **Keep background** y **Keep shiny + background**. Las tres primeras vienen activadas inicialmente; la combinación shiny + fondo viene desactivada. Cumplir cualquiera de los filtros marcados conserva el Pokémon. Dentro de **Keep shiny + background**, en cambio, deben cumplirse las dos condiciones a la vez.
+
+Si marcas **Keep shiny** junto con **Keep shiny + background**, se conservan todos los shiny, tengan fondo o no. Si marcas **Keep background** junto con la combinación, se conservan todos los que tengan fondo. Para conservar únicamente shiny con fondo mediante estos filtros, deja marcada solo la combinación y desmarca los demás filtros opcionales. El motor sigue capturando los otros Pokémon y los transfiere si no existe otra protección.
+
+La protección de eclosionados se consulta en el registro autorizado para transferencia; no convierte las eclosiones en nuevas autorizaciones ni añade Pokémon de la colección anterior a la cola.
+
 Las transferencias están desactivadas inicialmente y **no tienen cuota total por sesión**. El motor recibe `maxTransfers = 0`; las preferencias antiguas no restauran un límite. No se heredan autorizaciones entre sesiones, cuentas ni reinicios.
 
 ![Fragmento de la autorización de transferencias](docs/assets/session-transfer.png)
 
-*Este es un fragmento del archivo [session-transfers.cjs](engine/src/session-transfers.cjs), generado desde el código del repositorio.*
+*Este es un fragmento del archivo [session-transfers.cjs](engine/src/session-transfers.cjs).*
 
 ### Mochila: límites por tipo, no borrado indiscriminado
 
@@ -80,22 +119,28 @@ La limpieza está desactivada inicialmente. El motor recibe `maxDiscardedItems =
 
 En **Engine settings → Session limits**, **Maximum catches** comienza en **4800** y **Maximum PokéStop spins** en **2400**. Estos valores se pueden cambiar de acuerdo a Ambos aceptan un máximo positivo y conservan el valor elegido para las siguientes sesiones.
 
-Los contadores empiezan en cero al iniciar el servicio. Solo consumen el límite las respuestas exitosas de las acciones emitidas por SilphMod: no los intentos fallidos, las huidas ni las capturas manuales. Estos son límites de esta sesión, no contadores diarios de la cuenta.
+Los contadores se conservan entre inicios del servicio y recuperaciones automáticas. Solo consumen el límite las respuestas exitosas de las acciones emitidas por SilphMod: no los intentos fallidos, las huidas ni las capturas manuales. Son máximos sobre las estadísticas locales acumuladas, no contadores diarios de la cuenta.
+
+Si las capturas o los giros acumulados ya alcanzan su máximo, **Start service** queda bloqueado y muestra **Capture limit reached** o **Spin limit reached**. Para continuar, aumenta los límites por encima de ambos totales o utiliza **Clear statistics** con el servicio detenido. Detener el farmer no borra los resultados; limpiar estadísticas tampoco borra los logs.
 
 Al alcanzar cualquiera de los dos máximos, no se envían más acciones. El agente retira sus hooks, libera sus referencias y confirma la parada; después Android verifica la identidad del proceso, cierra Pokémon GO y guarda los registros con el motivo y los resultados finales. **Export logs** permite recuperar el ZIP. El cierre no borra caché, almacenamiento ni configuración del juego.
 
 ## Uso
+
 Antes de todo, recuerda que debes de disponer de una aplicación GPS Joistick correctamente configurada.
 
 1. Instala el APK desde la sección de lanzamientos, abrela y concede permiso root y notificaciones (En caso te lo pida). Mantén tu joystick configurado y funcionando. No ejecutes otros automatismos o inyectores simultáneamente.
 2. Selecciona **Catches**, **Throw quality**, **Use berries**, **Berry priority**, **Spin PokéStops**, filtros de transferencia y **Item limits**. Ajusta los máximos de capturas y giros en **Engine settings**. Las transferencias y los descartes no tienen un máximo total propio por sesión, es decir, eliminan una cantidad ilimitada de los objetos que hayas configurado para descartar mientras la sesión permanezca activa.
 3. Coloca una **ruta de recorrido** en tu aplicación GPS joistick o simplemente usa el Joistick de esta app para movilizarte por el mapa. Recuerda que la **ruta de recorrido** es recomendada para mayor efectividad del mod en mayor tiempo.
 4. Si tu instancia necesita el tratamiento de ubicación (UGPHONE), marca **Fix error 12** y pulsa **Start service**. Permanece en SilphMod durante la preparación; puede demorar unos segundos en abrir el juego; la app puede cerrar únicamente el juego una vez y abrirlo para instalar el tratamiento temprano. No borra caché, almacenamiento ni ajustes del joystick.
-Si das a **Start service**; esperas a que abra el juego y se cierra en la pantalla de carga del juego antes de llegar al mapa, esto es algo normal, no debes alarmarte, lo que debes hacer es esperar a que guarde los logs del error y volver a pulsar **Start service**. Hacer esto las veces necesarias hasta que abra el juego y cargue el mapa.
+
+   Si das a **Start service**; esperas a que abra el juego y se cierra en la pantalla de carga del juego antes de llegar al mapa, esto es algo normal, no debes alarmarte, lo que debes hacer es esperar a que guarde los logs del error y volver a pulsar **Start service**. Hacer esto las veces necesarias hasta que abra el juego y cargue el mapa.
+
 5. Espera **Active**. Hay una comprobación automática de mapa, jugador y referencias antes de enviar acciones.
 6. Pulsa **Stop service** o **Stop** en la notificación cuando desees terminar la sesión. Y solo en caso de querer guardar el reporte de errores, espera a que termine **Saving logs…** y utiliza **Export logs**. El ZIP se guarda en `Descargas/SilphMod/`.
 
 El servicio no tiene un temporizador de 30/60 segundos ni un límite fijo de horas. Para detenerlo, debes abrir la notificación de la app y darle en detener o en su defecto cerrar Pokémon Go y volver a la app del Mod.
+
 Cambiar de app pausa las acciones; perder el proceso, cambiar de cuenta o perder prolongadamente el controlador termina la sesión. Abrir la barra de notificaciones permite revisar las estadísticas sin pausar capturas ni giros, mientras el juego siga debajo del panel y la pantalla esté desbloqueada. Al cambiar a otra app o bloquear la pantalla, las acciones se pausan. (Recuerda que en UGPHONE el juego puede funcionar en segundo plano si cierras la instancia, pero no si cierras Pokémon Go o SilphMod).
 
 Si el almacenamiento Pokémon se llena, se pausan las capturas y se informa el estado; SilphMod no borra la colección anterior para hacer espacio. Con la mochila llena y sin excedentes autorizados, tampoco elimina otros objetos por su cuenta. Detener no puede revertir una operación que ya fue enviada.
@@ -117,7 +162,17 @@ Cuando la opción de ubicación está activa, el agente prepara primero el adapt
 
 La activación usa una autorización de un solo uso vinculada a proceso, sesión y jugador. No hay una desconexión/reinyección entre la validación y el farmer. Las acciones se ejecutan desde el hilo Unity; los objetos retenidos se liberan al terminar.
 
-El controlador envía latidos cada **500 ms** en un hilo independiente de consultas de foco y escritura de registros. Solo una lectura positiva de foco de hasta **1.500 ms** puede autorizar acciones; el panel de notificaciones se admite cuando el juego permanece como actividad subyacente. El permiso para nuevas acciones caduca a los **2.200 ms**; una demora breve puede recuperarse en la misma conexión, mientras una pérdida continua de control superior a **10 segundos** termina la sesión. **No se reinicia automáticamente el juego después de un fallo.**
+El controlador envía latidos cada **500 ms** en un hilo independiente de consultas de foco y escritura de registros. Solo una lectura positiva de foco de hasta **1.500 ms** puede autorizar acciones; el panel de notificaciones se admite cuando el juego permanece como actividad subyacente. El permiso para nuevas acciones caduca a los **2.200 ms**; una demora breve puede recuperarse en la misma conexión, mientras una pérdida continua de control superior a **10 segundos** termina la sesión. La recuperación automática se reserva al caso de mapa vacío descrito a continuación; no reinicia indiscriminadamente después de cualquier fallo.
+
+### Recuperación automática del mapa
+
+El farmer observa la presencia de Pokémon cercanos cada **cinco segundos**. Si acumula **cinco minutos continuos de lecturas válidas sin Pokémon dentro de 40 m**, detiene el agente, confirma la liberación de referencias y del tratamiento de ubicación, cierra únicamente el proceso verificado de Pokémon GO y guarda los registros. Después abre el juego y conecta una nueva instancia del motor con la misma configuración y cuenta.
+
+Esta función permanece activa durante el farmeo y no requiere marcar una opción. Una lectura con Pokémon reinicia el contador, aunque esos objetivos estén temporalmente en espera. Las muestras incompletas, la falta de lecturas, cambiar de app o bloquear la pantalla no se interpretan como un mapa vacío. Tampoco basta con quedarse sin Poké Balls o llenar el almacenamiento.
+
+Cada recuperación admite **hasta diez intentos de arranque en total, contando el primero**. Si el motor llega a **Active**, no se realizan los intentos restantes y continúa el farmeo. Si el juego se cierra durante ese arranque o la conexión no termina de activarse, puede reintentarse tras confirmar que el inyector anterior terminó y el juego está cerrado. Las esperas entre intentos aumentan de **5 a 30 segundos**; no hay inyectores simultáneos. Al agotar los diez intentos, el servicio se detiene, conserva las estadísticas y guarda los registros. Una recuperación posterior, tras volver a farmear y acumular otros cinco minutos de mapa vacío, dispone de un nuevo máximo de diez intentos.
+
+**Stop service** y **Stop** cancelan tanto el farmeo como cualquier reintento pendiente. Las estadísticas no se reinician y los límites siguen contando lo ya acumulado. La nueva conexión valida nuevamente al jugador y no recupera la cola de transferencias del proceso anterior.
 
 ### Capturas y llamadas del juego
 
@@ -243,7 +298,7 @@ Las acciones se ejecutan en el hilo Unity, con el mismo control de sesión y foc
 
 Los registros `spin_scan` explican la selección de Poképaradas, su distancia, enfriamiento, mochila llena y límite de recorrido de la lista cargada. Esta observación reutiliza el escaneo existente y no añade solicitudes al juego ni modifica el radio o los enfriamientos.
 
-### Transferencias y borrado: 
+### Transferencias y borrado
 
 Los identificadores de 64 bits permanecen como cadenas exactas o valores `UInt64`, nunca como números JavaScript susceptibles de perder precisión. La autorización combina petición emitida, respuesta reciente y exitosa, clase correcta, ID capturado y sesión actual.
 
@@ -261,7 +316,7 @@ return {
 
 Una transferencia no incrementa el contador únicamente por haber sido solicitada: también debe desaparecer del inventario tras la respuesta aceptada. Los resultados desconocidos no autorizan reintentos irreversibles.
 
-### Ubicación y Error 12:
+### Ubicación y Error 12
 
 El adaptador usa la ABI JNI para identificar `android.location.Location.isFromMockProvider()` y, si existe, `isMock()`. Trata únicamente las respuestas booleanas correspondientes a esos métodos dentro del **proceso al que se conectó**. No modifica coordenadas, objetos `Location`, AppOps, servicios de Google, SELinux ni módulos del sistema.
 
@@ -271,7 +326,7 @@ Esta opción está prevista para funcionar en **Android 10 - SDK 29**, Versiones
 
 ### Contador XP y polvo estelar
 
-Se contabilizan las recompensas de respuestas exitosas de **capturas y giros de esta sesión**: `CaptureScoreProto.Exp`, `Stardust`, recompensas de evolución temporal/mega y `FortSearchOutProto.XpAwarded`, `Loot` y `BonusLoot` según el contrato validado.
+Se contabilizan las recompensas de respuestas exitosas de **capturas y giros emitidos por SilphMod**: `CaptureScoreProto.Exp`, `Stardust`, recompensas de evolución temporal/mega y `FortSearchOutProto.XpAwarded`, `Loot` y `BonusLoot` según el contrato validado. Los totales se conservan al detener o recuperar el servicio y solo se restablecen con **Clear statistics**.
 
 No se resta el saldo de la cuenta ni se estiman premios multiplicando capturas por una constante. No se vuelven a multiplicar los importes por bonos que ya pudiera haber aplicado el juego. Una secuencia creciente evita duplicados; los totales Android usan `long`. `—` indica lectura no disponible y `+` un total parcial con recompensas faltantes.
 
@@ -283,10 +338,9 @@ Requisitos: JDK **17 o superior**, Android SDK **36**, Node.js **22 o superior**
 cd engine
 npm.cmd ci
 npm.cmd run typecheck
-npm.cmd test
 cd ..
 python tools/prepare_native.py
-.\gradlew.bat :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
+.\gradlew.bat :app:assembleRelease
 ```
 
 En Linux/macOS utiliza `npm` y `bash ./gradlew` en lugar de `npm.cmd` y `gradlew.bat`. La preparación nativa descarga el ejecutable oficial ARM64 de **Frida 17.22.1**, verifica archivo comprimido, binario, tamaño y formato ELF, y no lo ejecuta en el ordenador. También acepta `--archive /ruta/al/archivo-oficial.xz` para una preparación offline.
@@ -310,9 +364,7 @@ SilphMod/
 ├── app/                  # Una sola aplicación Android
 ├── engine/
 │   ├── src/              # Motor, políticas y control de sesión
-│   ├── location/         # Adaptador JNI
-│   ├── test/             # Pruebas del motor
-│   └── location-test/    # Pruebas del adaptador
+│   └── location/         # Adaptador JNI
 ├── docs/
 │   └── assets/           # Identidad, arquitectura y fragmento de código
 ├── tools/                # Preparación nativa
@@ -326,13 +378,15 @@ SilphMod/
 
 **1.6.0 incorpora calidad de lanzamiento seleccionable**, uso de bayas por prioridad, manejo selectivo de interrupciones, límites de sesión de capturas y giros, continuidad al desplegar las notificaciones y un intervalo de acciones de **100–3000 ms**, con valor inicial de **150 ms**. Las transferencias y los descartes mantienen sus cuotas totales propias ilimitadas; la sesión completa finaliza al alcanzar cualquiera de los máximos de captura o giros.
 
+**1.7.0 añade recuperación automática del mapa con hasta diez intentos de arranque**, estadísticas persistentes con borrado manual, bloqueo del inicio cuando se han alcanzado los límites acumulados y filtros de conservación para Dynamax, eclosionados, fondos y la combinación shiny + fondo.
+
 Algo a recalcar es que el **motor**, no SilphMod, fue probado en múltiples versiones de android, dando resultados positivos; esto no significa que funcione con todos los dispositivos de forma correcta, aún existen errores de incompatibilidad y errores nativos `SIGSEGV / SEGV_ACCERR` con llamadas en `libNianticLabsPlugin.so` (Se seguirán investigando estos errores).
 
 La siguiente fase es medir tiempos de respuesta y reconciliación, latencia de foco/control y coste del registro, además de ampliar la matriz de dispositivos.
 
 Se buscará agregar la configuración del orden jerárquico del uso de pokebolas. No la de por defecto: 1. Pokeball; 2. Superball; 3. Ultraball
 
-Algo pendiente también es ampliar el catálogo de pokemones configurados para no transferir, identificándolos por fondo, dynamax, nundos(0/0/0), etc.
+Algo pendiente también es seguir ampliando el catálogo de pokemones configurados para no transferir, por ejemplo con nundos (0/0/0).
 
 SilphMod no elimina restricciones del servidor, cooldowns ni riesgos para la cuenta. Transferencias y descartes son irreversibles. La automatización puede infringir las condiciones del juego; utiliza el proyecto con conocimiento de esos límites. No es recomendable su uso en cuentas que consideres valiosas.
 
