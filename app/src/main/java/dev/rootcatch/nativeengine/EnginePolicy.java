@@ -7,8 +7,8 @@ import java.util.Map;
 /** Pure policy: no Android/game dependency, independently unit-testable. */
 public final class EnginePolicy {
     public static final String GAME = "com.nianticlabs.pokemongo";
-    public static final String VERSION = "0.431.0";
-    public static final long VERSION_CODE = 2026092402L;
+    public static final String VERSION = "0.433.0";
+    public static final long VERSION_CODE = 2026100702L;
     public static final String CLEANUP_TRIGGER = "EXCESS_FROM_START";
     public static final String DEFAULT_LIMITS = "Potion=50,SuperPotion=50,Revive=30,NanabBerry=30";
     public static final Map<String, Integer> ITEMS;

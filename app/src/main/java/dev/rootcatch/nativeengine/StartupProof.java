@@ -3,6 +3,17 @@ package dev.rootcatch.nativeengine;
 /** Pure verification of the automatic, same-attach observation. */
 public final class StartupProof {
     private StartupProof() { }
+    public static long processStartTicks(String stat) {
+        if (stat == null) throw new IllegalArgumentException("Missing process identity");
+        int closing = stat.lastIndexOf(')');
+        if (closing < 1) throw new IllegalArgumentException("Invalid process identity");
+        String[] fields = stat.substring(closing + 1).trim().split("\\s+");
+        if (fields.length <= 19 || !fields[19].matches("[0-9]+"))
+            throw new IllegalArgumentException("Invalid process start time");
+        long ticks = Long.parseLong(fields[19]);
+        if (ticks <= 0) throw new IllegalArgumentException("Invalid process start time");
+        return ticks;
+    }
     public static boolean sameProcess(String stat, long expectedStart) {
         if (stat == null || expectedStart <= 0) return false;
         int closing = stat.lastIndexOf(')');

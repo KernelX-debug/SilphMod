@@ -7,18 +7,22 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-URL = "https://github.com/frida/frida/releases/download/17.22.1/frida-inject-17.22.1-android-arm64.xz"
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--archive", type=Path, help="Use an existing official .xz instead of downloading")
+    parser.add_argument("--backend", choices=["attach", "spawn"], default="attach")
     args = parser.parse_args()
     manifest = json.loads((ROOT / "tools/native-runtime.json").read_text(encoding="utf-8"))
+    if args.backend == "spawn":
+        manifest = manifest["spawn"]
+    version = manifest["version"]
+    url = f"https://github.com/frida/frida/releases/download/{version}/frida-inject-{version}-android-arm64.xz"
     if args.archive:
         compressed = args.archive.read_bytes()
     else:
-        with urllib.request.urlopen(URL, timeout=60) as response:
+        with urllib.request.urlopen(url, timeout=60) as response:
             compressed = response.read(32 * 1024 * 1024 + 1)
         if len(compressed) > 32 * 1024 * 1024:
             raise ValueError("Archive size exceeds preparation limit")
@@ -29,7 +33,8 @@ def main():
         raise ValueError("Runtime bytes/SHA-256 mismatch")
     if binary[:6] != b"\x7fELF\x02\x01" or struct.unpack_from("<H", binary, 18)[0] != 183:
         raise ValueError("Expected an AArch64 ELF executable")
-    target = ROOT / "app/src/main/jniLibs/arm64-v8a/librootcatch-inject.so"
+    library = "libsilph-spawn.so" if args.backend == "spawn" else "librootcatch-inject.so"
+    target = ROOT / "app/src/main/jniLibs/arm64-v8a" / library
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists() and target.read_bytes() != binary:
         raise ValueError("Refusing to overwrite a different runtime")

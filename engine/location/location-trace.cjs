@@ -13,14 +13,15 @@ const GETTERS = Object.freeze([
 function installTrace(runtime,parameters,report) {
   const features=PROFILES[parameters.profile];
   if(!features?.jni)throw Error('This profile cannot prepare JNI');
+  if(!Number.isInteger(parameters.sdk)||parameters.sdk<29)throw Error('Android 10 or newer required');
   const {Process,Interceptor,ptr} = runtime;
-  let active=false, configured=false, jni=null, nativeObserved=false;
+  let active=false, configured=false, jni=null, nativeObserved=false, actualSdk=null;
   let queries=0, changed=0, updates=0, returned=0, samples=0, lastSummary=0, skippedOwnQueries=0;
   const listeners=[], globals=[], mockIds=new Map(), getters=[], ownReads=new Set(), statuses={}, statusCounts={};
   const gate=sampleGate(()=>Date.now());
   const treatment=features.treatment;
   function snapshot() {
-    return {mockQueries:queries,mockResultsChanged:changed,locationUpdates:updates,
+    return {sdk:actualSdk,mockQueries:queries,mockResultsChanged:changed,locationUpdates:updates,
       nativeReturns:returned,samples,skippedOwnQueries,statusCounts:{...statusCounts},
       nativeEntryObserved:nativeObserved,nativeCalls:jni?.nativeCalls??0,
       hooksInstalled:listeners.length,coordinateMutation:false,locationObjectMutation:false,
@@ -65,6 +66,7 @@ function installTrace(runtime,parameters,report) {
     jni.withEnv(scope=>{
       const sdk=scope.sdk();
       if(sdk!==parameters.sdk) throw Error('Process and controller SDK mismatch');
+      actualSdk=sdk;
       if(features.mock||features.read||parameters.profile==='jni_prepare') {
         const location=scope.findClass('android/location/Location');
         globals.push(scope.retain(location));
@@ -73,6 +75,7 @@ function installTrace(runtime,parameters,report) {
           catch(error) { report('mock_method_unavailable',{method:name,message:String(error)}); }
         }
         if(![...mockIds.values()].includes('isFromMockProvider')) throw Error('Required mock method missing');
+        if(sdk>=31&&![...mockIds.values()].includes('isMock'))throw Error('Required modern mock method missing');
         if(features.read)for(const [key,name,signature,type] of GETTERS) {
           try { getters.push({key,id:scope.method(location,name,signature),type}); }
           catch(error) { report('location_getter_unavailable',{key,message:String(error)}); }

@@ -16,6 +16,19 @@ final class DiagnosticCommands {
                 + " sh -c " + EnginePolicy.quote(command) + "; else echo RC_NATIVE_TIMEOUT_UNAVAILABLE; exit 125; fi";
     }
     static String liveLogcat() { return "exec logcat -b all -v threadtime -T 1 '*:V'"; }
+    static String farmerLiveLogcat() {
+        return "exec logcat -b main -b system -b crash -v threadtime -T 1 " + farmerLogTags();
+    }
+    private static String farmerLogTags() {
+        return "'*:W' 'Unity:I' 'DEBUG:I' 'AndroidRuntime:I' 'libc:I' 'ActivityManager:I' 'lmkd:I'";
+    }
+    static Map<String, String> finalSources(int pid, long ticks, boolean full) {
+        if (full) return snapshots(pid, ticks);
+        Map<String, String> sources = new LinkedHashMap<>();
+        if (pid > 1 && ticks > 0) sources.put("game-process", process(pid, ticks, false));
+        sources.put("logcat", "logcat -d -b main -b system -b crash -v threadtime -t 2000 " + farmerLogTags());
+        return sources;
+    }
     static String process(int pid, long ticks, boolean maps) {
         if (pid <= 1 || ticks <= 0) throw new IllegalArgumentException("Invalid identity");
         String base = "/proc/" + pid;

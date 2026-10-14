@@ -7,7 +7,7 @@ const {SILPH_STOP_MS,ACTION_LEASE_MS}=require('./control-watchdog.cjs');
 const LEASE_MS = SILPH_STOP_MS, ENGINE_WARM_MS = 8000;
 function createBootstrap(runtime, install, loadEngine, emit, clock, timers) {
   let parameters=null, adapter=null, engine=null, phase='idle', stopped=false;
-  let lastBeat=0, locationAt=0, engineLoading=false, methods=[];
+  let lastBeat=0, locationAt=0, librariesAt=null, engineLoading=false, methods=[];
   let latestHeartbeat=null, cleanup=null;
   function release() {
     if(cleanup)return cleanup;
@@ -66,22 +66,27 @@ function createBootstrap(runtime, install, loadEngine, emit, clock, timers) {
       stop('SilphMod connection lost for over 10 seconds');return;
     }
     if(adapter)adapter.summary(clock());
-    if(phase==='waiting_libraries'&&clock()-locationAt>=(parameters.resolveError12?ENGINE_WARM_MS:0)
-        &&runtime.librariesReady())void startEngine();
+    if(phase!=='waiting_libraries')return;
+    if(!runtime.librariesReady()){librariesAt=null;return;}
+    if(parameters.sdk>=30) {
+      if(librariesAt===null){librariesAt=clock();emit('bootstrap_stage',{phase:'waiting_runtime',warmMs:ENGINE_WARM_MS});}
+      if(clock()-librariesAt<ENGINE_WARM_MS)return;
+    }else if(clock()-locationAt<(parameters.resolveError12?ENGINE_WARM_MS:0))return;
+    void startEngine();
   },500);
   return {
     init(_stage,p) {
       if(parameters||stopped)throw Error('Session duplicated or stopped');
       if(!p||p.edition!=='ugphone'||p.automaticPreflight!==true||p.readOnly!==false||p.encounterOnly!==false
-          ||p.gamePackage!=='com.nianticlabs.pokemongo'||p.version!=='0.431.0'
+          ||p.gamePackage!=='com.nianticlabs.pokemongo'||p.version!=='0.433.0'
           ||typeof p.sessionId!=='string'||!/^[0-9]{13}_[a-f0-9]{8}$/.test(p.sessionId)
           ||typeof p.resolveError12!=='boolean'||p.nativeLocationJNI!==false
           ||runtime.Process.arch!=='arm64'||runtime.Process.pointerSize!==8
-          ||p.resolveError12&&p.sdk!==29)throw Error('Unsupported SilphMod profile');
+          ||!Number.isInteger(p.sdk)||p.sdk<29||p.mode!==undefined&&p.mode!=='FARMER')throw Error('Unsupported SilphMod profile');
       parameters={...p};lastBeat=clock();phase='location_setup';
       emit('attached',{pid:runtime.Process.id,arch:runtime.Process.arch,readOnly:true,bootstrap:true});
       emit('silph_bootstrap',{implementation:IMPLEMENTATION,resolveError12:p.resolveError12,
-        singleAttach:true,engineDeferred:true,leaseMs:LEASE_MS,engineWarmMs:p.resolveError12?ENGINE_WARM_MS:0});
+        singleAttach:true,engineDeferred:true,leaseMs:LEASE_MS,engineWarmMs:p.sdk>=30||p.resolveError12?ENGINE_WARM_MS:0});
       timers.setImmediate(()=>{
         if(stopped)return;
         try {
@@ -89,7 +94,7 @@ function createBootstrap(runtime, install, loadEngine, emit, clock, timers) {
             adapter=install(runtime,{protocol:2,session:p.sessionId,profile:'mock_treat',
               extended:false,backtrace:false,sdk:p.sdk},locationReport);
             const snapshot=adapter.snapshot();
-            if(!methods.includes('isFromMockProvider')||snapshot.hooksInstalled<1||snapshot.hooksInstalled>3
+            if(!methods.includes('isFromMockProvider')||p.sdk>=31&&!methods.includes('isMock')||snapshot.hooksInstalled<1||snapshot.hooksInstalled>3
                 ||snapshot.coordinateMutation!==false||snapshot.systemMutation!==false)throw Error('Location not validated');
             emit('native_location_ready',{implementation:IMPLEMENTATION,methods,
               hookCount:snapshot.hooksInstalled,...snapshot});

@@ -1,6 +1,6 @@
 // Session-bound transfer policy: ambiguous data never authorizes deletion.
 const {ownedId, classifyPokemon} = require('./pokemon-inspection.cjs');
-function transferVerdict(data, options) {
+function transferVerdict(data, options, source) {
   const inspected = classifyPokemon(data);
   if (inspected.decision === 'unknown' || !Number.isInteger(data.dexId) || data.dexId <= 0
       || typeof data.buddy !== 'boolean' || typeof data.fusion !== 'boolean'
@@ -9,6 +9,10 @@ function transferVerdict(data, options) {
       || typeof options.keepShiny !== 'boolean' || typeof options.keepHundo !== 'boolean')
     return {decision:'unknown',reasons:['transfer_protection_data_invalid'],transferAllowed:false};
   const reasons = [];
+  if (options.keepFieldResearch !== undefined && typeof options.keepFieldResearch !== 'boolean'
+      || options.keepFieldResearch === true && !['WILD','FIELD_RESEARCH','SAMPLE'].includes(source))
+    return {decision:'unknown',reasons:['transfer_origin_invalid'],transferAllowed:false};
+  if (options.keepFieldResearch && source === 'FIELD_RESEARCH') reasons.push('field_research');
   for (const [option, field] of [['keepDynamax','dynamax'],['keepHatched','hatched'],
     ['keepBackground','background'],['keepShinyBackground','background']]) {
     if (options[option] !== undefined && typeof options[option] !== 'boolean'
@@ -35,10 +39,11 @@ class SessionTransferLedger {
     this.seenOwned = new Set(); this.captures = new Map(); this.requests = new Map();
     this.sequence = 0; this.closed = false; this.confirmed = 0;
   }
-  issueCapture(encounterId, sentAt) {
-    if (this.closed || this.requests.size || !ownedId(encounterId) || !Number.isFinite(sentAt))
+  issueCapture(encounterId, sentAt, source = 'WILD') {
+    if (this.closed || this.requests.size || !ownedId(encounterId) || !Number.isFinite(sentAt)
+        || !['WILD','FIELD_RESEARCH'].includes(source))
       throw Error('Invalid or overlapping capture request');
-    const request = Object.freeze({sessionId:this.sessionId, requestId:this.sessionId+':'+(++this.sequence), encounterId, sentAt});
+    const request = Object.freeze({sessionId:this.sessionId, requestId:this.sessionId+':'+(++this.sequence), encounterId, sentAt, source});
     this.requests.set(request.requestId, request); return request;
   }
   abandonCapture(request) {
@@ -74,6 +79,9 @@ class SessionTransferLedger {
     const record = this.captures.get(id);
     return !this.closed && record?.sessionId === this.sessionId && record?.state === 'captured'
       && record.encounterId === encounterId && (this.limit === 0 || this.confirmed < this.limit);
+  }
+  captureSource(id, encounterId) {
+    return this.authorize(id, encounterId) ? this.captures.get(id).source : null;
   }
   begin(id, encounterId) {
     if (!this.authorize(id, encounterId)) throw Error('Transfer outside current-session scope or limit');

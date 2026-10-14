@@ -1,0 +1,12 @@
+Pokémon selector artwork
+
+Images are obtained from PokeMiners/pogo_assets and PokeAPI/sprites.
+https://github.com/PokeMiners/pogo_assets
+https://github.com/PokeAPI/sprites
+
+Pokémon artwork belongs to its respective rightsholders, including The Pokémon
+Company and Niantic. These images are not licensed under the project MIT license.
+The PokeAPI repository notice is retained in PokeAPI-sprites.txt.
+
+The offline released-species catalog is prepared from PoGoAPI:
+https://pogoapi.net/api/v1/released_pokemon.json

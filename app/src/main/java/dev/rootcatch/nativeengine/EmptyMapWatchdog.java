@@ -7,6 +7,11 @@ public final class EmptyMapWatchdog {
 
     public void pause() { emptySince = -1; lastSample = -1; }
 
+    public void pokemonObserved(long now) {
+        if (now < 0) { pause(); return; }
+        emptySince = now; lastSample = now;
+    }
+
     public boolean observe(long now, int nearby, boolean complete, boolean focused) {
         if (!focused || !complete || nearby < 0 || now < 0) { pause(); return false; }
         if (lastSample < 0 || now < lastSample || now - lastSample > SAMPLE_GAP_MS) emptySince = -1;

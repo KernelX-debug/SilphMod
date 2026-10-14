@@ -8,13 +8,14 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
-import java.util.zip.ZipEntry;
+import java.util.zip.Deflater;
 import java.util.zip.ZipOutputStream;
 
 /** Local-only, user-requested raw export; no upload, broad filesystem scan or external storage grant. */
@@ -35,14 +36,14 @@ final class LogExporter {
         try {
             JSONArray index = new JSONArray();
             try (OutputStream stream = context.getContentResolver().openOutputStream(uri);
-                 ZipOutputStream zip = new ZipOutputStream(require(stream))) {
+                 ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(require(stream), 65536))) {
+                zip.setLevel(Deflater.BEST_SPEED);
                 for (File report : reports) {
                     for (File file : FarmReports.files(report)) {
                         String path = "sessions/" + report.getName() + "/" + file.getName();
-                        String digest;
-                        try (InputStream source = new FileInputStream(file)) { digest = FarmSession.hash(source); }
-                        index.put(new JSONObject().put("path", path).put("bytes", file.length()).put("sha256", digest));
-                        try (InputStream source = new FileInputStream(file)) { entry(zip, path, source); }
+                        LogArchive.Receipt receipt;
+                        try (InputStream source = new FileInputStream(file)) { receipt = LogArchive.add(zip, path, source); }
+                        index.put(new JSONObject().put("path", path).put("bytes", receipt.bytes()).put("sha256", receipt.sha256()));
                     }
                 }
                 JSONObject manifest = new JSONObject().put("build", FarmPolicy.BUILD).put("appPackage", context.getPackageName())
@@ -71,11 +72,11 @@ final class LogExporter {
         return stream;
     }
     private static void entry(ZipOutputStream zip, String name, String text) throws Exception {
-        zip.putNextEntry(new ZipEntry(name)); zip.write(text.getBytes(StandardCharsets.UTF_8)); zip.closeEntry();
+        try (InputStream source = new java.io.ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8))) {
+            LogArchive.add(zip, name, source);
+        }
     }
     private static void entry(ZipOutputStream zip, String name, InputStream input) throws Exception {
-        zip.putNextEntry(new ZipEntry(name)); byte[] buffer = new byte[32768]; int count;
-        while ((count = input.read(buffer)) != -1) zip.write(buffer, 0, count);
-        zip.closeEntry();
+        LogArchive.add(zip, name, input);
     }
 }

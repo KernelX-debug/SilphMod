@@ -9,6 +9,8 @@ const TARGETS=Object.freeze([
   {name:'Niantic.Holoholo.UI.XpAwardGuiControllerV2',kind:'xp_award',action:'LuckyBonusSkipButtonClicked'},
   {name:'Niantic.Holoholo.UI.EggHatchGuiController',kind:'egg_intro',action:'Click'},
   {name:'Niantic.Holoholo.Cutscenes.EggHatchCutsceneGuiController',kind:'egg_cutscene',action:'Dismiss'},
+  {name:'Niantic.Holoholo.Map.SpeedModal',kind:'speed_warning',action:'Dismiss'},
+  {name:'Niantic.Holoholo.UI.NewStampCollectionGuiController',kind:'stamp_rally_notice',action:'Dismiss'},
 ].map(target=>Object.freeze(target)));
 const MAX_PENDING=16, MAX_ACTIONS=2, RETRY_MS=250, EXPIRY_MS=30000;
 
@@ -21,7 +23,9 @@ function method(type,name,result) {
 
 function install(runtime,report) {
   const targets=new Map(),entries=new Set(),queue=new Map(),errors=[];
-  let listener=null,closed=false,processing=false,nextDrain=0,actions=0,failures=0,expired=0;
+  const acted=new Map();
+  const unknown=new Map();
+  let listener=null,visibleListener=null,closed=false,processing=false,nextDrain=0,actions=0,failures=0,expired=0;
   let base,opened,isTop,state;
   function release(entry) {
     if(entry.released)return;
@@ -35,6 +39,13 @@ function install(runtime,report) {
     for(const entry of [...entries])if(entry.target===target)release(entry);
   }
   function stateOf(controller) {return runtime.number(controller.field(state.name).value);}
+  function observeUnknown(controller,source) {
+    const name=controller.class.fullName,now=runtime.now();
+    if(typeof name!=='string'||name.length>256||targets.has(name)||now-(unknown.get(name)??-Infinity)<30000)return;
+    if(unknown.size>=32&&!unknown.has(name))unknown.delete(unknown.keys().next().value);
+    unknown.set(name,now);
+    report('ui_unknown_controller',{controller:name,source,action:'OBSERVE_ONLY'});
+  }
   function live(controller) {
     const value=controller.field('m_CachedPtr').value;
     if(!runtime.isPointer(value))throw Error('Incompatible Unity object pointer');
@@ -63,7 +74,16 @@ function install(runtime,report) {
           if(!isTop.bind(controller).invoke())continue;
           if(!runtime.canAct())break;
           attempted++;const began=runtime.now();
-          // The game's action keeps its dismissal events, promises and cleanup.
+          if(target.skip) {
+            const asset=controller.field(target.skip.field).value;
+            if(asset&&!asset.isNull()&&asset.class.fullName===target.skip.type&&live(asset)) {
+              target.skip.method.bind(asset).invoke();
+              report('ui_interruption_animation_skip',{kind:target.kind,controller:target.name,action:'SkipEggHatchAnimation'});
+              if(closed)break;
+            }
+          }
+          acted.set(entry.key,target.name);
+          if(acted.size>256)acted.delete(acted.keys().next().value);
           target.method.bind(controller).invoke();actions++;
           const after=stateOf(controller);
           report('ui_interruption_result',{kind:target.kind,controller:target.name,action:target.action,
@@ -88,7 +108,15 @@ function install(runtime,report) {
         const action=method(type,spec.action,'System.Void');
         const cached=type.tryField('m_CachedPtr');
         if(!cached||cached.isStatic||cached.type.name!=='System.IntPtr')throw Error('Unity object field unavailable');
-        targets.set(spec.name,{...spec,method:action,disabled:false});
+        let skip=null;
+        if(runtime.visibleRecovery&&spec.kind==='egg_cutscene')try {
+          const field=type.tryField('eggHatchAsset'),asset=runtime.resolve('PokemonInfoEggHatch');
+          if(!field||field.isStatic||field.offset<16||field.type.name!=='PokemonInfoEggHatch')throw Error('Egg hatch asset unavailable');
+          const cached=asset.tryField('m_CachedPtr');
+          if(!cached||cached.isStatic||cached.type.name!=='System.IntPtr')throw Error('Egg hatch asset Unity pointer unavailable');
+          skip={field:'eggHatchAsset',type:'PokemonInfoEggHatch',method:method(asset,'SkipEggHatchAnimation','System.Void')};
+        }catch(error){report('ui_interruption_unavailable',{kind:'egg_animation_skip',message:String(error)});}
+        targets.set(spec.name,{...spec,method:action,skip,disabled:false});
       }catch(error){report('ui_interruption_unavailable',{...spec,message:String(error)});}
     }
     if(targets.size)listener=runtime.attach(opened.virtualAddress,{
@@ -99,8 +127,10 @@ function install(runtime,report) {
         try {
           const controller=runtime.object(args[0]);
           target=targets.get(controller.class.fullName);
+          if(!target){observeUnknown(controller,'OPEN');return;}
           if(!target||target.disabled||!live(controller)||stateOf(controller)!==1)return;
           const key=controller.handle.toString();
+          acted.delete(key);
           if(queue.has(key)||entries.size>=MAX_PENDING)return;
           const reference=runtime.retain(controller,'ui:'+target.kind);
           const entry={key,target,reference,created:runtime.now(),released:false};
@@ -116,8 +146,33 @@ function install(runtime,report) {
         drain(true);
       },
     });
+    if(listener&&runtime.visibleRecovery)visibleListener=runtime.attach(isTop.virtualAddress,{
+      onEnter(args) {
+        this.silphVisible=null;
+        if(closed||processing||!runtime.canObserve()||!runtime.sameThread())return;
+        try {
+          const controller=runtime.object(args[0]),target=targets.get(controller.class.fullName);
+          if(!target){observeUnknown(controller,'TOP_QUERY');return;}
+          if(target&&!target.disabled)this.silphVisible=args[0];
+        }catch(error){report('ui_interruption_deferred',{reason:'visible_observation_failed',message:String(error)});}
+      },
+      onLeave(result) {
+        const address=this.silphVisible;this.silphVisible=null;
+        if(!address||closed||processing||!runtime.canObserve()||!runtime.sameThread()||result.toInt32()===0)return;
+        let target;
+        try {
+          const controller=runtime.object(address),key=controller.handle.toString();
+          target=targets.get(controller.class.fullName);
+          if(!target||target.disabled||queue.has(key)||acted.get(key)===target.name||entries.size>=MAX_PENDING
+            ||!live(controller)||stateOf(controller)!==2)return;
+          const entry={key,target,reference:runtime.retain(controller,'ui:visible:'+target.kind),created:runtime.now(),released:false};
+          entries.add(entry);queue.set(key,entry);
+          report('ui_interruption_seen',{kind:target.kind,controller:target.name,action:target.action,source:'VISIBLE_RECOVERY'});
+        }catch(error){if(target)disable(target,'visible_recovery',error);}
+      },
+    });
   }catch(error){report('ui_interruption_unavailable',{controller:GUI_CLASS,message:String(error)});}
-  report('ui_interruption_profile',{available:!!listener,eventDriven:true,originalOpenPreserved:true,
+  report('ui_interruption_profile',{available:!!listener,visibleRecovery:!!visibleListener,eventDriven:true,originalOpenPreserved:true,
     targets:[...targets.values()].map(({name,kind,action})=>({name,kind,action})),maxPending:MAX_PENDING});
   function snapshot() {
     return {available:!!listener&&!closed,pending:queue.size,references:entries.size,actions,failures,expired,
@@ -126,8 +181,10 @@ function install(runtime,report) {
   function close() {
     closed=true;
     if(listener)try {listener.detach();listener=null;}catch(error){errors.push(String(error));}
+    if(visibleListener)try {visibleListener.detach();visibleListener=null;}catch(error){errors.push(String(error));}
+    acted.clear();unknown.clear();
     for(const entry of [...entries])release(entry);
-    return {passed:errors.length===0&&listener===null&&entries.size===0,remainingHooks:listener?1:0,
+    return {passed:errors.length===0&&listener===null&&visibleListener===null&&entries.size===0,remainingHooks:(listener?1:0)+(visibleListener?1:0),
       remainingReferences:entries.size,errors:[...errors],actions,failures,expired};
   }
   return {drain,snapshot,close,get busy(){return processing;}};

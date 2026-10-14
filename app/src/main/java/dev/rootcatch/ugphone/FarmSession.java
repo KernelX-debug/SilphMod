@@ -7,6 +7,7 @@ import android.os.Build;
 import android.os.SystemClock;
 import dev.rootcatch.automation.AutomationConfig;
 import dev.rootcatch.nativeengine.EnginePolicy;
+import dev.rootcatch.nativeengine.ConnectionStrategy;
 import dev.rootcatch.nativeengine.NativeEngineRunner;
 import dev.rootcatch.nativeengine.RollingLog;
 import dev.rootcatch.nativeengine.TransferOptions;
@@ -33,6 +34,8 @@ final class FarmSession implements Runnable {
     private final boolean resolveError12;
     private final boolean userApprovedGameStop;
     private final boolean automaticRestart;
+    private final boolean earlySpawn = ConnectionStrategy.forSdk(Build.VERSION.SDK_INT).earlySpawn();
+    private final GameLaunchGate gameLaunch = new GameLaunchGate(earlySpawn);
     private final int recoveryAttempt;
     private final String expectedPlayerId;
     private final SessionCounters baseline;
@@ -48,20 +51,25 @@ final class FarmSession implements Runnable {
     private volatile long readyAt;
     private Thread monitor;
     private int pid;
-    private long startTicks, lastSnapshot;
+    private long startTicks, lastSnapshot, lastIdentityLog;
     private File report;
     private RollingLog trace;
     private CrashCollector collector;
     private SessionCounters counters = new SessionCounters();
     private String ending = "Session ended", lastStatus = "Preparing", lastInspection = "";
     private String cleanupPauseReason = "";
+    private boolean buddyRemovalHandled;
+
+    void skipBuddyRemoval(boolean handled) { buddyRemovalHandled = handled; }
+    boolean buddyWasRemoved() { return runner != null && runner.buddyWasRemoved(); }
+    boolean buddyRestartPending() { return recoveryReady() && buddyWasRemoved(); }
 
     FarmSession(Context context, AutomationConfig config, TransferOptions transfers, boolean resolveError12,
                 boolean userApprovedGameStop, boolean automaticRestart, int recoveryAttempt, String expectedPlayerId,
                 SessionCounters baseline, Listener listener) {
         this.context = context.getApplicationContext(); this.config = config;
         this.transfers = transfers; this.resolveError12 = resolveError12;
-        this.userApprovedGameStop = resolveError12 && userApprovedGameStop; this.listener = listener;
+        this.userApprovedGameStop = (resolveError12 || earlySpawn) && userApprovedGameStop; this.listener = listener;
         this.automaticRestart = automaticRestart; this.expectedPlayerId = expectedPlayerId;
         this.recoveryAttempt = recoveryAttempt;
         this.baseline = baseline; this.counters = baseline;
@@ -81,6 +89,7 @@ final class FarmSession implements Runnable {
     }
     private synchronized void stopEngine(String reason) {
         stopReason = reason;
+        gameLaunch.stop();
         if (stopping) return;
         stopping = true;
         listener.launchReady("");
@@ -102,6 +111,7 @@ final class FarmSession implements Runnable {
                     .put("abisReported", Arrays.toString(Build.SUPPORTED_ABIS)).put("rawLogs", true)
                     .put("automaticPreflight", true).put("singleAttach", true).put("readOnlyObservationMs", 10_000)
                     .put("continuous", true).put("autoCatch", config.autoCatch).put("autoSpin", config.autoSpin)
+                    .put("mode", "FARMER")
                     .put("cleanBag", config.cleanBag).put("transfersEnabled", transfers.enabled)
                     .put("transferPolicy", transfers.proofKey()).put("cleanupLimits", EnginePolicy.limitsKey(config.discardLimits))
                     .put("maxDiscardedItems", config.maxDiscardedItems).put("cleanupTrigger", EnginePolicy.CLEANUP_TRIGGER)
@@ -109,14 +119,19 @@ final class FarmSession implements Runnable {
                     .put("throwQuality", config.throwQuality)
                     .put("useBerries", config.useBerries).put("berryOrder", new org.json.JSONArray(config.berryOrder))
                     .put("skipInterruptions", config.skipInterruptions)
+                    .put("showIvNames", config.showIvNames).put("extendedManualTransfer", config.extendedManualTransfer)
+                    .put("removeBuddy", config.removeBuddy).put("buddyRemovalHandled", buddyRemovalHandled)
+                    .put("fieldResearch", config.fieldResearch).put("discardUnsupportedResearch", config.discardUnsupportedResearch)
                     .put("maxCatches", config.maxCatches).put("maxSpins", config.maxSpins)
                     .put("priorCaught", baseline.caught).put("priorSpun", baseline.spun).put("automaticRestart", automaticRestart)
                     .put("recoveryAttempt", recoveryAttempt).put("maxRecoveryAttempts", RecoveryAttempts.MAX_ATTEMPTS)
                     .put("keepDynamax", transfers.keepDynamax).put("keepHatched", transfers.keepHatched)
                     .put("keepBackground", transfers.keepBackground).put("keepShinyBackground", transfers.keepShinyBackground)
-                    .put("expectedAgentSha256", FarmPolicy.EXPECTED_AGENT_SHA).put("externalEnhancerRequired", !resolveError12)
+                    .put("keepFieldResearch", transfers.keepFieldResearch)
+                    .put("expectedAgentSha256", FarmPolicy.EXPECTED_AGENT_SHA)
+                    .put("connection", ConnectionStrategy.forSdk(Build.VERSION.SDK_INT).name())
                     .put("edition", "ugphone").put("resolveError12", resolveError12).put("locationImplementation", "rootcatch-profile7-v2")
-                    .put("attachPhase", resolveError12 || automaticRestart ? "startup" : "warm").put("rootModulesModified", false)
+                    .put("attachPhase", earlySpawn ? "spawn" : resolveError12 || automaticRestart ? "startup" : "warm").put("rootModulesModified", false)
                     .put("userApprovedGameStop", userApprovedGameStop).put("maxGameStopAttempts", 1)
                     .put("startupAuthorization", userApprovedGameStop ? "USER_START_BUTTON" : "NONE")
                     .put("controlRecovery", true).put("controlStopAfterMs", 10000).put("actionLeaseMs", 2200));
@@ -132,15 +147,22 @@ final class FarmSession implements Runnable {
                 throw new IllegalStateException("ARM64 required");
             PackageInfo game = context.getPackageManager().getPackageInfo(EnginePolicy.GAME, 0);
             if (!EnginePolicy.supports(config.gamePackage, game.versionName, game.getLongVersionCode()))
-                throw new IllegalStateException("Supported version: GO 0.431.0 / 2026092402");
+                throw new IllegalStateException("Supported version: GO " + EnginePolicy.VERSION + " / " + EnginePolicy.VERSION_CODE);
             try (InputStream asset = context.getAssets().open("engine/agent.js")) {
                 if (!FarmPolicy.EXPECTED_AGENT_SHA.equals(hash(asset))) throw new IllegalStateException("Engine integrity check failed");
             }
-            if (resolveError12 && Build.VERSION.SDK_INT != 29)
-                throw new IllegalStateException("Fix error 12: UGPhone Android 10 profile");
             RootShell.Result security = root.execute("getenforce", 2000);
             record("environment", new JSONObject().put("rootGranted", true).put("selinuxReported", security.output).put("exit", security.code));
             runner = new NativeEngineRunner(context, root, config, false, new NativeEngineRunner.Listener() {
+                @Override public void onTargetProcess(int target, long ticks) {
+                    pid = target; startTicks = ticks;
+                    collector.bindTarget(target, ticks);
+                    try { record("target", new JSONObject().put("pid", pid).put("startTicks", ticks)
+                            .put("connection", "EARLY_SPAWN")); } catch (Exception ignored) { }
+                    startMonitor();
+                    requestGameLaunch(true);
+                }
+                @Override public void onGameForeground() { listener.launchReady(""); }
                 @Override public void onStatus(String message) {
                     if ("Internal engine active".equals(message) && readyAt == 0) {
                         readyAt = SystemClock.elapsedRealtime(); listener.ready();
@@ -167,12 +189,31 @@ final class FarmSession implements Runnable {
                 }
                 @Override public void onInspection(String summary) { lastInspection = summary; snapshot(); }
             }, true, false, 0, report, transfers.enabled, transfers, expectedPlayerId, true);
-            runner.accumulatedCounts(baseline.caught, baseline.spun, true);
+            runner.accumulatedCounts(baseline.caught, baseline.spun,
+                    dev.rootcatch.automation.PokemonSelection.recoverEmptyMap(config.onlyCatch));
+            runner.skipBuddyRemoval(buddyRemovalHandled);
             runner.enableNativeLocation(resolveError12);
             listener.status("Preparing connection…");
             runner.prepareAssets(FarmPolicy.EXPECTED_AGENT_SHA);
             if (stopping) return;
-            if (resolveError12 || automaticRestart) {
+            if (earlySpawn) {
+                collector = new CrashCollector(report, 0, 0, true);
+                collector.start(true);
+                listener.status("Preparing game startup…");
+                GameStartCheck startCheck = new GameStartCheck((command, timeout) -> {
+                    RootShell.Result reply = root.execute(command, timeout);
+                    return new GameStartCheck.Reply(reply.code, reply.output);
+                }, (event, values) -> record(event, new JSONObject(values)),
+                        SystemClock::elapsedRealtime, Thread::sleep, () -> stopping);
+                startCheck.useFastInventory();
+                startCheck.prepare(!automaticRestart && userApprovedGameStop);
+                if (stopping) return;
+                startupOpened = true;
+                record("spawn_armed", new JSONObject().put("assetsAlreadyVerified", true)
+                        .put("gameAbsentConfirmed", true).put("automaticRestart", automaticRestart)
+                        .put("policyIsolationRequired", true));
+                listener.status("Opening Pokémon GO…");
+            } else if (resolveError12 || automaticRestart) {
                 collector = new CrashCollector(report, 0, 0, true);
                 collector.start(true);
                 listener.status("Checking game startup…");
@@ -187,30 +228,32 @@ final class FarmSession implements Runnable {
                         .put("gameAbsentConfirmed", true).put("automaticKill", false).put("singleAttach", true)
                         .put("userApprovedGameStop", userApprovedGameStop).put("automaticRestart", automaticRestart));
                 listener.status("Opening Pokémon GO…");
-                if (automaticRestart) launchRecoveryGame(); else listener.launchReady(report.getName());
+                requestGameLaunch(false);
                 awaitEarlyProcess();
                 listener.launchReady("");
                 if (stopping) return;
                 collector.bindTarget(pid, startTicks);
             } else {
+                requestGameLaunch(false);
                 awaitProcess();
+                listener.launchReady("");
                 if (stopping) return;
                 listener.status("Preparing logs…");
                 collector = new CrashCollector(report, pid, startTicks, true);
                 collector.start(false);
             }
             if (stopping) return;
-            record("target", new JSONObject().put("pid", pid).put("startTicks", startTicks)
-                    .put("gameVersion", game.versionName).put("gameVersionCode", game.getLongVersionCode()));
-            checkIdentity(root);
-            RootShell.Result processStatus = root.execute("cat /proc/" + pid + "/status", 2500);
-            if (processStatus.code != 0 || AttachGuard.tracerPid(processStatus.output) != 0)
-                throw new IllegalStateException("The game is already traced; engine not connected");
-            runner.expectProcess(pid, startTicks);
+            if (!earlySpawn) {
+                record("target", new JSONObject().put("pid", pid).put("startTicks", startTicks)
+                        .put("gameVersion", game.versionName).put("gameVersionCode", game.getLongVersionCode()));
+                checkIdentity(root);
+                RootShell.Result processStatus = root.execute("cat /proc/" + pid + "/status", 2500);
+                if (processStatus.code != 0 || AttachGuard.tracerPid(processStatus.output) != 0)
+                    throw new IllegalStateException("The game is already traced; engine not connected");
+                runner.expectProcess(pid, startTicks);
+                startMonitor();
+            }
             if (stopping) { runner.requestStop(stopReason); return; }
-            long started = SystemClock.elapsedRealtime();
-            monitor = new Thread(() -> supervise(started), "rootcatch-farm-guard");
-            monitor.setDaemon(true); monitor.start();
             runner.run();
             result = stopReason != null ? stopReason : ending;
             if (stopReason == null && !runner.sessionLimitReached().isEmpty()) {
@@ -231,20 +274,23 @@ final class FarmSession implements Runnable {
                         .put("gameClosed", closure.gameClosed).put("closureCommandAccepted", closure.commandAccepted)
                         .put("closureStatus", closure.status).put("closureError", closure.error)
                         .put("closureObservations", closure.observations).put("engineStoppedBeforeGameClose", true));
-            } else if (stopReason == null && runner.emptyMapRecoveryReady()) {
+            } else if (stopReason == null && (runner.emptyMapRecoveryReady() || runner.buddyRemovalRecoveryReady())) {
+                boolean buddyRestart = runner.buddyRemovalRecoveryReady();
+                String recoveryPrefix = buddyRestart ? "buddy_removal_" : "empty_map_";
                 stopping = true;
                 monitorRoot.close();
                 if (monitor != null) { monitor.interrupt(); monitor.join(1500); }
-                listener.status("Restarting Pokémon GO…");
+                listener.status(buddyRestart ? "Removing buddy…" : "Restarting Pokémon GO…");
                 SessionLimitStop gameStop = new SessionLimitStop((command, timeout) -> {
                     RootShell.Result reply = root.execute(command, timeout);
                     return new GameStartCheck.Reply(reply.code, reply.output);
-                }, (event, values) -> record("empty_map_" + event, new JSONObject(values)), Thread::sleep);
+                }, (event, values) -> record(recoveryPrefix + event, new JSONObject(values)), Thread::sleep);
                 if (stopReason == null) {
                     SessionLimitStop.Result closure = gameStop.close(pid, startTicks);
                     recoveryReady = closure.gameClosed && !runner.playerIdentity().isEmpty() && stopReason == null;
-                    result = recoveryReady ? "Restarting after 5 minutes without nearby Pokémon" : "Map recovery could not close the game";
-                    record("empty_map_recovery_closed", new JSONObject().put("gameClosed", closure.gameClosed)
+                    result = recoveryReady ? buddyRestart ? "Restarting after buddy removal" : "Restarting after 5 minutes without nearby Pokémon"
+                            : "Recovery could not close the game";
+                    record(recoveryPrefix + "recovery_closed", new JSONObject().put("gameClosed", closure.gameClosed)
                             .put("status", closure.status).put("error", closure.error).put("recoveryReady", recoveryReady)
                             .put("caught", counters.caught).put("spun", counters.spun));
                 }
@@ -266,8 +312,10 @@ final class FarmSession implements Runnable {
             root.close();
             listener.engineStopped();
             if (collector != null) {
-                listener.status("Saving logs…");
-                try { collector.finish(); } catch (Exception error) { record("collector_error", detail(error.toString())); }
+                boolean restart = recoveryReady();
+                if (!buddyRestartPending()) listener.status("Saving logs…");
+                try { collector.finish(!userCancelled && !restart && limitReason.isEmpty(), restart, listener::status); }
+                catch (Exception error) { record("collector_error", detail(error.toString())); }
             }
             result = stopReason != null ? stopReason : result;
             if (startupRetryReady() && recoveryAttempt == RecoveryAttempts.MAX_ATTEMPTS)
@@ -277,6 +325,21 @@ final class FarmSession implements Runnable {
             try { if (trace != null) trace.close(); } catch (Exception ignored) { }
             listener.finished(result);
         }
+    }
+    private synchronized void startMonitor() {
+        if (stopping || monitor != null) return;
+        long began = SystemClock.elapsedRealtime();
+        monitor = new Thread(() -> supervise(began), "rootcatch-farm-guard");
+        monitor.setDaemon(true); monitor.start();
+    }
+    private void requestGameLaunch(boolean targetBound) {
+        if (stopping || !gameLaunch.request(targetBound)) return;
+        if (!automaticRestart) {
+            listener.launchReady(report.getName());
+            return;
+        }
+        try { launchRecoveryGame(); }
+        catch (Exception error) { throw startupFailure("Automatic game launch failed: " + error.getMessage()); }
     }
     private void launchRecoveryGame() throws Exception {
         if (stopping) return;
@@ -323,6 +386,7 @@ final class FarmSession implements Runnable {
                 return new GameStartCheck.Reply(reply.code, reply.output);
             }, (event, values) -> record("recovery_retry_" + event, new JSONObject(values)),
                     SystemClock::elapsedRealtime, Thread::sleep, () -> userCancelled);
+            if (earlySpawn) absence.useFastInventory();
             absence.prepare(false);
             startupRetryReady = !userCancelled;
             record("recovery_retry_ready", new JSONObject().put("attempt", recoveryAttempt)
@@ -398,9 +462,26 @@ final class FarmSession implements Runnable {
         }
     }
     private void checkIdentity(RootShell shell) throws Exception {
-        RootShell.Result found = shell.execute("pidof " + EnginePolicy.GAME, 2500);
-        if (found.code != 0 || EnginePolicy.uniquePid(found.output) != pid || readStart(shell, pid) != startTicks)
-            throw new IllegalStateException("Game process changed");
+        long began = SystemClock.elapsedRealtime();
+        String command = BoundGameProcess.command(pid);
+        RootShell.Result reply = shell.execute(command, 2500);
+        BoundGameProcess.Result identity = BoundGameProcess.verify(reply.code, reply.output, pid, startTicks);
+        boolean diagnostic = readyAt == 0 || began - lastIdentityLog >= 15000 || !identity.matches();
+        if (diagnostic) {
+            lastIdentityLog = began;
+            record("bound_process_identity", new JSONObject().put("pid", pid).put("expectedStartTicks", startTicks)
+                    .put("state", identity.state.name()).put("reason", identity.reason).put("command", command)
+                    .put("exit", reply.code).put("output", reply.output)
+                    .put("durationMs", SystemClock.elapsedRealtime() - began));
+            try {
+                RootShell.Result discovery = shell.execute(GameStartCheck.PIDOF, 2500);
+                record("process_discovery_diagnostic", new JSONObject().put("exit", discovery.code).put("output", discovery.output)
+                        .put("uniquePid", EnginePolicy.uniquePid(discovery.output)).put("boundPid", pid)
+                        .put("boundIdentityValid", identity.matches()).put("diagnosticOnly", true));
+            } catch (Exception error) { record("process_discovery_diagnostic_error", detail(error.toString())); }
+        }
+        if (!identity.matches()) throw new IllegalStateException(identity.state == BoundGameProcess.State.CHANGED
+                ? "Game process changed: " + identity.reason : "Game identity unavailable: " + identity.reason);
     }
     private long readStart(RootShell shell, int target) throws Exception {
         RootShell.Result identity = shell.execute("cat /proc/" + target + "/stat", 2500);
@@ -424,6 +505,8 @@ final class FarmSession implements Runnable {
                     .put("build", FarmPolicy.BUILD).put("result", reason).put("agentSha256", FarmPolicy.EXPECTED_AGENT_SHA)
                     .put("pid", pid).put("startTicks", startTicks).put("continuous", true).put("automaticPreflight", true)
                     .put("singleAttach", true).put("caught", counters.caught).put("fled", counters.fled)
+                    .put("mode", "FARMER")
+                    .put("maxCatches", config.maxCatches).put("maxSpins", config.maxSpins)
                     .put("recoveryAttempt", recoveryAttempt).put("maxRecoveryAttempts", RecoveryAttempts.MAX_ATTEMPTS)
                     .put("startupRetryReady", startupRetryReady())
                     .put("resolveError12", resolveError12).put("locationImplementation", "rootcatch-profile7-v2")

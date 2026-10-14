@@ -23,6 +23,8 @@ final class CrashCollector {
     private Thread liveThread;
     private volatile long finalDeadline;
     private boolean finishing;
+    private boolean fullReport = true, restarting;
+    private java.util.function.Consumer<String> progress = message -> { };
     CrashCollector(File report, int pid, long ticks, boolean continuous) throws Exception {
         this.report = report; this.pid = pid; this.ticks = ticks;
         this.continuous = continuous;
@@ -36,7 +38,8 @@ final class CrashCollector {
         note("collector", new JSONObjectSafe().put("rawLogs", true).put("pid", pid).put("startTicks", ticks)
                 .put("liveBytesLimit", 16 * MIB).put("sourceBytesLimit", 2 * MIB)
                 .put("continuousLiveRotation", continuous).put("liveSegmentSeconds", 240).put("liveArchives", 2)
-                .put("nativeReportsRequireRootAccess", true).put("allSystemBuffersMayIncludeOtherApps", true));
+                .put("nativeReportsRequireRootAccess", true).put("allSystemBuffersMayIncludeOtherApps", true)
+                .put("liveScope", "SYSTEM_WARNINGS_AND_GAME_CRASH_INFO").put("verboseSystemStream", false));
         liveThread = new Thread(this::liveLoop,
                 "ugphone-logcat-live");
         liveThread.setDaemon(true); liveThread.start();
@@ -53,9 +56,15 @@ final class CrashCollector {
         capture("before-process-list.log", DiagnosticCommands.snapshots(pid, ticks).get("process-list"), new DiagnosticProcess(), 4, 2 * MIB);
         capture("before-tools.log", DiagnosticCommands.snapshots(pid, ticks).get("tools"), new DiagnosticProcess(), 4, 2 * MIB);
     }
-    void finish() {
+    void finish() { finish(true, false, message -> { }); }
+    void finish(boolean full, boolean restart, java.util.function.Consumer<String> onProgress) {
         synchronized (this) { if (finishing) return; finishing = true; }
-        finalDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(50);
+        fullReport = full; restarting = restart; progress = onProgress;
+        int seconds = restarting ? 3 : fullReport ? 50 : 12;
+        finalDeadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(seconds);
+        note("finalization_profile", new JSONObjectSafe().put("fullReport", fullReport).put("controlledRestart", restarting)
+                .put("sourceBudgetSeconds", seconds));
+        if (!fullReport) stopLive();
         CollectorFinalization.run(this::gatherFinalSources, this::stopLive, () -> {
             note("collector_end", new JSONObjectSafe().put("liveWorkerFinished", liveThread == null || !liveThread.isAlive())
                     .put("targetBound", pid > 1 && ticks > 0).put("pid", pid).put("startTicks", ticks)
@@ -63,13 +72,21 @@ final class CrashCollector {
         }, () -> { synchronized (this) { try { manifest.close(); } catch (Exception ignored) { } } });
     }
     private void gatherFinalSources() {
-        // Keep live capture for a short post-stop window: debuggerd reports may arrive after PID disappearance.
-        try { Thread.sleep(2500); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+        if (restarting) {
+            note("source_omitted", new JSONObjectSafe().put("reason", "controlled restart; engine and lifecycle logs retained"));
+            return;
+        }
+        if (fullReport) try { Thread.sleep(2500); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
         if (pid <= 1 || ticks <= 0)
             note("source_omitted", new JSONObjectSafe().put("file", "after-game-process.log")
                     .put("reason", "target not bound; collecting system sources without a fabricated PID"));
-        for (Map.Entry<String, String> source : DiagnosticCommands.snapshots(pid, ticks).entrySet())
+        Map<String, String> sources = DiagnosticCommands.finalSources(pid, ticks, fullReport);
+        int completed = 0;
+        for (Map.Entry<String, String> source : sources.entrySet()) {
+            progress.accept("Saving logs… " + (++completed) + "/" + (sources.size() + 1));
             capture("after-" + source.getKey() + ".log", source.getValue(), new DiagnosticProcess(), 5, 2 * MIB);
+        }
+        progress.accept("Saving logs… " + (sources.size() + 1) + "/" + (sources.size() + 1));
         capture("tombstone-inventory-after.log", DiagnosticCommands.tombstoneInventory(), new DiagnosticProcess(), 4, MIB);
         tombstones("tombstone-inventory-after.log", "current", 4);
     }
@@ -94,7 +111,7 @@ final class CrashCollector {
                 if (liveStopping) { current.close(); break; }
                 note("live_segment", new JSONObjectSafe().put("sequence", ++segment)
                         .put("file", "logcat-live.log").put("olderSegmentsMayBeOverwritten", true));
-                capture("logcat-live.log", DiagnosticCommands.liveLogcat(), current, 240, 16 * MIB);
+                capture("logcat-live.log", DiagnosticCommands.farmerLiveLogcat(), current, 240, 16 * MIB);
                 if (!liveStopping && continuous) Thread.sleep(1000);
             } catch (Exception error) {
                 note("live_rotation_error", new JSONObjectSafe().put("error", error.toString())); break;

@@ -1,4 +1,4 @@
-// Item identifiers cross-checked against the 0.431.0 Item enum.
+// Item identifiers cross-checked against the 0.433.0 Item enum.
 // This allowlist does not authorize unknown or protected items for deletion.
 const CATALOG = Object.freeze([
   {

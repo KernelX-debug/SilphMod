@@ -9,8 +9,9 @@ function jniRuntime(r, report) {
   let nativeCalls = 0;const functionCache=new Map();
   function readable(address, bytes) {
     if (!address || address.isNull()) throw Error('Null pointer');
-    const range = Process.findRangeByAddress(address);
-    if (!range || !range.protection.includes('r') || address.add(bytes).compare(range.base.add(range.size)) > 0)
+    const inspected = Process.arch==='arm64'&&Process.pointerSize===8 ? address.and(ptr('0x00ffffffffffffff')) : address;
+    const range = Process.findRangeByAddress(inspected);
+    if (!range || !range.protection.includes('r') || inspected.add(bytes).compare(range.base.add(range.size)) > 0)
       throw Error('Range not readable: '+address);
     return address;
   }
@@ -75,6 +76,14 @@ function jniRuntime(r, report) {
       return nonNull(own('GetMethodID:'+name,()=>fn(static_?113:33,'pointer',
         ['pointer','pointer','pointer','pointer'])(env,clazz,cstr(name),cstr(signature))),name);
     }
+    function staticField(clazz,name,signature) {
+      return nonNull(own('GetStaticFieldID:'+name,()=>fn(144,'pointer',
+        ['pointer','pointer','pointer','pointer'])(env,clazz,cstr(name),cstr(signature))),name);
+    }
+    function staticObject(clazz,id) {
+      return track(own('GetStaticObjectField',()=>fn(145,'pointer',
+        ['pointer','pointer','pointer'])(env,clazz,id)));
+    }
     function callObject(object,id,args=ptr(0),static_=false) {
       return track(own('CallObjectMethodA',()=>fn(static_?116:36,'pointer',
         ['pointer','pointer','pointer','pointer'])(env,object,id,args)));
@@ -131,7 +140,7 @@ function jniRuntime(r, report) {
         fn(index,type,['pointer','pointer','pointer','pointer']);
       fn(168,'int',['pointer','pointer']);fn(169,'pointer',['pointer','pointer','pointer']);fn(170,'void',['pointer','pointer','pointer']);
     }
-    return {env, table, pending, own, findClass, method, scalar, text, loadApplicationClass, sdk, enumNames,
+    return {env, table, pending, own, findClass, method, staticField, staticObject, scalar, text, loadApplicationClass, sdk, enumNames,
       retain, release, prepareLocationRead,
       close() { const errors=[]; for (const ref of refs.splice(0).reverse()) {
         try { deleteLocal(env,ref); } catch(error) { errors.push(String(error)); }

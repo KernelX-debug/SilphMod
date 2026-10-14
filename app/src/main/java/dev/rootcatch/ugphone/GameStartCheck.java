@@ -26,6 +26,25 @@ final class GameStartCheck {
             + "case \"${20}\" in ''|*[!0-9]*|0) rc_unread=$((rc_unread+1)); continue;; esac; "
             + "rc_match=$((rc_match+1)); printf 'PROCESS:%s:%s:%s\\n' \"${rc_dir##*/}\" \"${20}\" \"$rc_name\";; esac; "
             + "done; printf 'SUMMARY:%s:%s:%s\\n' \"$rc_seen\" \"$rc_unread\" \"$rc_match\"";
+    static final String FAST_PROC =
+            "rc_table=$(ps -A -o PID,ARGS) || exit 2; "
+            + "rc_list=$(printf '%s\\n' \"$rc_table\" | awk -v target='" + GAME + "' '"
+            + "NR == 1 { if ($1 != \"PID\" || $2 != \"ARGS\") invalid=1; next } "
+            + "NF < 2 || $1 !~ /^[0-9]+$/ { invalid=1; next } "
+            + "{ seen++; if ($2 == target || index($2, target \":\") == 1) print $1 } "
+            + "END { if (invalid || seen < 1) exit 2; print \"TOTAL:\" seen }') || exit 2; "
+            + "rc_seen=0; rc_unread=0; rc_match=0; "
+            + "for rc_id in $rc_list; do case \"$rc_id\" in TOTAL:*) rc_seen=${rc_id#TOTAL:}; continue;; esac; "
+            + "rc_dir=/proc/$rc_id; [ -d \"$rc_dir\" ] || continue; "
+            + "rc_name=$(tr '\\000' ' ' < \"$rc_dir/cmdline\" 2>/dev/null); rc_read=$?; "
+            + "if [ \"$rc_read\" != 0 ]; then [ ! -d \"$rc_dir\" ] || rc_unread=$((rc_unread+1)); continue; fi; "
+            + "rc_name=${rc_name%% *}; case \"$rc_name\" in '" + GAME + "'|'" + GAME + ":'*) "
+            + "rc_stat=$(cat \"$rc_dir/stat\" 2>/dev/null); rc_read=$?; "
+            + "if [ \"$rc_read\" != 0 ]; then [ ! -d \"$rc_dir\" ] || rc_unread=$((rc_unread+1)); continue; fi; "
+            + "rc_tail=${rc_stat##*) }; set -- $rc_tail; "
+            + "case \"${20}\" in ''|*[!0-9]*|0) rc_unread=$((rc_unread+1)); continue;; esac; "
+            + "rc_match=$((rc_match+1)); printf 'PROCESS:%s:%s:%s\\n' \"$rc_id\" \"${20}\" \"$rc_name\";; esac; "
+            + "done; printf 'SUMMARY:%s:%s:%s\\n' \"$rc_seen\" \"$rc_unread\" \"$rc_match\"";
 
     interface Executor { Reply execute(String command, long timeoutMs) throws Exception; }
     interface Journal { void record(String event, Map<String, Object> values); }
@@ -52,6 +71,8 @@ final class GameStartCheck {
     private final LongSupplier clock;
     private final Sleeper sleeper;
     private final BooleanSupplier cancelled;
+    private String procCommand = PROC;
+    void useFastInventory() { procCommand = FAST_PROC; }
     GameStartCheck(Executor executor, Journal journal, LongSupplier clock, Sleeper sleeper, BooleanSupplier cancelled) {
         this.executor = executor; this.journal = journal; this.clock = clock;
         this.sleeper = sleeper; this.cancelled = cancelled;
@@ -124,6 +145,15 @@ final class GameStartCheck {
             journal.record("game_start_probe_error", values); throw error;
         }
     }
+    private Reply readProbe(String name, String command, long timeout, String phase, int attempt) throws Exception {
+        try { return query(name, command, timeout, phase, attempt); }
+        catch (java.io.IOException error) {
+            if (!FAST_PROC.equals(procCommand) || cancelled.getAsBoolean() || Thread.currentThread().isInterrupted()) throw error;
+            journal.record("game_start_read_retry", values("probe", name, "attempt", attempt,
+                    "maxReadRetries", 1, "error", error.toString(), "gameRequestsSent", false));
+            return query(name, command, timeout, phase, attempt);
+        }
+    }
     /** Two independent absence observations, no automatic repeated stop/relaunch. */
     void prepare(boolean allowGameStop) throws Exception {
         long deadline = clock.getAsLong() + 20_000;
@@ -132,8 +162,8 @@ final class GameStartCheck {
         do {
             if (cancelled.getAsBoolean()) throw new InterruptedException("Startup cancelled");
             String phase = stopIssued ? "after_user_approved_stop" : "before_launch";
-            Reply pidof = query("PIDOF", PIDOF, 2500, phase, ++attempt);
-            Reply proc = query("PROC", PROC, 8000, phase, attempt);
+            Reply pidof = readProbe("PIDOF", PIDOF, 2500, phase, ++attempt);
+            Reply proc = readProbe("PROC", procCommand, 8000, phase, attempt);
             Observation observation = decide(pidof, proc);
             journal.record("game_start_decision", values("phase", phase, "attempt", attempt,
                     "state", observation.state.name(), "reason", observation.reason,

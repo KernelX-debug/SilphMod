@@ -1,4 +1,4 @@
-/** Pointer-width GC handles for the inspected GO 0.431.0 / Unity 6000.3.21f1 ARM64 ABI.
+/** Pointer-width GC handles for the inspected GO 0.433.0 / Unity 6000.3.22f1 ARM64 ABI.
  * Does not patch the bridge or use its uint32 GCHandle helpers.
  */
 export type GcApi64 = {

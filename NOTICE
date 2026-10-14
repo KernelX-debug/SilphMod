@@ -7,6 +7,9 @@ Runtime dependencies (unmodified upstream distributions):
 - Frida 17.22.1: LGPL-2.0 with the wxWindows Library Licence 3.1 exception.
   Source: https://github.com/frida/frida/tree/17.22.1
   Binary: https://github.com/frida/frida/releases/tag/17.22.1
+- Frida 17.23.3: same license; unmodified ARM64 executable for early startup.
+  Source: https://github.com/frida/frida/tree/17.23.3
+  Binary: https://github.com/frida/frida/releases/tag/17.23.3
 - frida-java-bridge 7.0.13: LGPL-2.0 WITH WxWindows-exception-3.1.
   Source: https://github.com/frida/frida-java-bridge
 - frida-il2cpp-bridge 0.14.0: MIT; copyright vfsfitvnm.
@@ -38,3 +41,10 @@ The Pokémon Company and Niantic, and is not covered by the project MIT license.
 The Poffin image is an unmodified game asset archived by PokeMiners:
 https://github.com/PokeMiners/pogo_assets/blob/df0598b84318f68a5bbe5494caa4292c9b49caae/Images/Items/poffin.3.png
 Internal Java names and installed application identity are retained for upgrade compatibility.
+
+Pokémon selector artwork is provided by PokeMiners/pogo_assets and PokeAPI/sprites.
+Sources and per-file hashes are retained in tools/pokemon-assets.json.
+Pokémon artwork belongs to its respective rightsholders and is not covered by MIT.
+The PokeAPI repository notice is included in assets/licenses/PokeAPI-sprites.txt.
+The offline released-species catalog is sourced from
+https://pogoapi.net/api/v1/released_pokemon.json during asset preparation only.

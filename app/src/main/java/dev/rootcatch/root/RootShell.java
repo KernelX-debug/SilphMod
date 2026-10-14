@@ -20,8 +20,16 @@ public final class RootShell implements Closeable {
 
     private final AtomicLong sequence = new AtomicLong();
     private final Object commandLock = new Object();
+    private final String[] shellCommand;
     private volatile Session session;
     private volatile boolean closed;
+
+    public RootShell() { this("su"); }
+
+    RootShell(String... shellCommand) {
+        if (shellCommand == null || shellCommand.length == 0) throw new IllegalArgumentException("Empty shell command");
+        this.shellCommand = shellCommand.clone();
+    }
 
     public Result execute(String command) throws IOException {
         return execute(command, DEFAULT_TIMEOUT_MS);
@@ -44,7 +52,7 @@ public final class RootShell implements Closeable {
             try {
                 active.writer.write(command);
                 active.writer.newLine();
-                active.writer.write("echo " + marker + "$?");
+                active.writer.write("printf '\\n" + marker + "%s\\n' \"$?\"");
                 active.writer.newLine();
                 active.writer.flush();
 
@@ -67,7 +75,9 @@ public final class RootShell implements Closeable {
                     }
                     if (event == null) continue;
                     if (event.endOfStream) {
-                        throw new IOException("The su process ended unexpectedly");
+                        String tail = output.length() > 2048 ? output.substring(output.length() - 2048) : output.toString();
+                        String exit = active.process.isAlive() ? "pending" : Integer.toString(active.process.exitValue());
+                        throw new IOException("The su process ended unexpectedly (exit " + exit + "): " + tail);
                     }
                     if (event.line.startsWith(marker)) {
                         if (closed) throw new IOException("Root shell is closed");
@@ -103,7 +113,7 @@ public final class RootShell implements Closeable {
         if (current != null && current.process.isAlive()) return current;
         if (current != null) discard(current);
 
-        Process process = new ProcessBuilder("su").redirectErrorStream(true).start();
+        Process process = new ProcessBuilder(shellCommand).redirectErrorStream(true).start();
         if (closed) {
             process.destroyForcibly();
             throw new IOException("Root shell is closed");

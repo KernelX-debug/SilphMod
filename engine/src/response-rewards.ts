@@ -69,3 +69,34 @@ export function spinRewardData(result:Obj) {
   return {xpAwarded:integer(field(result,'XpAwarded'),'spin_xp'),
     loot:loot(field(result,'Loot')),bonusLoot:loot(field(result,'BonusLoot'))};
 }
+export function questRewardData(result:Obj) {
+  obj(result,'Holoholo.Rpc.CompleteQuestOutProto');
+  const sequence=list(field(result,'Rewards'),'Holoholo.Rpc.QuestRewardProto');
+  const entries=[];
+  let xp=0,stardust=0;
+  for(let i=0;i<sequence.length;i++) {
+    const reward=obj(sequence.item.invoke(i),'Holoholo.Rpc.QuestRewardProto');
+    const getter=reward.tryMethod('get_RewardCase',0);
+    if(!getter || getter.virtualAddress.isNull() || !getter.returnType.class.isEnum)
+      throw new RewardDataError('quest_reward_kind_mismatch');
+    const raw=getter.invoke(),kind=integer(raw instanceof Il2Cpp.ValueType?raw.field('value__').value:raw,'quest_reward_kind');
+    if(kind>24)throw new RewardDataError('unknown_quest_reward_kind');
+    let count:number|null=null,item:number|null=null;
+    if(kind===2 || kind===4) {
+      const amount=reward.tryMethod<number>(kind===2?'get_Exp':'get_Stardust',0);
+      if(!amount || amount.virtualAddress.isNull() || amount.returnType.name!=='System.Int32')
+        throw new RewardDataError('quest_reward_amount_mismatch');
+      count=integer(amount.invoke(),'quest_reward_amount');
+      if(kind===2)xp=integer(xp+count,'quest_xp');else stardust=integer(stardust+count,'quest_stardust');
+    } else if(kind===3) {
+      const getter=reward.tryMethod<Obj>('get_Item',0);
+      if(!getter || getter.virtualAddress.isNull() || getter.returnType.name!=='Holoholo.Rpc.ItemRewardProto')
+        throw new RewardDataError('quest_reward_item_mismatch');
+      const value=obj(getter.invoke(),'Holoholo.Rpc.ItemRewardProto'),raw=field(value,'Item');
+      item=integer(raw instanceof Il2Cpp.ValueType?raw.field('value__').value:raw,'quest_item');
+      count=integer(field(value,'Amount'),'quest_item_amount');
+    }
+    entries.push({kind,count,item});
+  }
+  return {xp,stardust,entries};
+}

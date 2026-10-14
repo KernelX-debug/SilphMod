@@ -29,7 +29,6 @@ public final class SessionLimits {
         if (spun >= maxSpins) return "Spin limit reached";
         return "";
     }
-
     public static boolean reached(String kind, int caught, int spun, int maxCatches, int maxSpins,
                                   boolean autoCatch, boolean autoSpin) {
         return maxCatches > 0 && maxSpins > 0 && caught >= 0 && spun >= 0

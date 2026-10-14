@@ -32,6 +32,7 @@ import dev.rootcatch.automation.AutomationConfig;
 import dev.rootcatch.automation.BerryOptions;
 import dev.rootcatch.automation.SessionLimits;
 import dev.rootcatch.automation.ThrowQuality;
+import dev.rootcatch.automation.PokemonSelection;
 import dev.rootcatch.nativeengine.EnginePolicy;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,15 +43,17 @@ public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<View> settings = new ArrayList<>();
     private SharedPreferences prefs;
-    private Switch capture, spin, transfer, clean, useBerries, skipInterruptions;
-    private CheckBox keepShiny, keepHundo, keepDynamax, keepHatched, keepBackground, keepShinyBackground, resolveError12;
+    private Switch capture, spin, transfer, clean, useBerries, showIvNames, extendedManualTransfer;
+    private CheckBox keepShiny, keepHundo, keepDynamax, keepHatched, keepBackground, keepShinyBackground, keepFieldResearch, resolveError12, removeBuddy;
     private EditText delay, maxCatches, maxSpins;
+    private LinearLayout farmerEngine;
     private LinearLayout transferOptions, cleanOptions, advancedOptions, berryOptions;
     private TextView status, elapsed, caught, spun, transferred, discarded, xp, stardust;
-    private Button start, export, clearStatistics, items, advanced, throwSelector, berrySelector;
+    private Button start, export, clearStatistics, items, advanced, throwSelector, berrySelector, pokemonSelector;
     private ThrowQuality throwQuality;
     private String limits;
     private String berryOrder;
+    private String onlyCatch;
     private boolean starting;
     private boolean visible;
     private long startingAt;
@@ -64,6 +67,7 @@ public final class MainActivity extends Activity {
         throwQuality = ThrowQuality.fromSavedValue(prefs.getString("throw_quality", "GREAT"));
         limits = prefs.getString("discard_limits", EnginePolicy.DEFAULT_LIMITS);
         berryOrder = BerryOptions.fromSavedValue(prefs.getString("berry_order", BerryOptions.DEFAULT_ORDER));
+        onlyCatch = PokemonSelection.encode(PokemonSelection.parse(prefs.getString(PokemonSelection.KEY, "")));
         FarmService.restoreLast(this);
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true); scroll.setBackgroundColor(BACKGROUND);
         LinearLayout page = column(); page.setPadding(dp(22), dp(20), dp(22), dp(26)); scroll.addView(page);
@@ -83,6 +87,7 @@ public final class MainActivity extends Activity {
         TextView title = text("SilphMod", 26, TEXT); title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(0, -2, 1); titleParams.setMarginStart(dp(12));
         header.addView(title, titleParams); page.addView(header);
+        space(page, 18);
         status = text("Ready", 14, ACCENT); status.setPadding(0, dp(16), 0, dp(6)); page.addView(status);
         elapsed = text("00:00:00", 16, MUTED); elapsed.setTypeface(Typeface.MONOSPACE); page.addView(elapsed); space(page, 18);
         LinearLayout metrics = column();
@@ -100,6 +105,14 @@ public final class MainActivity extends Activity {
         resolveError12 = check(features, "Fix error 12", prefs.getBoolean("resolve_error_12", false));
         resolveError12.setTextSize(16);
         capture = toggle(features, "Catches", prefs.getBoolean("catch", true));
+        pokemonSelector = button("", false); settings.add(pokemonSelector); features.addView(pokemonSelector);
+        updatePokemonLabel();
+        pokemonSelector.setOnClickListener(view -> {
+            if (FarmService.isBusy() || starting) return;
+            new PokemonPickerDialog(this, onlyCatch).show(selected -> {
+                onlyCatch = selected; prefs.edit().putString(PokemonSelection.KEY, selected).apply(); updatePokemonLabel();
+            });
+        });
         throwSelector = button(getString(R.string.throw_quality_selector, throwQuality.label), false);
         settings.add(throwSelector); features.addView(throwSelector);
         throwSelector.setOnClickListener(view -> {
@@ -124,8 +137,9 @@ public final class MainActivity extends Activity {
         });
         useBerries.setOnCheckedChangeListener((view, checked) -> berryOptions.setVisibility(checked ? View.VISIBLE : View.GONE));
         berryOptions.setVisibility(useBerries.isChecked() ? View.VISIBLE : View.GONE);
+        removeBuddy = check(features, getString(R.string.remove_buddy), prefs.getBoolean("remove_buddy", false));
+        removeBuddy.setTextSize(16);
         spin = toggle(features, "Spin PokéStops", prefs.getBoolean("spin", true));
-        skipInterruptions = toggle(features, getString(R.string.skip_interruptions), prefs.getBoolean("skip_interruptions", true));
         transfer = toggle(features, "Transfer new catches", prefs.getBoolean("transfer", false));
         transferOptions = column(); transferOptions.setPadding(dp(8), 0, dp(8), dp(12)); features.addView(transferOptions);
         keepShiny = check(transferOptions, "Keep shiny", prefs.getBoolean("keep_shiny", true));
@@ -134,6 +148,7 @@ public final class MainActivity extends Activity {
         keepHatched = check(transferOptions, "Keep hatched", prefs.getBoolean("keep_hatched", true));
         keepBackground = check(transferOptions, "Keep background", prefs.getBoolean("keep_background", true));
         keepShinyBackground = check(transferOptions, "Keep shiny + background", prefs.getBoolean("keep_shiny_background", false));
+        keepFieldResearch = check(transferOptions, "Keep field research encounters", prefs.getBoolean("keep_field_research", true));
         clean = toggle(features, "Clean item bag", prefs.getBoolean("clean", false));
         cleanOptions = column(); cleanOptions.setPadding(dp(8), 0, dp(8), dp(10)); features.addView(cleanOptions);
         items = button("Items to keep", false); settings.add(items); cleanOptions.addView(items); updateItemLabel();
@@ -143,13 +158,19 @@ public final class MainActivity extends Activity {
         transferOptions.setVisibility(transfer.isChecked() ? View.VISIBLE : View.GONE);
         cleanOptions.setVisibility(clean.isChecked() ? View.VISIBLE : View.GONE);
         space(page, 14);
+        section(page, "Inventory tools");
+        LinearLayout inventoryTools = card(); page.addView(inventoryTools);
+        showIvNames = toggle(inventoryTools, "Show IV names", prefs.getBoolean("show_iv_names", true));
+        extendedManualTransfer = toggle(inventoryTools, "Extended manual transfer", prefs.getBoolean("extended_manual_transfer", false));
+        space(page, 14);
         advanced = button("Engine settings ▾", false); page.addView(advanced); settings.add(advanced);
         advancedOptions = card(); advancedOptions.setVisibility(View.GONE); page.addView(advancedOptions);
-        delay = numeric(advancedOptions, "Action interval · ms", prefs.getInt("delay", 150));
-        section(advancedOptions, getString(R.string.session_limits));
-        maxCatches = numeric(advancedOptions, getString(R.string.maximum_catches),
+        farmerEngine = column(); advancedOptions.addView(farmerEngine);
+        delay = numeric(farmerEngine, "Action interval · ms", prefs.getInt("delay", 150));
+        section(farmerEngine, getString(R.string.session_limits));
+        maxCatches = numeric(farmerEngine, getString(R.string.maximum_catches),
                 SessionLimits.savedLimit(prefs.getInt("max_catches", SessionLimits.DEFAULT_CATCHES), SessionLimits.DEFAULT_CATCHES));
-        maxSpins = numeric(advancedOptions, getString(R.string.maximum_spins),
+        maxSpins = numeric(farmerEngine, getString(R.string.maximum_spins),
                 SessionLimits.savedLimit(prefs.getInt("max_spins", SessionLimits.DEFAULT_SPINS), SessionLimits.DEFAULT_SPINS));
         advanced.setOnClickListener(view -> {
             boolean visible = advancedOptions.getVisibility() != View.VISIBLE;
@@ -192,44 +213,62 @@ public final class MainActivity extends Activity {
             }
             PackageInfo game = getPackageManager().getPackageInfo(EnginePolicy.GAME, 0);
             if (!EnginePolicy.supports(EnginePolicy.GAME, game.versionName, game.getLongVersionCode()))
-                throw new IllegalArgumentException("Supported version: GO 0.431.0 / 2026092402");
+                throw new IllegalArgumentException("Supported version: GO " + EnginePolicy.VERSION + " / " + EnginePolicy.VERSION_CODE);
             Intent service = new Intent(this, FarmService.class).setAction(FarmService.START)
                     .putExtra("resolveError12", resolveError12.isChecked())
-                    .putExtra("userApprovedGameStop", resolveError12.isChecked())
+                    .putExtra("userApprovedGameStop", resolveError12.isChecked()
+                            || dev.rootcatch.nativeengine.ConnectionStrategy.forSdk(Build.VERSION.SDK_INT).earlySpawn())
                     .putExtra("startupAuthorization", "USER_START_BUTTON")
                     .putExtra("transfer", transfer.isChecked()).putExtra("keepShiny", keepShiny.isChecked())
                     .putExtra("keepHundo", keepHundo.isChecked()).putExtra("keepDynamax", keepDynamax.isChecked())
                     .putExtra("keepHatched", keepHatched.isChecked()).putExtra("keepBackground", keepBackground.isChecked())
-                    .putExtra("keepShinyBackground", keepShinyBackground.isChecked());
+                    .putExtra("keepShinyBackground", keepShinyBackground.isChecked())
+                    .putExtra("keepFieldResearch", keepFieldResearch.isChecked());
             starting = true; startingAt = android.os.SystemClock.elapsedRealtime(); renderState();
             startForegroundService(service);
-            if (!resolveError12.isChecked()) moveTaskToBack(true);
         } catch (Exception error) { starting = false; Toast.makeText(this, error.getMessage(), Toast.LENGTH_LONG).show(); }
     }
     private void saveSettings() {
         FarmPolicy.validate(capture.isChecked(), spin.isChecked(), clean.isChecked(), transfer.isChecked(), limits);
         if (capture.isChecked() && useBerries.isChecked() && BerryOptions.parse(berryOrder).isEmpty())
             throw new IllegalArgumentException(getString(R.string.select_berries));
-        int actionDelay = read(delay, 100, 3000, "Interval");
-        int catchLimit = read(maxCatches, 1, Integer.MAX_VALUE, getString(R.string.maximum_catches));
-        int spinLimit = read(maxSpins, 1, Integer.MAX_VALUE, getString(R.string.maximum_spins));
-        prefs.edit().putString("package", EnginePolicy.GAME).putBoolean("internal_engine", true)
+        SharedPreferences.Editor edit = prefs.edit().putString("package", EnginePolicy.GAME).putBoolean("internal_engine", true)
                 .putString("throw_quality", throwQuality.name())
+                .putString(PokemonSelection.KEY, onlyCatch)
                 .putBoolean("use_berries", useBerries.isChecked()).putString("berry_order", berryOrder)
-                .putBoolean("skip_interruptions", skipInterruptions.isChecked())
-                .putInt("max_catches", catchLimit).putInt("max_spins", spinLimit)
                 .putBoolean("catch", capture.isChecked()).putBoolean("spin", spin.isChecked()).putBoolean("clean", clean.isChecked())
                 .putBoolean("resolve_error_12", resolveError12.isChecked())
+                .putBoolean("remove_buddy", removeBuddy.isChecked())
                 .putBoolean("transfer", transfer.isChecked()).putBoolean("keep_shiny", keepShiny.isChecked()).putBoolean("keep_hundo", keepHundo.isChecked())
                 .putBoolean("keep_dynamax", keepDynamax.isChecked()).putBoolean("keep_hatched", keepHatched.isChecked())
                 .putBoolean("keep_background", keepBackground.isChecked()).putBoolean("keep_shiny_background", keepShinyBackground.isChecked())
+                .putBoolean("keep_field_research", keepFieldResearch.isChecked())
+                .putBoolean("show_iv_names", showIvNames.isChecked())
+                .putBoolean("extended_manual_transfer", extendedManualTransfer.isChecked())
                 .putInt("max_transfers", 0).putString("discard_limits", EnginePolicy.limitsKey(limits))
-                .putInt("max_discarded_items", 0).putInt("delay", actionDelay).putInt("max_throws", 0).apply();
+                .putInt("max_discarded_items", 0).putInt("max_throws", 0);
+        edit.putInt("delay", read(delay, 100, 3000, "Interval"))
+                .putInt("max_catches", read(maxCatches, 1, Integer.MAX_VALUE, getString(R.string.maximum_catches)))
+                .putInt("max_spins", read(maxSpins, 1, Integer.MAX_VALUE, getString(R.string.maximum_spins)));
+        edit.apply();
     }
     private void saveDraft() {
         if (!FarmService.isBusy() && !starting && prefs != null && capture != null) {
             try { saveSettings(); } catch (IllegalArgumentException ignored) { }
+            saveEngineDraft();
         }
+    }
+    private void updatePokemonLabel() {
+        int count = PokemonSelection.parse(onlyCatch).size();
+        pokemonSelector.setText(count == 0 ? getString(R.string.only_catch_all)
+                : getResources().getQuantityString(R.plurals.only_catch_count, count, count));
+    }
+    private void saveEngineDraft() {
+        try {
+            prefs.edit().putInt("delay", read(delay, 100, 3000, "Interval"))
+                    .putInt("max_catches", read(maxCatches, 1, Integer.MAX_VALUE, "Capture limit"))
+                    .putInt("max_spins", read(maxSpins, 1, Integer.MAX_VALUE, "Spin limit")).apply();
+        } catch (IllegalArgumentException ignored) { }
     }
     private static int read(EditText input, int min, int max, String label) { return FarmPolicy.integer(input.getText().toString(), min, max, label); }
     private void openArmedGame() {

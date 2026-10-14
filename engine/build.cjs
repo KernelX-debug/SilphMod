@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..');
 const output = path.join(root, 'app/build/generated/engine');
 const asset = path.join(output, 'assets/engine/agent.js');
 esbuild.buildSync({
-  absWorkingDir: __dirname, entryPoints: ['src/silph-entry.ts'], bundle: true,
+  absWorkingDir: __dirname, entryPoints: ['src/silph-entry.ts'], bundle: true, preserveSymlinks: true,
   format: 'iife', platform: 'neutral', mainFields: ['main', 'module'],
   target: 'es2020', charset: 'utf8', legalComments: 'inline', outfile: asset,
 });

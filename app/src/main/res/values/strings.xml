@@ -1,4 +1,6 @@
 <resources>
+    <string name="remove_buddy">Remove buddy</string>
+    <string name="removing_buddy">Removing buddy…</string>
     <string name="enable_notifications_start">Enable notifications to start</string>
     <string name="enable_notifications_service">Enable service notifications</string>
     <string name="exporting">Exporting…</string>
@@ -15,7 +17,6 @@
     <string name="apply">Apply</string>
     <string name="save">Save</string>
     <string name="use_berries">Use berries</string>
-    <string name="skip_interruptions">Skip interruptions</string>
     <string name="session_limits">Session limits</string>
     <string name="maximum_catches">Maximum catches</string>
     <string name="maximum_spins">Maximum PokéStop spins</string>
@@ -37,5 +38,24 @@
     <plurals name="item_types">
         <item quantity="one">Item limits · %1$d type</item>
         <item quantity="other">Item limits · %1$d types</item>
+    </plurals>
+    <string name="only_catch">Only catch</string>
+    <string name="pokemon_catalog_entry">%1$d. %2$s</string>
+    <string name="only_catch_all">Only catch · All Pokémon ▾</string>
+    <string name="only_catch_all_caption">No selection · Catch all map Pokémon</string>
+    <string name="search_pokemon">Search by name or Pokédex number</string>
+    <string name="all_pokemon">All Pokémon</string>
+    <string name="selected_pokemon">Selected (%1$d)</string>
+    <string name="clear_selection">Clear</string>
+    <string name="save_selection">Save selection</string>
+    <string name="no_matching_pokemon">No matching Pokémon</string>
+    <string name="pokemon_catalog_unavailable">Pokémon catalog unavailable</string>
+    <plurals name="pokemon_selected">
+        <item quantity="one">%1$d Pokémon selected</item>
+        <item quantity="other">%1$d Pokémon selected</item>
+    </plurals>
+    <plurals name="only_catch_count">
+        <item quantity="one">Only catch · %1$d selected ▾</item>
+        <item quantity="other">Only catch · %1$d selected ▾</item>
     </plurals>
 </resources>

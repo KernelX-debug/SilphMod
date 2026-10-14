@@ -3,5 +3,19 @@
   "archiveSha256": "9bf7ce67a77b43041f4be40a53f940018f78bd45a2b9e666f6558b7ceaa7da02",
   "binarySha256": "fde5dd3d72cdc062e31c9f262038d9bfb637b6ac9665131341cfddd1fb7f05c0",
   "bytes": 58920136,
-  "source": "https://github.com/frida/frida/releases/tag/17.22.1"
+  "source": "https://github.com/frida/frida/releases/tag/17.22.1",
+  "loader": {
+    "adapter": "readonly-apk-v1",
+    "library": "libsilph-loader.so",
+    "binarySha256": "0215d7f3f5ded7104932ec9e28653d40f50576b1dc88ed6b9eef91bce5f0e7d8",
+    "source": "native/loader-adapter.c",
+    "build": "tools/build_loader.ps1"
+  },
+  "spawn": {
+    "version": "17.23.3",
+    "archiveSha256": "fa27b0478fbe1909978388d606236008c40e19ffddcea3bca69a6ed54fde02dc",
+    "binarySha256": "bc4e1a0c7ede20af387e9e002a535cb3ff0072f523c460692820473b3f07e122",
+    "bytes": 58920376,
+    "source": "https://github.com/frida/frida/releases/tag/17.23.3"
+  }
 }

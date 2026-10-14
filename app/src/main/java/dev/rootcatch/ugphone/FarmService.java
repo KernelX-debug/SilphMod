@@ -13,6 +13,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import android.widget.Toast;
 import dev.rootcatch.R;
 import dev.rootcatch.automation.AutomationConfig;
 import dev.rootcatch.automation.SessionLimits;
@@ -36,6 +37,8 @@ public final class FarmService extends Service {
     private AutomationConfig config;
     private TransferOptions transfers;
     private boolean resolveError12, approvedGameStop, userStopped;
+    private boolean buddyRemovalHandled;
+    private boolean buddyNoticeShown;
     private String userStopReason = "Stopped by user";
     private long cycle;
     private final RecoveryAttempts recovery = new RecoveryAttempts();
@@ -69,13 +72,25 @@ public final class FarmService extends Service {
     static synchronized void endExport() { exporting = false; }
     static synchronized void restoreLast(Context context) {
         if (running || workerAlive) return;
-        SharedPreferences saved = context.getSharedPreferences("farm_last_result", 0);
-        status = "en".equals(saved.getString("status_language", "")) ? saved.getString("status", "Ready") : "Ready";
-        counters = new SessionCounters(saved.getInt("caught", 0), saved.getInt("fled", 0),
+        restoreFarmer(context);
+    }
+    private static SharedPreferences saved(Context context) {
+        return context.getSharedPreferences("farm_last_result", 0);
+    }
+    private static SessionCounters readCounters(SharedPreferences saved) {
+        return new SessionCounters(saved.getInt("caught", 0), saved.getInt("fled", 0),
                 saved.getInt("spun", 0), saved.getInt("discarded", 0), saved.getInt("transferred", 0),
                 saved.getLong("xp", 0), saved.getLong("stardust", 0), saved.getLong("missing_rewards", 0),
                 saved.getBoolean("rewards_available", false));
+    }
+    private static void restoreFarmer(Context context) {
+        SharedPreferences saved = saved(context);
+        status = "en".equals(saved.getString("status_language", "")) ? saved.getString("status", "Ready") : "Ready";
+        counters = readCounters(saved);
         savedElapsed = saved.getLong("elapsed", 0); readyAt = 0; stoppedAt = 0;
+    }
+    private String limitBlock() {
+        return SessionLimits.startBlock(counters.caught, counters.spun, config.maxCatches, config.maxSpins);
     }
     private final Runnable tick = new Runnable() {
         @Override public void run() {
@@ -102,6 +117,8 @@ public final class FarmService extends Service {
         }
         if (!START.equals(intent.getAction())) { if (!running) stopSelf(); return START_NOT_STICKY; }
         if (running) return START_NOT_STICKY;
+        buddyRemovalHandled = false;
+        buddyNoticeShown = false;
         // Meet Android's foreground-service deadline before any root prompt, file IO or validation.
         startForeground(NOTIFICATION, notification());
         synchronized (FarmService.class) {
@@ -109,13 +126,14 @@ public final class FarmService extends Service {
             running = true; closing = false; ownEpoch = ++epoch;
         }
         config = AutomationConfig.load(this);
+        restoreFarmer(this);
         try {
             transfers = new TransferOptions(intent.getBooleanExtra("transfer", false), intent.getBooleanExtra("keepShiny", true),
                     intent.getBooleanExtra("keepHundo", true), intent.getBooleanExtra("keepDynamax", true),
                     intent.getBooleanExtra("keepHatched", true), intent.getBooleanExtra("keepBackground", true),
-                    intent.getBooleanExtra("keepShinyBackground", false), 0);
+                    intent.getBooleanExtra("keepShinyBackground", false), intent.getBooleanExtra("keepFieldResearch", true), 0);
             FarmPolicy.validate(config.autoCatch, config.autoSpin, config.cleanBag, transfers.enabled, config.discardLimits);
-            String block = SessionLimits.startBlock(counters.caught, counters.spun, config.maxCatches, config.maxSpins);
+            String block = limitBlock();
             if (!block.isEmpty()) throw new IllegalArgumentException(block);
             if (!notificationsVisible(this)) throw new IllegalArgumentException("Enable service notifications");
         } catch (IllegalArgumentException error) { finish(error.getMessage()); return START_NOT_STICKY; }
@@ -141,7 +159,12 @@ public final class FarmService extends Service {
             @Override public void launchReady(String ticket) { handler.post(() -> {
                 if (currentCycle(token, round) && !userStopped) launchReadySession = ticket; }); }
             @Override public void status(String message) { handler.post(() -> {
-                if (currentCycle(token, round) && !userStopped) { status = message; update(false); } }); }
+                if (currentCycle(token, round) && !userStopped) {
+                    if ("Removing buddy…".equals(message) && !buddyNoticeShown) {
+                        buddyNoticeShown = true; Toast.makeText(FarmService.this, R.string.removing_buddy, Toast.LENGTH_LONG).show();
+                    }
+                    status = message; update(false);
+                } }); }
             @Override public void ready() { handler.post(() -> {
                 if (currentCycle(token, round) && !userStopped && readyAt == 0) { readyAt = SystemClock.elapsedRealtime(); status = "Active"; update(true); } }); }
             @Override public void stats(int caught, int fled, int spun, int discarded) { handler.post(() -> {
@@ -153,14 +176,17 @@ public final class FarmService extends Service {
             @Override public void cleanupPaused(String reason) { handler.post(() -> {
                 if (currentCycle(token, round)) { cleanupNote = "Item cleanup paused"; update(true); } }); }
             @Override public void engineStopped() { handler.post(() -> {
-                if (currentCycle(token, round)) { freezeElapsed(); status = "Saving logs…"; persistLast(); update(true); } }); }
+                if (currentCycle(token, round)) { freezeElapsed();
+                    status = session != null && session.buddyRestartPending() && !userStopped ? "Removing buddy…" : "Saving logs…";
+                    persistLast(); update(true); } }); }
             @Override public void finished(String reason) { handler.post(() -> {
                 FarmSession ended = session;
                 if (ended != null) counters = counters.merge(ended.totals());
+                if (ended != null && ended.buddyWasRemoved()) buddyRemovalHandled = true;
                 synchronized (FarmService.class) { workerAlive = false; launchReadySession = ""; activeSession = null; }
                 if (currentCycle(token, round)) {
                     boolean recover = !userStopped && ended != null && ended.recoveryReady();
-                    String block = SessionLimits.startBlock(counters.caught, counters.spun, config.maxCatches, config.maxSpins);
+                    String block = limitBlock();
                     if (recover && block.isEmpty()) {
                         recovery.begin(ended.playerIdentity());
                         status = "Restarting Pokémon GO…"; update(true); persistLast();
@@ -173,6 +199,7 @@ public final class FarmService extends Service {
                 else { closing = false; status = reason; persistLast(); }
             }); }
         });
+        current.skipBuddyRemoval(buddyRemovalHandled);
         session = current; activeSession = current; workerAlive = true;
         new Thread(current, "rootcatch-farm").start();
     }
@@ -208,7 +235,7 @@ public final class FarmService extends Service {
         persist(this);
     }
     private static void persist(Context context) {
-        context.getSharedPreferences("farm_last_result", 0).edit().putString("status", status).putString("status_language", "en")
+        saved(context).edit().putString("status", status).putString("status_language", "en")
                 .putInt("caught", counters.caught).putInt("fled", counters.fled).putInt("spun", counters.spun)
                 .putInt("discarded", counters.discarded).putInt("transferred", counters.transferred)
                 .putLong("xp", counters.xp).putLong("stardust", counters.stardust)
@@ -233,10 +260,10 @@ public final class FarmService extends Service {
         PendingIntent stop = PendingIntent.getService(this, 1, new Intent(this, FarmService.class).setAction(STOP),
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification.Builder builder = new Notification.Builder(this, CHANNEL).setSmallIcon(R.drawable.ic_notification)
-                .setContentTitle("SilphMod · " + (running ? status : "Finished"))
+                .setContentTitle("SilphMod · " + "Farmer" + " · " + (running ? status : "Finished"))
                 .setContentText(counters.compact()).setContentIntent(open).setOnlyAlertOnce(true)
                 .setSubText(counters.rewardLine())
-                .setStyle(new Notification.BigTextStyle().bigText(counters.compact() + "\n" + counters.rewardLine()
+                .setStyle(new Notification.BigTextStyle().bigText(counters.compact() + "\n" + (counters.rewardLine())
                         + "\nTime " + SessionCounters.elapsed(elapsed()) + "\n" + status()))
                 .setOngoing(running).setAutoCancel(!running).setShowWhen(readyAt > 0)
                 .setWhen(System.currentTimeMillis() - elapsed()).setUsesChronometer(running && readyAt > 0 && stoppedAt == 0);

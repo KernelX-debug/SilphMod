@@ -8,7 +8,9 @@ public final class AutomationConfig {
 
     public final String gamePackage;
     public final boolean autoCatch;
+    public final java.util.List<Integer> onlyCatch;
     public final boolean autoSpin;
+    public final boolean removeBuddy;
     public final boolean cleanBag;
     public final int actionDelayMs;
     public final int maxCatches;
@@ -18,17 +20,25 @@ public final class AutomationConfig {
     public final boolean useBerries;
     public final java.util.List<String> berryOrder;
     public final boolean skipInterruptions;
+    public final boolean fieldResearch;
+    public final boolean discardUnsupportedResearch;
+    public final boolean showIvNames;
+    public final boolean extendedManualTransfer;
     public final boolean internalEngine;
     public final String discardLimits;
     public final int maxDiscardedItems;
 
-    private AutomationConfig(String gamePackage, boolean autoCatch, boolean autoSpin,
+    private AutomationConfig(String gamePackage,
+                             boolean autoCatch, java.util.List<Integer> onlyCatch, boolean autoSpin, boolean removeBuddy,
                              boolean cleanBag, int actionDelayMs, int maxCatches, int maxSpins,
-                             int maxThrows, String throwQuality, boolean useBerries, java.util.List<String> berryOrder, boolean skipInterruptions, boolean internalEngine,
+                             int maxThrows, String throwQuality, boolean useBerries, java.util.List<String> berryOrder,
+                             boolean showIvNames, boolean extendedManualTransfer, boolean internalEngine,
                              String discardLimits, int maxDiscardedItems) {
         this.gamePackage = gamePackage;
         this.autoCatch = autoCatch;
+        this.onlyCatch = onlyCatch;
         this.autoSpin = autoSpin;
+        this.removeBuddy = removeBuddy;
         this.cleanBag = cleanBag;
         this.actionDelayMs = actionDelayMs;
         this.maxCatches = maxCatches;
@@ -37,7 +47,11 @@ public final class AutomationConfig {
         this.throwQuality = throwQuality;
         this.useBerries = useBerries;
         this.berryOrder = berryOrder;
-        this.skipInterruptions = skipInterruptions;
+        this.skipInterruptions = true;
+        this.fieldResearch = true;
+        this.discardUnsupportedResearch = true;
+        this.showIvNames = showIvNames;
+        this.extendedManualTransfer = extendedManualTransfer;
         this.internalEngine = internalEngine;
         this.discardLimits = discardLimits;
         this.maxDiscardedItems = maxDiscardedItems;
@@ -48,7 +62,9 @@ public final class AutomationConfig {
         return new AutomationConfig(
                 p.getString("package", "com.nianticlabs.pokemongo"),
                 p.getBoolean("catch", true),
+                PokemonSelection.parse(p.getString(PokemonSelection.KEY, "")),
                 p.getBoolean("spin", true),
+                p.getBoolean("remove_buddy", false),
                 p.getBoolean("clean", false),
                 clamp(p.getInt("delay", 150), 100, 3000),
                 SessionLimits.savedLimit(p.getInt("max_catches", SessionLimits.DEFAULT_CATCHES), SessionLimits.DEFAULT_CATCHES),
@@ -57,7 +73,8 @@ public final class AutomationConfig {
                 ThrowQuality.fromSavedValue(p.getString("throw_quality", "GREAT")).name(),
                 p.getBoolean("use_berries", true),
                 BerryOptions.parse(BerryOptions.fromSavedValue(p.getString("berry_order", BerryOptions.DEFAULT_ORDER))),
-                p.getBoolean("skip_interruptions", true),
+                p.getBoolean("show_iv_names", true),
+                p.getBoolean("extended_manual_transfer", false),
                 p.getBoolean("internal_engine", true),
                 p.getString("discard_limits", dev.rootcatch.nativeengine.EnginePolicy.DEFAULT_LIMITS),
                 0

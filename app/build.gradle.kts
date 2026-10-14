@@ -11,9 +11,15 @@ val buildEngine = tasks.register<Exec>("buildEngine") {
     outputs.dir(generatedEngine)
 }
 val checkNative = tasks.register("checkNativeRuntime") {
-    val runtime = file("src/main/jniLibs/arm64-v8a/librootcatch-inject.so")
-    inputs.file(runtime)
+    val runtimes = mapOf(
+        "librootcatch-inject.so" to "fde5dd3d72cdc062e31c9f262038d9bfb637b6ac9665131341cfddd1fb7f05c0",
+        "libsilph-spawn.so" to "bc4e1a0c7ede20af387e9e002a535cb3ff0072f523c460692820473b3f07e122",
+        "libsilph-loader.so" to "0215d7f3f5ded7104932ec9e28653d40f50576b1dc88ed6b9eef91bce5f0e7d8"
+    )
+    inputs.files(runtimes.keys.map { file("src/main/jniLibs/arm64-v8a/$it") })
     doLast {
+      runtimes.forEach { (name, expected) ->
+        val runtime = file("src/main/jniLibs/arm64-v8a/$name")
         check(runtime.isFile) { "Prepare Frida: python tools/prepare_native.py" }
         val hash = MessageDigest.getInstance("SHA-256")
         runtime.inputStream().use { stream ->
@@ -22,9 +28,10 @@ val checkNative = tasks.register("checkNativeRuntime") {
             while (count != -1) { hash.update(buffer, 0, count); count = stream.read(buffer) }
         }
         val actual = hash.digest().joinToString("") { "%02x".format(it) }
-        check(actual == "fde5dd3d72cdc062e31c9f262038d9bfb637b6ac9665131341cfddd1fb7f05c0") {
+        check(actual == expected) {
             "Frida runtime integrity mismatch"
         }
+      }
     }
 }
 val releaseStore = providers.environmentVariable("SILPH_KEYSTORE").orNull
@@ -35,8 +42,8 @@ android {
         applicationId = "dev.rootcatch.ugphonetest"
         minSdk = 29
         targetSdk = 36
-        versionCode = 30
-        versionName = "1.7.0-ugphone"
+        versionCode = 59
+        versionName = "1.9.0"
     }
     buildFeatures { buildConfig = true }
     sourceSets.getByName("main") {
@@ -63,6 +70,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    packaging { jniLibs { useLegacyPackaging = true; keepDebugSymbols += "**/librootcatch-inject.so" } }
+    packaging { jniLibs { useLegacyPackaging = true; keepDebugSymbols += setOf("**/librootcatch-inject.so", "**/libsilph-spawn.so") } }
 }
 tasks.named("preBuild").configure { dependsOn(buildEngine, checkNative) }
