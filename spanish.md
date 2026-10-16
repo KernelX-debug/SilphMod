@@ -8,7 +8,7 @@ Automatización local para Pokémon GO original en **Android con root**, tanto e
 
 Configuras las funciones, pulsas **Start service** y sigues el progreso desde la notificación. **Stop** y **Export logs** permiten detener la sesión y revisar sus resultados. La interfaz, las notificaciones y los recursos visuales están en inglés.
 
-**Edición:** `1.9.0` · [MIT](LICENSE)
+**Edición:** `1.9.3` · [MIT](LICENSE)
 
 **Entornos de referencia:** UGPhone Android 10, Motorola Edge 50 Fusion con Android 15 y Redmi Note 14 Pro+ 5G con Android 16; todos ARM64 con root.
 
@@ -28,12 +28,13 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
   - [Recuperación automática del mapa](#recuperación-automática-del-mapa)
   - [Capturas y llamadas del juego](#capturas-y-llamadas-del-juego)
   - [Alcance y prioridad de captura](#alcance-y-prioridad-de-captura)
-  - [Throw quality](#throw-quality-del-contrato-il2cpp-al-lanzamiento)
+  - [Throw quality](#throw-quality)
   - [Bayas](#bayas-confirmar-el-efecto-antes-de-lanzar)
   - [Interrupciones y continuidad del mapa](#interrupciones-y-continuidad-del-mapa)
   - [Investigaciones de campo](#investigaciones-de-campo)
   - [Remove buddy](#remove-buddy)
   - [Inventory tools](#inventory-tools)
+  - [Game tools: regalos y nombre temporal](#game-tools-regalos-y-nombre-temporal)
   - [Transferencias y borrado](#transferencias-y-borrado)
   - [Ubicación y Error 12](#ubicación-y-error-12)
   - [Contador XP y polvo estelar](#contador-xp-y-polvo-estelar)
@@ -46,7 +47,7 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 
 ## Cómo funciona
 
-![SilphMod en funcionamiento — 1:13](docs/assets/demo.gif)
+![SilphMod en funcionamiento — 1:01](docs/assets/demo.gif)
 
 ## Compatibilidad
 
@@ -55,11 +56,11 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 | Sistema | Android **10 o posterior** y permiso `su` |
 | Entornos de referencia | UGPhone Android **10 / SDK 29**; teléfonos físicos Android **15 / SDK 35** y **16 / SDK 36** |
 | Arquitectura | **ARM64**, punteros de 64 bits |
-| Juego | Pokémon GO original **0.433.0**, `versionCode 2026100702` |
+| Juego | Pokémon GO original **0.433.1**, `versionCode 2026101502` |
 | Motor del juego | Unity **6000.3.22f1**, IL2CPP |
 | APK | `minSdk 29`, `targetSdk 36` |
 | Tratamiento opcional de Error 12 | Contratos JNI de `Location` resueltos según la versión del sistema |
-| Conexión | Selección automática del arranque y del runtime según el SDK, dentro de una misma APK |
+| Conexión | Inyector adaptativo con selección automática del arranque y del runtime según el SDK y las capacidades del entorno, dentro de una misma APK |
 | Identidad instalada | `dev.rootcatch.ugphonetest`, conservada para actualizar instalaciones anteriores |
 
 La aplicación conserva una sola interfaz y un solo motor Farmer. El arranque se adapta al **Android del dispositivo o de la instancia**, sin que el usuario tenga que elegir una APK diferente para cada entorno.
@@ -84,6 +85,8 @@ La aplicación conserva una sola interfaz y un solo motor Farmer. El arranque se
 | Conservar encuentros de investigación | **Keep field research encounters** protege sus capturas. Si se desactiva, se aplican los mismos filtros shiny, IV y demás protecciones que a las capturas salvajes. |
 | Show IV names | Muestra temporalmente el porcentaje entero y los IV en la lista del inventario, sin renombrar los Pokémon de la cuenta. |
 | Extended manual transfer | Amplía la selección manual múltiple de Pokémon especiales desde el inventario del juego. Es independiente de las transferencias automáticas. |
+| Fast gift opening | Acelera la apertura manual de regalos, la presentación de sus objetos y las esperas locales de esa secuencia. Activado inicialmente en **Game tools**. |
+| Hide trainer name | Muestra temporalmente **SilphMod** en el HUD, el perfil propio y la cabecera de amigos. El nombre de la cuenta no cambia. Activado inicialmente en **Game tools**. |
 | Limpiar mochila | Elimina excedentes de los tipos seleccionados **desde el inicio**, y mantiene esos límites durante la sesión. No necesita esperar a que la mochila se llene. |
 | Solucionar error 12 | Tratamiento de ubicación dentro del proceso del juego, opcional y vinculado a la sesión. |
 | Estadísticas | Capturas, huidas, giros, transferencias, objetos eliminados, XP, polvo estelar y tiempo activo acumulados. Se conservan al detener, volver a iniciar y recuperar el mapa. |
@@ -159,7 +162,7 @@ Al alcanzar cualquiera de los dos máximos, no se envían más acciones. El agen
 Antes de todo, recuerda que debes de disponer de una aplicación GPS Joistick correctamente configurada.
 
 1. Instala el APK desde la sección de lanzamientos, abrela y concede permiso root y notificaciones (En caso te lo pida). Mantén tu joystick configurado y funcionando. No ejecutes otros automatismos o inyectores simultáneamente.
-2. Selecciona **Catches**, **Only catch**, **Throw quality**, **Use berries**, **Berry priority**, **Remove buddy**, **Spin PokéStops**, filtros de transferencia e **Items to keep**, según lo que quieras utilizar. En **Inventory tools** puedes activar los nombres por IV y la transferencia manual ampliada. Ajusta los máximos de capturas y giros en **Engine settings**. Las transferencias y los descartes no tienen un máximo total propio por sesión, es decir, eliminan una cantidad ilimitada de los objetos que hayas configurado para descartar mientras la sesión permanezca activa.
+2. Selecciona **Catches**, **Only catch**, **Throw quality**, **Use berries**, **Berry priority**, **Remove buddy**, **Spin PokéStops**, filtros de transferencia e **Items to keep**, según lo que quieras utilizar. En **Inventory tools** puedes activar los nombres por IV y la transferencia manual ampliada. En **Game tools** puedes elegir **Fast gift opening** y **Hide trainer name**. Ajusta los máximos de capturas y giros en **Engine settings**. Las transferencias y los descartes no tienen un máximo total propio por sesión, es decir, eliminan una cantidad ilimitada de los objetos que hayas configurado para descartar mientras la sesión permanezca activa.
 3. Coloca una **ruta de recorrido** en tu aplicación GPS joistick o simplemente usa el Joistick de esta app para movilizarte por el mapa. Recuerda que la **ruta de recorrido** es recomendada para mayor efectividad del mod en mayor tiempo.
 4. Si tu dispositivo o instancia necesita el tratamiento de ubicación, marca **Fix error 12** y pulsa **Start service**. SilphMod abre Pokémon GO y prepara la conexión correspondiente al sistema. El arranque puede cerrar únicamente el juego y volver a abrirlo para instalar el tratamiento temprano; no borra caché, almacenamiento ni ajustes del joystick. Si activaste **Remove buddy**, el estado **Removing buddy…** acompaña su retirada y el reinicio necesario para continuar sin compañero.
 
@@ -191,7 +194,11 @@ La activación usa una autorización de un solo uso vinculada a proceso, sesión
 
 El controlador envía latidos cada **500 ms** en un hilo independiente de consultas de foco y escritura de registros. Solo una lectura positiva de foco de hasta **1.500 ms** puede autorizar acciones; el panel de notificaciones se admite cuando el juego permanece como actividad subyacente. El permiso para nuevas acciones caduca a los **2.200 ms**; una demora breve puede recuperarse en la misma conexión, mientras una pérdida continua de control superior a **10 segundos** termina la sesión. La recuperación automática atiende el mapa vacío descrito a continuación y el reinicio necesario después de retirar el compañero.
 
-En Android 10 se utiliza la conexión al proceso con Frida **17.22.1**. En Android posteriores, el arranque temprano utiliza Frida **17.23.3** y el adaptador nativo propio. La estrategia se selecciona por SDK; la configuración del Farmer y sus políticas son las mismas. El foco se consulta mediante Java en Android 10 y mediante el adaptador JNI de actividad en los sistemas posteriores.
+El inyector adaptativo selecciona la conexión según el SDK, el tamaño de página de memoria, el contexto root y el estado de SELinux. En Android 10 puede utilizar la conexión al proceso con Frida **17.22.1** o la conexión directa con **17.23.3**, según el entorno. En Android posteriores prioriza el arranque temprano con **17.23.3** y el adaptador nativo propio. Si una conexión falla de forma recuperable, puede utilizar una ruta alternativa dentro de la misma APK.
+
+La ruta que llega a funcionar queda asociada a la configuración del dispositivo, la versión del juego, los runtimes y el estado de **Fix error 12**. El siguiente inicio puede reutilizarla cuando ese entorno no ha cambiado. Los reintentos confirman la salida del inyector anterior y el cierre del proceso antes de volver a conectar; el máximo de arranque es de **diez intentos**. La configuración del Farmer y sus políticas son las mismas en todas las rutas.
+
+El foco se consulta mediante Java en Android 10 y mediante el adaptador JNI de actividad en los sistemas posteriores. La lectura distingue el juego subyacente, el panel de notificaciones y la pantalla realmente enfocada al usar **scrcpy** o la grabadora del sistema. Proyectar o grabar la pantalla no se interpreta por sí solo como un cambio de app; abrir otra aplicación sigue pausando las acciones.
 
 ### Recuperación automática del mapa
 
@@ -207,7 +214,7 @@ Cada recuperación admite **hasta diez intentos de arranque en total, contando e
 
 La ingeniería inversa se utilizó para identificar contratos, estructuras y firmas del perfil admitido. El motor resuelve clases y servicios en ejecución y valida lo que va a utilizar; no distribuye la biblioteca del juego ni su metadata decompilada.
 
-| Operación | Entrada utilizada en el perfil 0.433.0 |
+| Operación | Entrada utilizada en el perfil 0.433.1 |
 | --- | --- |
 | Resolver servicios | `Zenject.Internal.ZenUtilInternal.GetAllSceneContexts` y `DiContainer.TryResolve(System.Type)` |
 | Leer posición | `Niantic.Holoholo.Avatar.IMapAvatar.get_Location`, estructura `Niantic.LatLng` |
@@ -220,6 +227,8 @@ La ingeniería inversa se utilizó para identificar contratos, estructuras y fir
 | Reciclar objetos | `IRpcHandler.SendRpc<RecycleItemProto, RecycleItemOutProto>`; ID `137` |
 | Transferir | `IPokemonBag.ReleasePokemon(pokemon)`, seguido de reconciliación por ID |
 | Investigaciones de campo | `IQuestService` e `IQuestRpcService.CompleteQuest`, `RemoveQuest` y `BeginQuestEncounter` |
+| Regalos manuales | `OpenGiftGuiController.OnOpenClick()`, animadores del regalo y secuencias locales de presentación |
+| Nombre temporal | Textos de `PlayerHudGuiController`, `PlayerProfilePage` y `FriendsListHeaderCellView` |
 
 El motor utiliza el alcance de encuentro leído del juego, hasta **50 m para seleccionar capturas**, y mantiene **80 m para giros**. El objetivo se vuelve a validar antes de cada lanzamiento, algo importante cuando el joystick está siguiendo una ruta.
 
@@ -267,7 +276,7 @@ return Number.isFinite(age)&&age>=0&&age<MAX_TRANSFER_DEFERRAL_MS;
 
 El escaneo sin acciones se espacia **250 ms** y se evitan lecturas repetidas de inventario durante esa espera. **Action interval** mantiene su rango de **100–3000 ms**: la optimización cambia el orden del trabajo, no envía capturas en paralelo ni elimina la espera por las respuestas del juego.
 
-### Throw quality: del contrato IL2CPP al lanzamiento
+### Throw quality:
 
 El contrato de `Niantic.Holoholo.Encounter.PokeballThrow` distingue los grados **Normal = 1**, **Nice = 2**, **Great = 3** y **Excellent = 4**. Se pudieron identificar los campos `ReticleSize`, `HitBullseye`, `Missed` y `Spinning`, y la firma que recibe esa estructura en `MapPokemon.TryCapture`.
 
@@ -395,6 +404,34 @@ return `${Math.floor(((data.attack+data.defense+data.stamina)/45)*100)}% ${data.
 
 **Extended manual transfer**, desactivado inicialmente, amplía la selección múltiple del inventario para Pokémon especiales, incluidos shiny y determinadas clases legendarias. La selección y la confirmación las hace el usuario desde el juego. Favoritos, compañeros y otras protecciones de inventario siguen excluidos; esta función no añade Pokémon anteriores a la cola de transferencias automáticas.
 
+### Game tools: regalos y nombre temporal
+
+**Fast gift opening**, activado inicialmente, acelera los regalos que abres manualmente desde el juego mientras el servicio está activo. Reduce la duración de la animación de apertura a **50 ms** y acelera los animadores del regalo y de sus recompensas. La solicitud original, sus respuestas y la entrega de los objetos siguen a cargo del juego.
+
+Gracias a todo esto se permitió indentificar `OpenGiftGuiController.giftOpenAnimationLength`, su `guiAnimator`, el animador de `GiftBox` y la creación de `MajorRewardSequenceView` dentro de las secuencias del regalo. El motor aplica los cambios únicamente a esos componentes y restaura sus valores al cerrar el regalo o detener la sesión.
+
+```js
+const LABEL='SilphMod',MAX_RECORDS=48,ANIMATION_SPEED=12,OPEN_SECONDS=0.05;
+```
+
+*Valores utilizados en [game-tools.cjs](engine/src/game-tools.cjs). El reloj global del juego mantiene su velocidad habitual.*
+
+También se acortan las esperas simples de presentación producidas por las dos secuencias de apertura. El motor comprueba que el objeto sea exactamente `Niantic.Zeppelin.Scheduler.Wait` antes de modificar su duración:
+
+```js
+if(!runtime.valid(current)||current.class.fullName!==WAIT)return;
+const duration=current.field('<SleepFor>k__BackingField');
+const seconds=duration.value;
+if(!Number.isFinite(seconds)||seconds<0||seconds>5)return;
+if(seconds>OPEN_SECONDS+0.001){duration.value=OPEN_SECONDS;giftWaits++;savedWaitSeconds+=seconds-OPEN_SECONDS;}
+```
+
+*Fragmento de [game-tools.cjs](engine/src/game-tools.cjs). Las esperas de red, carga de recursos y condiciones pendientes conservan su comportamiento.*
+
+**Hide trainer name**, activado inicialmente, sustituye el texto visible del jugador en el HUD del mapa, el perfil propio y la cabecera de amigos. Utiliza los componentes `UnityEngine.UI.Text` de esas pantallas; no renombra la cuenta ni modifica los datos de identidad que utiliza el juego.
+
+El HUD se obtiene del estado de mapa que está ejecutándose. Los textos anteriores se conservan durante la sesión y se restauran al detenerla, en el hilo Unity. Las referencias tienen un límite de **48 componentes** y se liberan al cerrar el motor; los componentes destruidos se retiran para no acumularlos al navegar entre pantallas.
+
 ### Transferencias y borrado
 
 Los identificadores de 64 bits permanecen como cadenas exactas o valores `UInt64`, nunca como números JavaScript susceptibles de perder precisión. La autorización combina petición emitida, respuesta reciente y exitosa, clase correcta, ID capturado y sesión actual.
@@ -415,7 +452,7 @@ Una transferencia no incrementa el contador únicamente por haber sido solicitad
 
 ### Ubicación y Error 12
 
-El adaptador usa la ABI JNI para identificar `android.location.Location.isFromMockProvider()` y, si existe, `isMock()`. Trata únicamente las respuestas booleanas correspondientes a esos métodos dentro del **proceso al que se conectó**. No modifica coordenadas, objetos `Location`, AppOps, servicios de Google, SELinux ni módulos del sistema.
+El adaptador usa la ABI JNI para identificar `android.location.Location.isFromMockProvider()` y, si existe, `isMock()`. Trata únicamente las respuestas booleanas correspondientes a esos métodos dentro del **proceso al que se conectó**.
 
 El tratamiento se instala al iniciar con **Fix error 12** y se retira al detener el servicio. Resuelve los métodos disponibles según el SDK del proceso, incluida la variante moderna `isMock()`, y comparte el mismo ciclo de vida en UGPhone y teléfonos físicos. La implementación está en [engine/location](engine/location).
 
@@ -480,12 +517,14 @@ SilphMod/
 
 **1.9.0 reúne el Farmer en una sola APK para UGPhone y teléfonos físicos con root**, incorpora **Only catch**, investigaciones de campo automáticas, **Remove buddy**, nombres temporales por IV y transferencia manual ampliada. Añade el alcance de encuentro leído del juego de hasta **50 m**, prioridad acotada para terminar capturas activas, menor repetición de lecturas y mejoras en la exportación de registros. El manejo de interrupciones incluye la presentación de eclosiones, el aviso de velocidad y el aviso de Stamp Rally.
 
+**1.9.3 actualiza el perfil a Pokémon GO 0.433.1**, añade **Fast gift opening** para acelerar la apertura manual de regalos y **Hide trainer name** para mostrar temporalmente SilphMod en lugar del nombre del jugador. Integra el inyector adaptativo con rutas alternativas y reutilización de la conexión que funcionó para ese entorno.
+
 La siguiente fase es seguir optimizando la continuidad del Farmer y ampliar la compatibilidad entre dispositivos.
 
 Se buscará agregar la configuración del orden jerárquico del uso de pokebolas. No la de por defecto: 1. Pokeball; 2. Superball; 3. Ultraball
 
 Algo pendiente también es seguir ampliando el catálogo de pokemones configurados para no transferir, por ejemplo con nundos (0/0/0).
 
-Licencia [MIT](LICENSE). Las dependencias conservan sus avisos en [NOTICE](NOTICE) y sus licencias dentro de los assets. Proyecto independiente, sin afiliación con los titulares del juego.
+Licencia [MIT](LICENSE). Las dependencias conservan sus avisos en [NOTICE](NOTICE) y sus licencias dentro de los assets. Proyecto independiente y personal, sin afiliación con los titulares del juego ni externos.
 
 Take care, little guy.
