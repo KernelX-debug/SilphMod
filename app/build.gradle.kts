@@ -14,7 +14,7 @@ val checkNative = tasks.register("checkNativeRuntime") {
     val runtimes = mapOf(
         "librootcatch-inject.so" to "fde5dd3d72cdc062e31c9f262038d9bfb637b6ac9665131341cfddd1fb7f05c0",
         "libsilph-spawn.so" to "bc4e1a0c7ede20af387e9e002a535cb3ff0072f523c460692820473b3f07e122",
-        "libsilph-loader.so" to "0215d7f3f5ded7104932ec9e28653d40f50576b1dc88ed6b9eef91bce5f0e7d8"
+        "libsilph-loader.so" to "45e5b68538d166afbf28157c5a52ca44a5b896bac105c19c8e189553fd475703"
     )
     inputs.files(runtimes.keys.map { file("src/main/jniLibs/arm64-v8a/$it") })
     doLast {
@@ -42,8 +42,8 @@ android {
         applicationId = "dev.rootcatch.ugphonetest"
         minSdk = 29
         targetSdk = 36
-        versionCode = 59
-        versionName = "1.9.0"
+        versionCode = 62
+        versionName = "1.9.3"
     }
     buildFeatures { buildConfig = true }
     sourceSets.getByName("main") {

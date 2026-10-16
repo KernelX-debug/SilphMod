@@ -24,5 +24,6 @@ typedef struct {
 
 int silph_loader_label(const void *value, size_t size);
 SilphLoaderResult silph_loader_readonly(int fd, const SilphLoaderOps *ops);
+SilphLoaderResult silph_loader_prepare(int fd, int original_result, int context_valid, const SilphLoaderOps *ops);
 
 #endif

@@ -7,6 +7,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Comparator;
 import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Private immutable directories. Export is serialized with farming; no automatic deletion. */
 final class FarmReports {
@@ -29,10 +33,30 @@ final class FarmReports {
         }
         File[] reports = combined.values().toArray(new File[0]);
         Arrays.sort(reports, Comparator.comparing(File::getName).reversed());
-        return Arrays.copyOf(reports, Math.min(3, reports.length));
+        List<File> selected = new ArrayList<>(Arrays.asList(Arrays.copyOf(reports, Math.min(3, reports.length))));
+        String chain = reports.length == 0 ? "" : chainId(reports[0]);
+        if (!chain.isEmpty()) for (File report : reports) {
+            if (selected.size() >= 12) break;
+            if (chain.equals(chainId(report)) && !selected.contains(report)) selected.add(report);
+        }
+        selected.sort(Comparator.comparing(File::getName).reversed());
+        return selected.toArray(new File[0]);
+    }
+    static void chain(File report, String id) throws IOException {
+        if (id == null || !id.matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}"))
+            throw new IllegalArgumentException("Invalid startup chain");
+        Files.write(new File(report, "startup-chain.txt").toPath(), id.getBytes(StandardCharsets.UTF_8));
+    }
+    private static String chainId(File report) {
+        File file = new File(report, "startup-chain.txt");
+        if (!directChild(report, file) || !file.isFile() || file.length() != 36) return "";
+        try {
+            String value = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            return value.matches("[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}") ? value : "";
+        } catch (IOException error) { return ""; }
     }
     static boolean allowedFile(String name) {
-        return name.equals("report-status.json") || name.equals("engine-start.jsonl")
+        return name.equals("report-status.json") || name.equals("engine-start.jsonl") || name.equals("startup-chain.txt")
                 || name.matches("(?:farm-session|test-session|latest|health|sources)(?:-[12])?\\.jsonl")
                 || name.matches("logcat-live(?:-[12])?\\.log")
                 || name.matches("tombstone-inventory-(?:before|after)\\.log")

@@ -24,6 +24,8 @@ public final class AutomationConfig {
     public final boolean discardUnsupportedResearch;
     public final boolean showIvNames;
     public final boolean extendedManualTransfer;
+    public final boolean fastGiftOpening;
+    public final boolean hideTrainerName;
     public final boolean internalEngine;
     public final String discardLimits;
     public final int maxDiscardedItems;
@@ -32,7 +34,7 @@ public final class AutomationConfig {
                              boolean autoCatch, java.util.List<Integer> onlyCatch, boolean autoSpin, boolean removeBuddy,
                              boolean cleanBag, int actionDelayMs, int maxCatches, int maxSpins,
                              int maxThrows, String throwQuality, boolean useBerries, java.util.List<String> berryOrder,
-                             boolean showIvNames, boolean extendedManualTransfer, boolean internalEngine,
+                             boolean showIvNames, boolean extendedManualTransfer, boolean fastGiftOpening, boolean hideTrainerName, boolean internalEngine,
                              String discardLimits, int maxDiscardedItems) {
         this.gamePackage = gamePackage;
         this.autoCatch = autoCatch;
@@ -52,6 +54,8 @@ public final class AutomationConfig {
         this.discardUnsupportedResearch = true;
         this.showIvNames = showIvNames;
         this.extendedManualTransfer = extendedManualTransfer;
+        this.fastGiftOpening = fastGiftOpening;
+        this.hideTrainerName = hideTrainerName;
         this.internalEngine = internalEngine;
         this.discardLimits = discardLimits;
         this.maxDiscardedItems = maxDiscardedItems;
@@ -75,6 +79,8 @@ public final class AutomationConfig {
                 BerryOptions.parse(BerryOptions.fromSavedValue(p.getString("berry_order", BerryOptions.DEFAULT_ORDER))),
                 p.getBoolean("show_iv_names", true),
                 p.getBoolean("extended_manual_transfer", false),
+                p.getBoolean("fast_gift_opening", true),
+                p.getBoolean("hide_trainer_name", true),
                 p.getBoolean("internal_engine", true),
                 p.getString("discard_limits", dev.rootcatch.nativeengine.EnginePolicy.DEFAULT_LIMITS),
                 0

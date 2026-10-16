@@ -42,6 +42,8 @@ public final class FarmService extends Service {
     private String userStopReason = "Stopped by user";
     private long cycle;
     private final RecoveryAttempts recovery = new RecoveryAttempts();
+    private CompatibilitySession compatibility;
+    private boolean verificationOnly;
     private Runnable pendingRecovery;
     private PowerManager.WakeLock wakeLock;
 
@@ -138,8 +140,10 @@ public final class FarmService extends Service {
             if (!notificationsVisible(this)) throw new IllegalArgumentException("Enable service notifications");
         } catch (IllegalArgumentException error) { finish(error.getMessage()); return START_NOT_STICKY; }
         readyAt = 0; stoppedAt = 0; launchReadySession = ""; userStopped = false; userStopReason = "Stopped by user";
-        cancelRecovery(); recovery.clear();
+        cancelRecovery(); recovery.beginStartup(); compatibility = new CompatibilitySession();
         resolveError12 = intent.getBooleanExtra("resolveError12", false);
+        verificationOnly = dev.rootcatch.BuildConfig.DEBUG && intent.getBooleanExtra("verifyStartupOnly", false);
+        compatibility.simulateSpawnFailure(verificationOnly && intent.getBooleanExtra("simulateSpawnFailure", false));
         approvedGameStop = intent.getBooleanExtra("userApprovedGameStop", false)
                 && "USER_START_BUTTON".equals(intent.getStringExtra("startupAuthorization"));
         status = "Preparing…"; cleanupNote = ""; update(true);
@@ -155,7 +159,7 @@ public final class FarmService extends Service {
         long token = ownEpoch, round = ++cycle;
         closing = false; cleanupNote = "";
         FarmSession current = new FarmSession(this, config, transfers, resolveError12, approvedGameStop,
-                automaticRestart, automaticRestart ? recovery.attempt() : 0, expectedPlayerId, counters, new FarmSession.Listener() {
+                automaticRestart, recovery.attempt(), expectedPlayerId, counters, compatibility, new FarmSession.Listener() {
             @Override public void launchReady(String ticket) { handler.post(() -> {
                 if (currentCycle(token, round) && !userStopped) launchReadySession = ticket; }); }
             @Override public void status(String message) { handler.post(() -> {
@@ -191,7 +195,7 @@ public final class FarmService extends Service {
                         recovery.begin(ended.playerIdentity());
                         status = "Restarting Pokémon GO…"; update(true); persistLast();
                         startCycle(true, ended.playerIdentity());
-                    } else if (!userStopped && automaticRestart && ended != null && ended.startupRetryReady() && block.isEmpty()) {
+                    } else if (!userStopped && ended != null && ended.startupRetryReady() && block.isEmpty()) {
                         if (recovery.retry()) scheduleRecovery(token, round);
                         else finish("Startup failed after " + RecoveryAttempts.MAX_ATTEMPTS + " attempts");
                     } else finish(userStopped ? userStopReason : recover && !block.isEmpty() ? block : reason);
@@ -200,6 +204,7 @@ public final class FarmService extends Service {
             }); }
         });
         current.skipBuddyRemoval(buddyRemovalHandled);
+        current.verifyStartupOnly(verificationOnly);
         session = current; activeSession = current; workerAlive = true;
         new Thread(current, "rootcatch-farm").start();
     }
@@ -211,7 +216,7 @@ public final class FarmService extends Service {
             pendingRecovery = null;
             if (!userStopped && currentCycle(token, round)) startCycle(true, recovery.playerId());
         };
-        handler.postDelayed(pendingRecovery, recovery.delayMillis());
+        handler.postDelayed(pendingRecovery, Math.min(3000L, (recovery.attempt() - 1) * 500L));
     }
     private void cancelRecovery() {
         if (pendingRecovery != null) handler.removeCallbacks(pendingRecovery);

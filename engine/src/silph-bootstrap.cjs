@@ -78,7 +78,7 @@ function createBootstrap(runtime, install, loadEngine, emit, clock, timers) {
     init(_stage,p) {
       if(parameters||stopped)throw Error('Session duplicated or stopped');
       if(!p||p.edition!=='ugphone'||p.automaticPreflight!==true||p.readOnly!==false||p.encounterOnly!==false
-          ||p.gamePackage!=='com.nianticlabs.pokemongo'||p.version!=='0.433.0'
+          ||p.gamePackage!=='com.nianticlabs.pokemongo'||p.version!=='0.433.1'
           ||typeof p.sessionId!=='string'||!/^[0-9]{13}_[a-f0-9]{8}$/.test(p.sessionId)
           ||typeof p.resolveError12!=='boolean'||p.nativeLocationJNI!==false
           ||runtime.Process.arch!=='arm64'||runtime.Process.pointerSize!==8

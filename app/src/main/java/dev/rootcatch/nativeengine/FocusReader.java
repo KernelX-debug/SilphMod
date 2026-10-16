@@ -57,7 +57,7 @@ final class FocusReader {
         // Preserve dumpsys's exit status despite the filtering pipeline. Always drain the pipe.
         return "{ dumpsys -t 2 window" + (source.equals("displays") ? " displays" : "")
                 + " 2>&1; rc_focus_exit=$?; printf '\\nRC_FOCUS_SOURCE_EXIT:%s\\n' \"$rc_focus_exit\"; }"
-                + " | grep -E '(^|[[:space:]])(Display:|Display #[0-9]|mCurrentFocus=|mFocusedApp=|mTopFocusedDisplayId=)"
+                + " | grep -E '^WINDOW MANAGER |(^|[[:space:]])(Display:|Display #[0-9]|mCurrentFocus=|mFocusedApp=|mTopFocusedDisplayId=)"
                 + "|RC_FOCUS_SOURCE_EXIT:|[Pp]ermission|[Dd]enied|[Ee]rror|[Ee]xception|[Tt][Ii][Mm][Ee][Oo][Uu][Tt]"
                 + "|[Tt]imed out|not found|[Uu]nknown command|[Uu]nrecognized command'"
                 + " | { head -c " + (MAX_BYTES + 1) + "; cat >/dev/null; }";

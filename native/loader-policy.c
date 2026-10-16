@@ -16,17 +16,38 @@ int silph_loader_label(const void *value, size_t size) {
     return size == sizeof(label) - 1 || text[sizeof(label) - 1] == 0;
 }
 
+static int agent(int fd, const SilphLoaderOps *ops) {
+    char path[128];
+    int length = ops->path(fd, path, sizeof(path) - 1);
+    if (length < 0 || (size_t)length >= sizeof(path) - 1) return 0;
+    path[length] = 0;
+    return equal(path, "/memfd:frida-agent-64.so (deleted)")
+            || equal(path, "memfd:frida-agent-64.so (deleted)");
+}
+
+SilphLoaderResult silph_loader_prepare(int fd, int original_result, int context_valid, const SilphLoaderOps *ops) {
+    SilphLoaderResult result = {0, 0, 0, 0, "unrelated"};
+    if (!agent(fd, ops)) return result;
+    if (original_result == 0 && context_valid == 1) {
+        char effective[256];
+        int length = ops->context(fd, effective, sizeof(effective) - 1);
+        if (length > 0 && (size_t)length < sizeof(effective) - 1
+                && silph_loader_label(effective, (size_t)length)) {
+            result.handled = 1;
+            result.stage = "original_memfd";
+            return result;
+        }
+    }
+    return silph_loader_readonly(fd, ops);
+}
+
 SilphLoaderResult silph_loader_readonly(int fd, const SilphLoaderOps *ops) {
     SilphLoaderResult result = {0, 0, 0, 0, "unrelated"};
-    char path[128], previous[256], effective[256];
-    int length = ops->path(fd, path, sizeof(path) - 1);
-    if (length < 0 || (size_t)length >= sizeof(path) - 1) return result;
-    path[length] = 0;
-    if (!equal(path, "/memfd:frida-agent-64.so (deleted)")
-            && !equal(path, "memfd:frida-agent-64.so (deleted)")) return result;
+    char previous[256], effective[256];
+    if (!agent(fd, ops)) return result;
     result.handled = 1;
     result.stage = "read_context";
-    length = ops->context(fd, previous, sizeof(previous) - 1);
+    int length = ops->context(fd, previous, sizeof(previous) - 1);
     if (length <= 0 || (size_t)length >= sizeof(previous) - 1) {
         result.error = ops->error(); return result;
     }

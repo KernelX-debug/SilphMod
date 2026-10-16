@@ -43,6 +43,7 @@ public final class NativeEngineRunner implements Runnable {
         default void onInspection(String summary) { }
         default void onTargetProcess(int pid, long startTicks) { }
         default void onGameForeground() { }
+        default void onStartupValidated() { }
     }
     private static final int MAX_LINE = 16384;
     private static final AtomicBoolean SESSION = new AtomicBoolean();
@@ -56,7 +57,10 @@ public final class NativeEngineRunner implements Runnable {
     private final String sessionId;
     private final String expectedPlayerId;
     private final boolean automaticPreflight;
-    private final ConnectionStrategy connection;
+    private ConnectionStrategy connection;
+    private ConnectionFailure connectionFailure = ConnectionFailure.NONE;
+    private boolean verificationOnly;
+    private boolean simulateStartupFailure, startupProfileNotified;
     private final int observeReadOnlyMs;
     private final File diagnosticLogDirectory;
     private final Listener listener;
@@ -127,6 +131,27 @@ public final class NativeEngineRunner implements Runnable {
     private int spinBudget() { return config.maxSpins - priorSpun; }
     public String playerIdentity() { return validatedPlayerId; }
     public boolean usesEarlySpawn() { return connection.earlySpawn(); }
+    public void selectConnection(ConnectionStrategy route) {
+        if (route == null || preparedAgent != null || process != null || attached)
+            throw new IllegalStateException("Connection already prepared");
+        connection = route;
+    }
+    public void verifyStartupOnly(boolean value) {
+        if (process != null || attached) throw new IllegalStateException("Session already started");
+        if (value && !dev.rootcatch.BuildConfig.DEBUG) throw new IllegalArgumentException("Debug verification unavailable");
+        verificationOnly = value;
+    }
+    public void simulateStartupFailure(boolean value) {
+        if (process != null || value && (!verificationOnly || !dev.rootcatch.BuildConfig.DEBUG))
+            throw new IllegalStateException("Debug verification required");
+        simulateStartupFailure = value;
+    }
+    public ConnectionFailure startupFailure() {
+        if (ready) return ConnectionFailure.NONE;
+        if (!loaderState.failure().isEmpty() || connectionFailure == ConnectionFailure.POLICY) return ConnectionFailure.POLICY;
+        if (nativeCrashReported) return ConnectionFailure.NATIVE_CRASH;
+        return connectionFailure;
+    }
     public boolean startupRetryCandidate() {
         return loaderState.failure().isEmpty() && !ready && (startupInterrupted || nativeCrashReported);
     }
@@ -179,7 +204,7 @@ public final class NativeEngineRunner implements Runnable {
         String actual = hash(agent);
         if (expectedAgentSha != null && !expectedAgentSha.equals(actual))
             throw new IllegalStateException("Agent integrity check failed");
-        if (connection.earlySpawn()) {
+        if (connection.guarded()) {
             File loader = new File(context.getApplicationInfo().nativeLibraryDir, ConnectionStrategy.LOADER_LIBRARY);
             if (!loader.isFile() || !ConnectionStrategy.LOADER_SHA256.equals(hash(loader)))
                 throw new IllegalStateException("Loader integrity check failed; reinstall the APK");
@@ -328,6 +353,7 @@ public final class NativeEngineRunner implements Runnable {
                     .put("useBerries", config.useBerries).put("berryOrder", new org.json.JSONArray(config.berryOrder))
                     .put("skipInterruptions", config.skipInterruptions)
                     .put("showIvNames", config.showIvNames).put("extendedManualTransfer", config.extendedManualTransfer)
+                    .put("fastGiftOpening", config.fastGiftOpening).put("hideTrainerName", config.hideTrainerName)
                     .put("fieldResearch", config.fieldResearch).put("discardUnsupportedResearch", config.discardUnsupportedResearch)
                     .put("maxCatches", captureBudget()).put("maxSpins", spinBudget())
                     .put("automaticPreflight", automaticPreflight)
@@ -350,8 +376,8 @@ public final class NativeEngineRunner implements Runnable {
             File agent = preparedAgent;
             record(new JSONObject().put("event", "integrity").put("helperSha256", connection.sha256)
                     .put("connection", connection.name()).put("runtimeVersion", connection.version)
-                    .put("loaderAdapter", connection.earlySpawn() ? LoaderState.ADAPTER : "none")
-                    .put("loaderSha256", connection.earlySpawn() ? ConnectionStrategy.LOADER_SHA256 : JSONObject.NULL)
+                    .put("loaderAdapter", connection.guarded() ? LoaderState.ADAPTER : "none")
+                    .put("loaderSha256", connection.guarded() ? ConnectionStrategy.LOADER_SHA256 : JSONObject.NULL)
                     .put("agentSha256", preparedAgentSha).toString());
             FocusLogPolicy focusLogs = new FocusLogPolicy();
             FocusReader focusReader = new FocusReader((command, timeout) -> {
@@ -395,7 +421,15 @@ public final class NativeEngineRunner implements Runnable {
             String launchCommand = connection.earlySpawn()
                     ? connection.spawnCommand(binary, preparedGuard.getAbsolutePath(), agent.getAbsolutePath(),
                             runtimeDirectory.getAbsolutePath(), params.toString())
+                    : connection.guarded() ? connection.directCommand(binary, preparedGuard.getAbsolutePath(), agent.getAbsolutePath(),
+                            runtimeDirectory.getAbsolutePath(), gamePid, params.toString())
                     : EnginePolicy.attachCommand(binary, agent.getAbsolutePath(), gamePid, params.toString());
+            if (simulateStartupFailure && verificationOnly && connection.earlySpawn()) {
+                connectionFailure = ConnectionFailure.SPAWN_SIGNAL;
+                record(new JSONObject().put("event", "host_debug_failure").put("simulated", true)
+                        .put("failure", connectionFailure.name()).put("gameInjected", false).toString());
+                throw new IllegalStateException("Simulated startup failure (read-only verification)");
+            }
             Process local = new ProcessBuilder("su", "-c", launchCommand).redirectErrorStream(true).start();
             process = local;
             processStarted = true; transportClosed = false;
@@ -427,6 +461,7 @@ public final class NativeEngineRunner implements Runnable {
                 if (overflow) throw new IllegalStateException("Agent output exceeded limit; stopping");
                 if (pulses.failure() != null) {
                     startupInterrupted = !ready;
+                    connectionFailure = ConnectionFailure.BROKEN_CHANNEL;
                     throw new IllegalStateException("Control transport failed", pulses.failure());
                 }
                 if (now >= nextFocus) {
@@ -454,6 +489,8 @@ public final class NativeEngineRunner implements Runnable {
                 }
                 if (eof && lines.isEmpty() && !stopping) {
                     startupInterrupted = !ready;
+                    if (attached && !ready && connectionFailure == ConnectionFailure.NONE)
+                        connectionFailure = ConnectionFailure.BROKEN_CHANNEL;
                     record(new JSONObject().put("event", "host_transport_exit").put("attached", attached)
                             .put("ready", ready).put("loaderStage", loaderState.stage())
                             .put("loaderAdapted", loaderState.adapted()).put("loaderErrno", loaderState.error())
@@ -482,6 +519,7 @@ public final class NativeEngineRunner implements Runnable {
         } catch (Exception e) {
             boolean expected = EnginePolicy.expectedPipeClose(requestedStop, e);
             if (!expected) recoveryFailed = true;
+            if (connectionFailure == ConnectionFailure.NONE) connectionFailure = ConnectionFailure.classify(e.toString());
             if (!expected) ending = "Internal engine: " + e.getMessage();
             try { record(new JSONObject().put("event", expected ? "host_stop_transport_closed" : "host_error")
                     .put("message", e.toString()).put("reason", ending).toString()); }
@@ -505,6 +543,7 @@ public final class NativeEngineRunner implements Runnable {
                     .put("resolveError12", nativeLocationJNI).put("locationCleanupConfirmed", nativeLocationCleanupConfirmed)
                     .put("loaderStage", loaderState.stage()).put("loaderAdapted", loaderState.adapted())
                     .put("loaderErrno", loaderState.error()).put("loaderOriginalErrno", loaderState.originalError())
+                    .put("connectionFailure", startupFailure().name()).put("connection", connection.name())
                     .put("caught", caught).put("fled", fled).put("spun", spun).put("discarded", discarded)
                     .put("transferred", transferred)
                     .put("priorCaught", priorCaught).put("priorSpun", priorSpun)
@@ -523,6 +562,8 @@ public final class NativeEngineRunner implements Runnable {
     }
 
     private synchronized void command(JSONObject json) throws Exception {
+        if (verificationOnly && "activate".equals(json.optString("type")))
+            throw new IllegalStateException("Read-only verification cannot activate farming");
         if (stopping && !"stop".equals(json.optString("type"))) return;
         BufferedWriter writer = control;
         if (writer == null) return;
@@ -552,6 +593,13 @@ public final class NativeEngineRunner implements Runnable {
 
     private void handle(String line) throws Exception {
         record(line);
+        if (!ready && !line.startsWith("{")) {
+            ConnectionFailure observed = ConnectionFailure.classify(line);
+            if (observed == ConnectionFailure.NATIVE_CRASH) nativeCrashReported = true;
+            if (observed != ConnectionFailure.UNKNOWN && observed != ConnectionFailure.NONE
+                    && (connectionFailure == ConnectionFailure.NONE || observed == ConnectionFailure.POLICY))
+                connectionFailure = observed;
+        }
         if ("SILPH_POLICY_WRITE_GUARD=isolated_mount_namespace".equals(line)) {
             policyGuardConfirmed = true; return;
         }
@@ -563,7 +611,7 @@ public final class NativeEngineRunner implements Runnable {
         JSONObject message;
         try { message = new JSONObject(line); } catch (Exception ignored) { return; }
         if ("host_loader".equals(message.optString("event"))) {
-            if (!connection.earlySpawn() || !policyGuardConfirmed
+            if (!connection.guarded() || !policyGuardConfirmed
                     || !loaderState.observe(message.optString("adapter"), message.optString("stage"),
                     message.optInt("errno", -1), message.optInt("originalErrno", -1),
                     message.optInt("pid", -1), helperPid))
@@ -578,6 +626,8 @@ public final class NativeEngineRunner implements Runnable {
         if (payload == null || payload.optInt("protocol") != 1) return;
         String event = payload.optString("event");
         if ("attached".equals(event)) {
+            if (connection.guarded() && (!policyGuardConfirmed || !loaderState.ready()))
+                throw new IllegalStateException("Runtime loading not confirmed");
             if (connection.earlySpawn() && !attached) {
                 if (!policyGuardConfirmed) throw new IllegalStateException("Runtime isolation not confirmed");
                 if (!loaderState.ready()) throw new IllegalStateException("Runtime loader not confirmed");
@@ -718,6 +768,12 @@ public final class NativeEngineRunner implements Runnable {
                     payload.optInt("cachedReferences"), payload.optInt("gameRequestsSent", -1),
                     payload.optBoolean("automatic"), payload.optBoolean("singleAttach")))
                 throw new IllegalStateException("Automatic preflight incomplete; stopping");
+            if (!startupProfileNotified) { startupProfileNotified = true; listener.onStartupValidated(); }
+            if (verificationOnly) {
+                record(new JSONObject().put("event", "host_read_only_verified").put("pid", gamePid)
+                        .put("route", connection.name()).put("gameRequestsSent", 0).toString());
+                requestStop("Startup verified (read-only)"); return;
+            }
             activationToken = payload.optString("token"); activationSent = true;
             command(new JSONObject().put("type", "activate").put("token", activationToken)
                     .put("sessionId", sessionId).put("playerId", validatedPlayerId));

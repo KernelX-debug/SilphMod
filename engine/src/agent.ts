@@ -44,6 +44,8 @@ import fieldResearch from './field-research.cjs';
 // @ts-ignore
 import inventoryTools from './inventory-tools.cjs';
 // @ts-ignore
+import gameTools from './game-tools.cjs';
+// @ts-ignore
 import buddyRemoval from './buddy-removal.cjs';
 // @ts-ignore
 import catchSelection from './catch-selection.cjs';
@@ -61,7 +63,8 @@ type Config = {autoCatch:boolean; onlyCatch:number[]; autoSpin:boolean; cleanBag
   maxTransfers:number;sessionId:string;maxDiscardedItems:number;expectedPlayerId:string;
   automaticPreflight:boolean;sessionAccounting:boolean;controlRecovery:boolean;
   throwQuality:string;notificationShadeSupport:boolean;useBerries:boolean;berryOrder:string[];skipInterruptions:boolean;
-  fieldResearch:boolean;discardUnsupportedResearch:boolean;showIvNames:boolean;extendedManualTransfer:boolean;removeBuddy:boolean};
+  fieldResearch:boolean;discardUnsupportedResearch:boolean;showIvNames:boolean;extendedManualTransfer:boolean;removeBuddy:boolean;
+  fastGiftOpening:boolean;hideTrainerName:boolean};
 type CaptureRequest = {sessionId:string;requestId:string;encounterId:string;sentAt:number;source:'WILD'|'FIELD_RESEARCH'};
 type Pending = {kind:'encounter'|'berry'|'capture'|'spin'|'discard'|'transfer'|'quest_claim'|'quest_remove'|'quest_encounter'|'buddy_check'|'buddy_remove'; promise:HeldReference64;
   handles:HeldReference64[]; started:number; id:string; item?:number; count?:number; before?:number;keep?:number;
@@ -77,6 +80,8 @@ let nextPresence=0;
 let hook:InvocationListener|null=null, inTick=false, container:Obj|null=null;
 let uiAdapter:any=null,unityThreadId=0;
 let inventoryAdapter:any=null;
+let gameToolsAdapter:any=null;
+let forceGameToolsCleanup=false;
 let containerHandle:HeldReference64|null=null, gc:GcReferences64|null=null, activity:any=null, javaReady=false;
 let lastWindowCheck=0, windowFocused=false;
 let windowAdapter:any=null,legacyJava:any=null,useNativeWindow=false,windowFocusCleanupFailed=false;
@@ -364,6 +369,7 @@ function reportHealth(now:number,counts:Record<string,number>) {
     targetAgeMs:target?now-targetSelectedAt:null,skippedTargets,mapScan:lastMapScan,
     spinScan:spinObserver.snapshot(now),uiInterruptions:uiAdapter?.snapshot()??null,
     inventoryTools:inventoryAdapter?.snapshot()??null,
+    gameTools:gameToolsAdapter?.snapshot()??null,
     performance:{tickCount,totalTickMs,maxTickMs,inventoryCountReads,idleScanMs:IDLE_SCAN_MS},
     rangeObservation:rangeState(now),captureScheduling:{capturePriorityActions,transferDeadlineHits,
       maxTransferDeferralMs:capturePlanning.MAX_TRANSFER_DEFERRAL_MS},...statistics()});
@@ -727,7 +733,8 @@ function skipTarget(reason:string,distanceMeters:number|null=null) {
   releaseTarget();
 }
 function stop(reason:string) {
-  if(!stopped&&(inventoryAdapter?.busy||eggPresentationAdapter?.busy||(researchTarget&&!inTick))) {
+  if(!stopped&&(inventoryAdapter?.busy||gameToolsAdapter?.busy||eggPresentationAdapter?.busy||(researchTarget&&!inTick)
+      ||gameToolsAdapter?.needsUnityCleanup&&Process.getCurrentThreadId()!==unityThreadId&&!forceGameToolsCleanup)) {
     if(!deferredStopReason){deferredStopAt=Date.now()+1000;emit(researchTarget?'research_stop_queued':'inventory_stop_queued',{reason});}
     deferredStopReason=deferredStopReason||reason;allowed=false;return;
   }
@@ -763,6 +770,12 @@ function stop(reason:string) {
       const result=inventoryAdapter.close();inventoryAdapter=null;emit('inventory_tools_cleanup',result);
       if(!result.passed)observerError+='; Inventory cleanup: '+result.errors.join('; ');
     }catch(error){observerError+='; Inventory cleanup: '+String(error);}
+  }
+  if(gameToolsAdapter) {
+    try {
+      const result=gameToolsAdapter.close();gameToolsAdapter=null;emit('game_tools_cleanup',result);
+      if(!result.passed)observerError+='; Game tools cleanup: '+result.errors.join('; ');
+    }catch(error){observerError+='; Game tools cleanup: '+String(error);}
   }
   let locationCleanupError='';
   if(locationAdapter){
@@ -1567,7 +1580,7 @@ function tick() {
 function init(_stage:string,parameters:any) {
   if(initialized)throw Error('Session already initialized');initialized=true;
   useNativeWindow=Number.isInteger(parameters.sdk)&&parameters.sdk>=30;
-  if(parameters.gamePackage!=='com.nianticlabs.pokemongo'||parameters.version!=='0.433.0')throw Error('Unsupported profile');
+  if(parameters.gamePackage!=='com.nianticlabs.pokemongo'||parameters.version!=='0.433.1')throw Error('Unsupported profile');
   if(parameters.mode!==undefined&&parameters.mode!=='FARMER')throw Error('Invalid engine mode');
   config={gamePackage:parameters.gamePackage,autoCatch:!!parameters.autoCatch,autoSpin:!!parameters.autoSpin,
     onlyCatch:catchSelection.read(parameters.onlyCatch),
@@ -1581,6 +1594,7 @@ function init(_stage:string,parameters:any) {
     keepBackground:parameters.keepBackground===true,keepShinyBackground:parameters.keepShinyBackground===true,
     keepFieldResearch:parameters.keepFieldResearch!==false,
     showIvNames:parameters.showIvNames===true,extendedManualTransfer:parameters.extendedManualTransfer===true,
+    fastGiftOpening:parameters.fastGiftOpening===true,hideTrainerName:parameters.hideTrainerName===true,
     removeBuddy:parameters.removeBuddy===true,
     maxTransfers:parameters.maxTransfers??0,sessionId:parameters.sessionId,
     maxDiscardedItems:parameters.maxDiscardedItems??0,expectedPlayerId:parameters.expectedPlayerId??'',
@@ -1655,7 +1669,7 @@ async function setup() {
       const capture=klass('holo-game','Niantic.Holoholo.Map.MapPokemon').method('TryCapture',2);
       if(capture.parameters[0].type.name!=='Niantic.Holoholo.Encounter.PokeballThrow')throw Error('Incompatible TryCapture signature');
       if(Il2Cpp.application.identifier!==config.gamePackage)throw Error('Incorrect process package');
-      if(Il2Cpp.application.version!=='0.433.0')throw Error('Incompatible Unity application version');
+      if(Il2Cpp.application.version!=='0.433.1')throw Error('Incompatible Unity application version');
       emit('profile',{unity:Il2Cpp.unityVersion,game:Il2Cpp.application.version,method:capture.name});
       // Width was verified against this exact game's ARM64 libil2cpp.so. Do
       // not guess it for other Unity versions or fall back to uint32 handles.
@@ -1665,13 +1679,20 @@ async function setup() {
       emit('gc_abi',{handleBits:64,pointerSize:Process.pointerSize,adapter:'rootcatch-gc64',unity:Il2Cpp.unityVersion});
       initializeRangeObserver();
       enterStage('setup:map-observer');
-      hook=Interceptor.attach(map.virtualAddress,{onLeave(result){
-        if(deferredStopReason&&!inventoryAdapter?.busy&&Process.getCurrentThreadId()===unityThreadId) {
+      hook=Interceptor.attach(map.virtualAddress,{onEnter(args){this.silphMapOwner=args[0];},onLeave(result){
+        if(deferredStopReason&&!inventoryAdapter?.busy&&!gameToolsAdapter?.busy&&Process.getCurrentThreadId()===unityThreadId) {
           const reason=deferredStopReason;deferredStopReason='';inTick=true;
           try {stop(reason);}catch(error){fail(error);}finally{inTick=false;}return;
         }
         if(uiAdapter?.busy)return;uiAdapter?.drain();if(result.toInt32()!==0)tick();
-        else if(startupGate&&!startupGate.active)startupGate.reset();}});
+        else if(startupGate&&!startupGate.active)startupGate.reset();
+        gameToolsAdapter?.primeHud(()=>{
+          const owner=object(new Il2Cpp.Object(this.silphMapOwner),'Map HUD owner');
+          if(owner.class.fullName!=='Niantic.Holoholo.Map.MapExploreState')throw Error('Invalid map HUD owner');
+          const getter=owner.method<Obj>('get_PlayerHud',0);
+          if(getter.returnType.name!=='Niantic.Holoholo.Map.UI.IPlayerHudGuiController')throw Error('Incompatible HUD getter');
+          return getter.invoke();
+        });}});
       if(config.skipInterruptions)uiAdapter=uiInterruptions.install({
         resolve:(name:string)=>klass('holo-game',name),object:(address:NativePointer)=>new Il2Cpp.Object(address),
         retain:(controller:Obj,label:string)=>retain(controller,label),read:(reference:HeldReference64)=>heldObject(reference,'GUI interruption'),
@@ -1714,6 +1735,20 @@ async function setup() {
         attach:(address:NativePointer,callbacks:InvocationListenerCallbacks)=>Interceptor.attach(address,callbacks),
       },config,emit);
       if(stopped&&inventoryAdapter){emit('inventory_tools_cleanup',inventoryAdapter.close());inventoryAdapter=null;return;}
+      if(config.fastGiftOpening||config.hideTrainerName)gameToolsAdapter=gameTools.install({
+        resolve:klass,object:(address:NativePointer)=>new Il2Cpp.Object(address),
+        valid:(value:any)=>value instanceof Il2Cpp.Object&&!value.isNull(),
+        alive:(value:Obj)=>klass('UnityEngine.CoreModule','UnityEngine.Object').method<boolean>('op_Implicit',1).invoke(value),
+        string:(text:string)=>Il2Cpp.string(text),
+        stringContent:(value:Il2Cpp.String)=>{if(!(value instanceof Il2Cpp.String))throw Error('Invalid UI text');return value.isNull()?'':value.content??'';},
+        stringObject:(reference:HeldReference64)=>new Il2Cpp.String(reference.target),
+        retain:(value:{handle:NativePointer},label:string)=>gc!.retain(value.handle,label),
+        address:(reference:HeldReference64)=>reference.target,
+        sameThread:()=>unityThreadId!==0&&Process.getCurrentThreadId()===unityThreadId,
+        enabled:()=>ready&&!stopped&&!config.readOnly&&!config.encounterOnly,
+        attach:(address:NativePointer,callbacks:InvocationListenerCallbacks)=>Interceptor.attach(address,callbacks),
+      },config,emit);
+      if(stopped&&gameToolsAdapter){emit('game_tools_cleanup',gameToolsAdapter.close());gameToolsAdapter=null;return;}
       emit('observing',{message:'Waiting for visible map and game services'});
     },'free');
   }catch(e){
@@ -1752,9 +1787,10 @@ onFridaStdin(line:string){
 },getFridaTerminalMode(){return 'cooked';}};
 rpc.exports={init:enginePort.init,onFridaStdin:enginePort.onFridaStdin,getFridaTerminalMode:enginePort.getFridaTerminalMode};
 setInterval(()=>{
-  if(deferredStopReason&&!stopped&&!inventoryAdapter?.busy&&Date.now()>=deferredStopAt) {
+  if(deferredStopReason&&!stopped&&!inventoryAdapter?.busy&&!gameToolsAdapter?.busy&&Date.now()>=deferredStopAt) {
     const reason=deferredStopReason;deferredStopReason='';
     researchObjectCleanupDeferred=researchTarget;researchTarget=false;
+    forceGameToolsCleanup=true;
     if(researchObjectCleanupDeferred)emit('research_target_cleanup_deferred',{questId:researchQuestId,reason:'unity_tick_unavailable',gameRestartRequired:true});
     stop(reason);
   }

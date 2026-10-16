@@ -14,6 +14,10 @@ final class ForegroundFocus {
     enum State { GAME, OTHER, NOTIFICATION_SHADE, NO_WINDOW, UNAVAILABLE, AMBIGUOUS }
     private static final Pattern DISPLAY = Pattern.compile("^Display: mDisplayId=([0-9]+)(?:\\s.*)?$");
     private static final Pattern LEGACY_DISPLAY = Pattern.compile("^Display #([0-9]+)(?::|\\s.*)?$");
+    private static final Pattern JOINED_DISPLAY = Pattern.compile(
+            "^mInputMethodWindow=(?:null|Window\\{[^{}]*\\})\\h+(Display: mDisplayId=.*)$");
+    private static final Pattern HISTORICAL_DISPLAY = Pattern.compile(
+            "^Display #[0-9]+ currentFocus=(?:null|Window\\{[^{}]*\\}) focusedApp=(?:null|ActivityRecord\\{[^{}]*\\})$");
     private static final Pattern TOP = Pattern.compile("^mTopFocusedDisplayId=([0-9]+)$");
     private static final Pattern WINDOW = Pattern.compile(
             "^Window\\{[^\\s{}]+\\s+u[0-9]+\\s+([^\\s/{}]+)(?:/[^\\s{}]+)?(?:\\s+[^{}]*)?\\}$");
@@ -52,9 +56,16 @@ final class ForegroundFocus {
         Map<Integer, AppProof> focusedApps = new HashMap<>();
         Set<Integer> appDisplays = new HashSet<>(), conflictingApps = new HashSet<>();
         int current = -1, top = -1;
-        boolean topSeen = false;
+        boolean topSeen = false, historical = false;
         for (String raw : output.split("\\R")) {
             String line = raw.trim();
+            if (line.startsWith("WINDOW MANAGER ")) {
+                historical = line.equals("WINDOW MANAGER LAST ANR (dumpsys window lastanr)");
+                continue;
+            }
+            if (historical || HISTORICAL_DISPLAY.matcher(line).matches()) continue;
+            Matcher joined = JOINED_DISPLAY.matcher(line);
+            if (joined.matches()) line = joined.group(1);
             Matcher display = DISPLAY.matcher(line), legacy = LEGACY_DISPLAY.matcher(line);
             if (display.matches() || legacy.matches()) {
                 boolean modern = display.matches();

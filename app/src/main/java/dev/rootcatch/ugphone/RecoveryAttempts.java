@@ -4,6 +4,7 @@ final class RecoveryAttempts {
     static final int MAX_ATTEMPTS = 10;
     private int attempt;
     private String playerId = "";
+    void beginStartup() { attempt = 1; playerId = ""; }
 
     void begin(String player) {
         if (player == null || player.isEmpty()) throw new IllegalArgumentException("Missing recovery player");

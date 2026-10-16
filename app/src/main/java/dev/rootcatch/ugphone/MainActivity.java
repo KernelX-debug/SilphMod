@@ -43,7 +43,7 @@ public final class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final List<View> settings = new ArrayList<>();
     private SharedPreferences prefs;
-    private Switch capture, spin, transfer, clean, useBerries, showIvNames, extendedManualTransfer;
+    private Switch capture, spin, transfer, clean, useBerries, showIvNames, extendedManualTransfer, fastGiftOpening, hideTrainerName;
     private CheckBox keepShiny, keepHundo, keepDynamax, keepHatched, keepBackground, keepShinyBackground, keepFieldResearch, resolveError12, removeBuddy;
     private EditText delay, maxCatches, maxSpins;
     private LinearLayout farmerEngine;
@@ -163,6 +163,11 @@ public final class MainActivity extends Activity {
         showIvNames = toggle(inventoryTools, "Show IV names", prefs.getBoolean("show_iv_names", true));
         extendedManualTransfer = toggle(inventoryTools, "Extended manual transfer", prefs.getBoolean("extended_manual_transfer", false));
         space(page, 14);
+        section(page, "Game tools");
+        LinearLayout gameTools = card(); page.addView(gameTools);
+        fastGiftOpening = toggle(gameTools, "Fast gift opening", prefs.getBoolean("fast_gift_opening", true));
+        hideTrainerName = toggle(gameTools, "Hide trainer name", prefs.getBoolean("hide_trainer_name", true));
+        space(page, 14);
         advanced = button("Engine settings ▾", false); page.addView(advanced); settings.add(advanced);
         advancedOptions = card(); advancedOptions.setVisibility(View.GONE); page.addView(advancedOptions);
         farmerEngine = column(); advancedOptions.addView(farmerEngine);
@@ -216,8 +221,7 @@ public final class MainActivity extends Activity {
                 throw new IllegalArgumentException("Supported version: GO " + EnginePolicy.VERSION + " / " + EnginePolicy.VERSION_CODE);
             Intent service = new Intent(this, FarmService.class).setAction(FarmService.START)
                     .putExtra("resolveError12", resolveError12.isChecked())
-                    .putExtra("userApprovedGameStop", resolveError12.isChecked()
-                            || dev.rootcatch.nativeengine.ConnectionStrategy.forSdk(Build.VERSION.SDK_INT).earlySpawn())
+                    .putExtra("userApprovedGameStop", true)
                     .putExtra("startupAuthorization", "USER_START_BUTTON")
                     .putExtra("transfer", transfer.isChecked()).putExtra("keepShiny", keepShiny.isChecked())
                     .putExtra("keepHundo", keepHundo.isChecked()).putExtra("keepDynamax", keepDynamax.isChecked())
@@ -245,6 +249,8 @@ public final class MainActivity extends Activity {
                 .putBoolean("keep_field_research", keepFieldResearch.isChecked())
                 .putBoolean("show_iv_names", showIvNames.isChecked())
                 .putBoolean("extended_manual_transfer", extendedManualTransfer.isChecked())
+                .putBoolean("fast_gift_opening", fastGiftOpening.isChecked())
+                .putBoolean("hide_trainer_name", hideTrainerName.isChecked())
                 .putInt("max_transfers", 0).putString("discard_limits", EnginePolicy.limitsKey(limits))
                 .putInt("max_discarded_items", 0).putInt("max_throws", 0);
         edit.putInt("delay", read(delay, 100, 3000, "Interval"))

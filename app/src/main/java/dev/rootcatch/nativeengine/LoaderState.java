@@ -1,7 +1,7 @@
 package dev.rootcatch.nativeengine;
 
 public final class LoaderState {
-    public static final String ADAPTER = "readonly-apk-v1";
+    public static final String ADAPTER = "readonly-apk-v3";
     private boolean ready, adapted;
     private String stage = "not_started";
     private int error, originalError;
@@ -20,12 +20,12 @@ public final class LoaderState {
                     if (observedError != 0 || original != 0) return false;
                     break;
                 case "readonly_apk_memfd":
-                    if (observedError != 0 || original == 0) return false;
+                    if (observedError != 0) return false;
                     adapted = true;
                     break;
                 case "read_context": case "read_flags": case "label_readonly":
                 case "open_readonly": case "verify_context": case "replace_readonly":
-                    if (observedError == 0 || original == 0) return false;
+                    if (observedError == 0) return false;
                     break;
                 default: return false;
             }

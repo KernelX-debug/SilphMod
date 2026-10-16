@@ -8,6 +8,7 @@ import android.os.SystemClock;
 import dev.rootcatch.automation.AutomationConfig;
 import dev.rootcatch.nativeengine.EnginePolicy;
 import dev.rootcatch.nativeengine.ConnectionStrategy;
+import dev.rootcatch.nativeengine.ConnectionFailure;
 import dev.rootcatch.nativeengine.NativeEngineRunner;
 import dev.rootcatch.nativeengine.RollingLog;
 import dev.rootcatch.nativeengine.TransferOptions;
@@ -34,15 +35,16 @@ final class FarmSession implements Runnable {
     private final boolean resolveError12;
     private final boolean userApprovedGameStop;
     private final boolean automaticRestart;
-    private final boolean earlySpawn = ConnectionStrategy.forSdk(Build.VERSION.SDK_INT).earlySpawn();
-    private final GameLaunchGate gameLaunch = new GameLaunchGate(earlySpawn);
+    private ConnectionStrategy connection = ConnectionStrategy.forSdk(Build.VERSION.SDK_INT);
+    private boolean earlySpawn = connection.earlySpawn();
+    private GameLaunchGate gameLaunch = new GameLaunchGate(earlySpawn);
+    private final CompatibilitySession compatibility;
     private final int recoveryAttempt;
     private final String expectedPlayerId;
     private final SessionCounters baseline;
     private volatile boolean recoveryReady;
     private volatile boolean userCancelled, startupRetryReady;
     private boolean startupOpened;
-    private volatile boolean retryCandidate;
     private final Listener listener;
     private final RootShell root = new RootShell(), monitorRoot = new RootShell();
     private volatile boolean stopping;
@@ -59,6 +61,9 @@ final class FarmSession implements Runnable {
     private String ending = "Session ended", lastStatus = "Preparing", lastInspection = "";
     private String cleanupPauseReason = "";
     private boolean buddyRemovalHandled;
+    private boolean verificationOnly;
+    private ConnectionFailure startupProblem = ConnectionFailure.NONE;
+    void verifyStartupOnly(boolean value) { verificationOnly = value; }
 
     void skipBuddyRemoval(boolean handled) { buddyRemovalHandled = handled; }
     boolean buddyWasRemoved() { return runner != null && runner.buddyWasRemoved(); }
@@ -66,13 +71,14 @@ final class FarmSession implements Runnable {
 
     FarmSession(Context context, AutomationConfig config, TransferOptions transfers, boolean resolveError12,
                 boolean userApprovedGameStop, boolean automaticRestart, int recoveryAttempt, String expectedPlayerId,
-                SessionCounters baseline, Listener listener) {
+                SessionCounters baseline, CompatibilitySession compatibility, Listener listener) {
         this.context = context.getApplicationContext(); this.config = config;
         this.transfers = transfers; this.resolveError12 = resolveError12;
-        this.userApprovedGameStop = (resolveError12 || earlySpawn) && userApprovedGameStop; this.listener = listener;
+        this.userApprovedGameStop = userApprovedGameStop; this.listener = listener;
         this.automaticRestart = automaticRestart; this.expectedPlayerId = expectedPlayerId;
         this.recoveryAttempt = recoveryAttempt;
         this.baseline = baseline; this.counters = baseline;
+        this.compatibility = compatibility;
     }
     boolean recoveryReady() { return recoveryReady && stopReason == null; }
     boolean startupRetryReady() { return startupRetryReady && !userCancelled; }
@@ -103,6 +109,7 @@ final class FarmSession implements Runnable {
         String limitReason = "";
         try {
             report = FarmReports.create(context.getFilesDir());
+            FarmReports.chain(report, compatibility.chain);
             trace = new RollingLog(report, "farm-session.jsonl", 1024 * 1024, 2);
             reportStatus(false, "Preparing");
             record("session_start", new JSONObject().put("build", FarmPolicy.BUILD).put("sessionId", report.getName())
@@ -120,6 +127,7 @@ final class FarmSession implements Runnable {
                     .put("useBerries", config.useBerries).put("berryOrder", new org.json.JSONArray(config.berryOrder))
                     .put("skipInterruptions", config.skipInterruptions)
                     .put("showIvNames", config.showIvNames).put("extendedManualTransfer", config.extendedManualTransfer)
+                    .put("fastGiftOpening", config.fastGiftOpening).put("hideTrainerName", config.hideTrainerName)
                     .put("removeBuddy", config.removeBuddy).put("buddyRemovalHandled", buddyRemovalHandled)
                     .put("fieldResearch", config.fieldResearch).put("discardUnsupportedResearch", config.discardUnsupportedResearch)
                     .put("maxCatches", config.maxCatches).put("maxSpins", config.maxSpins)
@@ -129,10 +137,10 @@ final class FarmSession implements Runnable {
                     .put("keepBackground", transfers.keepBackground).put("keepShinyBackground", transfers.keepShinyBackground)
                     .put("keepFieldResearch", transfers.keepFieldResearch)
                     .put("expectedAgentSha256", FarmPolicy.EXPECTED_AGENT_SHA)
-                    .put("connection", ConnectionStrategy.forSdk(Build.VERSION.SDK_INT).name())
+                    .put("connectionDefault", connection.name()).put("startupChain", compatibility.chain)
                     .put("edition", "ugphone").put("resolveError12", resolveError12).put("locationImplementation", "rootcatch-profile7-v2")
-                    .put("attachPhase", earlySpawn ? "spawn" : resolveError12 || automaticRestart ? "startup" : "warm").put("rootModulesModified", false)
-                    .put("userApprovedGameStop", userApprovedGameStop).put("maxGameStopAttempts", 1)
+                    .put("attachPhaseDefault", earlySpawn ? "spawn" : resolveError12 || automaticRestart ? "startup" : "warm").put("rootModulesModified", false)
+                    .put("userApprovedGameStop", userApprovedGameStop).put("maxStartupGameStopAttempts", 1).put("maxRetryGameStopAttempts", 1)
                     .put("startupAuthorization", userApprovedGameStop ? "USER_START_BUTTON" : "NONE")
                     .put("controlRecovery", true).put("controlStopAfterMs", 10000).put("actionLeaseMs", 2200));
             FarmPolicy.validate(config.autoCatch, config.autoSpin, config.cleanBag, transfers.enabled, config.discardLimits);
@@ -151,8 +159,12 @@ final class FarmSession implements Runnable {
             try (InputStream asset = context.getAssets().open("engine/agent.js")) {
                 if (!FarmPolicy.EXPECTED_AGENT_SHA.equals(hash(asset))) throw new IllegalStateException("Engine integrity check failed");
             }
-            RootShell.Result security = root.execute("getenforce", 2000);
-            record("environment", new JSONObject().put("rootGranted", true).put("selinuxReported", security.output).put("exit", security.code));
+            connection = compatibility.prepare(context, root, resolveError12, () -> userCancelled,
+                    values -> record("compatibility", values));
+            earlySpawn = connection.earlySpawn(); gameLaunch = new GameLaunchGate(earlySpawn);
+            record("connection", new JSONObject().put("route", connection.name()).put("runtimeVersion", connection.version)
+                    .put("attempt", recoveryAttempt).put("startupChain", compatibility.chain));
+            if (userCancelled) return;
             runner = new NativeEngineRunner(context, root, config, false, new NativeEngineRunner.Listener() {
                 @Override public void onTargetProcess(int target, long ticks) {
                     pid = target; startTicks = ticks;
@@ -163,6 +175,7 @@ final class FarmSession implements Runnable {
                     requestGameLaunch(true);
                 }
                 @Override public void onGameForeground() { listener.launchReady(""); }
+                @Override public void onStartupValidated() { if (!userCancelled) compatibility.validated(resolveError12); }
                 @Override public void onStatus(String message) {
                     if ("Internal engine active".equals(message) && readyAt == 0) {
                         readyAt = SystemClock.elapsedRealtime(); listener.ready();
@@ -189,6 +202,9 @@ final class FarmSession implements Runnable {
                 }
                 @Override public void onInspection(String summary) { lastInspection = summary; snapshot(); }
             }, true, false, 0, report, transfers.enabled, transfers, expectedPlayerId, true);
+            runner.selectConnection(connection);
+            runner.verifyStartupOnly(verificationOnly);
+            runner.simulateStartupFailure(verificationOnly && compatibility.takeSimulatedFailure(connection));
             runner.accumulatedCounts(baseline.caught, baseline.spun,
                     dev.rootcatch.automation.PokemonSelection.recoverEmptyMap(config.onlyCatch));
             runner.skipBuddyRemoval(buddyRemovalHandled);
@@ -213,7 +229,7 @@ final class FarmSession implements Runnable {
                         .put("gameAbsentConfirmed", true).put("automaticRestart", automaticRestart)
                         .put("policyIsolationRequired", true));
                 listener.status("Opening Pokémon GO…");
-            } else if (resolveError12 || automaticRestart) {
+            } else if (resolveError12 || automaticRestart || connection.guarded()) {
                 collector = new CrashCollector(report, 0, 0, true);
                 collector.start(true);
                 listener.status("Checking game startup…");
@@ -222,6 +238,7 @@ final class FarmSession implements Runnable {
                     return new GameStartCheck.Reply(reply.code, reply.output);
                 }, (event, values) -> record(event, new JSONObject(values)),
                         SystemClock::elapsedRealtime, Thread::sleep, () -> stopping);
+                if (connection.guarded()) startCheck.useFastInventory();
                 startCheck.prepare(!automaticRestart && userApprovedGameStop);
                 if (stopping) return;
                 record("early_armed", new JSONObject().put("assetsAlreadyVerified", true)
@@ -229,18 +246,18 @@ final class FarmSession implements Runnable {
                         .put("userApprovedGameStop", userApprovedGameStop).put("automaticRestart", automaticRestart));
                 listener.status("Opening Pokémon GO…");
                 requestGameLaunch(false);
-                awaitEarlyProcess();
+                if (connection.guarded()) awaitCompatibleProcess(); else awaitEarlyProcess();
                 listener.launchReady("");
                 if (stopping) return;
                 collector.bindTarget(pid, startTicks);
             } else {
                 requestGameLaunch(false);
-                awaitProcess();
+                if (connection.guarded()) awaitCompatibleProcess(); else awaitProcess();
                 listener.launchReady("");
                 if (stopping) return;
                 listener.status("Preparing logs…");
                 collector = new CrashCollector(report, pid, startTicks, true);
-                collector.start(false);
+                collector.start(connection.guarded());
             }
             if (stopping) return;
             if (!earlySpawn) {
@@ -312,14 +329,14 @@ final class FarmSession implements Runnable {
             root.close();
             listener.engineStopped();
             if (collector != null) {
-                boolean restart = recoveryReady();
+                boolean restart = recoveryReady() || startupRetryReady();
                 if (!buddyRestartPending()) listener.status("Saving logs…");
-                try { collector.finish(!userCancelled && !restart && limitReason.isEmpty(), restart, listener::status); }
+                try { collector.finish(!verificationOnly && !userCancelled && !restart && limitReason.isEmpty(), restart, listener::status); }
                 catch (Exception error) { record("collector_error", detail(error.toString())); }
             }
             result = stopReason != null ? stopReason : result;
-            if (startupRetryReady() && recoveryAttempt == RecoveryAttempts.MAX_ATTEMPTS)
-                result = "Startup failed after " + RecoveryAttempts.MAX_ATTEMPTS + " attempts";
+            if (!userCancelled && readyAt == 0 && recoveryAttempt == RecoveryAttempts.MAX_ATTEMPTS)
+                result = "Startup failed after " + RecoveryAttempts.MAX_ATTEMPTS + " attempts · " + result;
             record("session_end", detail(result));
             reportStatus(true, result);
             try { if (trace != null) trace.close(); } catch (Exception ignored) { }
@@ -334,6 +351,7 @@ final class FarmSession implements Runnable {
     }
     private void requestGameLaunch(boolean targetBound) {
         if (stopping || !gameLaunch.request(targetBound)) return;
+        startupOpened = true;
         if (!automaticRestart) {
             listener.launchReady(report.getName());
             return;
@@ -356,14 +374,36 @@ final class FarmSession implements Runnable {
             throw startupFailure("Automatic game launch failed");
     }
     private IllegalStateException startupFailure(String message) {
-        retryCandidate = true; return new IllegalStateException(message);
+        startupProblem = ConnectionFailure.classify(message);
+        return new IllegalStateException(message);
     }
     private void prepareStartupRetry() {
-        if (!automaticRestart || !startupOpened || readyAt != 0 || userCancelled
-                || !(retryCandidate || runner != null && runner.startupRetryCandidate())) return;
+        if (!StartupRetryPolicy.mayPlan(startupOpened, userCancelled, readyAt, recoveryAttempt)) return;
         try {
+            ConnectionFailure failure = runner == null ? ConnectionFailure.UNKNOWN : runner.startupFailure();
+            if ((failure == ConnectionFailure.NONE || failure == ConnectionFailure.UNKNOWN) && startupProblem.retryable())
+                failure = startupProblem;
+            if ((failure == ConnectionFailure.NONE || failure == ConnectionFailure.UNKNOWN) && stopReason != null)
+                failure = ConnectionFailure.classify(stopReason);
+            ConnectionStrategy next = compatibility.alternative(failure, resolveError12);
+            record("startup_retry_plan", new JSONObject().put("failure", failure.name()).put("route", connection.name())
+                    .put("nextRoute", next == null ? JSONObject.NULL : next.name()).put("attempt", recoveryAttempt)
+                    .put("maxAttempts", RecoveryAttempts.MAX_ATTEMPTS));
+            if (next == null || userCancelled) return;
             if (runner != null && !runner.startupTransportClosed()) {
                 record("recovery_retry_blocked", detail("Previous injector exit unconfirmed")); return;
+            }
+            if (pid <= 1 && userApprovedGameStop && !userCancelled) {
+                RootShell.Result found = root.execute(GameStartCheck.PIDOF, 2000);
+                int candidate = found.code == 0 ? EnginePolicy.uniquePid(found.output) : -1;
+                if (candidate > 1) {
+                    long ticks = readStart(root, candidate);
+                    RootShell.Result proof = root.execute(BoundGameProcess.command(candidate), 2500);
+                    if (!BoundGameProcess.verify(proof.code, proof.output, candidate, ticks).matches()) return;
+                    pid = candidate; startTicks = ticks;
+                    if (collector != null) collector.bindTarget(pid, ticks);
+                    record("startup_retry_target", new JSONObject().put("pid", pid).put("startTicks", ticks));
+                }
             }
             if (pid > 1 && startTicks > 0) {
                 RootShell.Result ids = root.execute(GameStartCheck.framed("PIDOF", GameStartCheck.PIDOF), 2000);
@@ -375,10 +415,23 @@ final class FarmSession implements Runnable {
                 }
                 if (state == GameStartCheck.State.RUNNING && !userCancelled) {
                     SessionLimitStop gameStop = new SessionLimitStop((command, timeout) -> {
+                        if (userCancelled) throw new IllegalStateException("Startup stopped");
                         RootShell.Result reply = root.execute(command, timeout);
                         return new GameStartCheck.Reply(reply.code, reply.output);
                     }, (event, values) -> record("recovery_retry_" + event, new JSONObject(values)), Thread::sleep);
                     if (!gameStop.close(pid, startTicks).gameClosed) return;
+                } else if (state == GameStartCheck.State.ABSENT && !userCancelled) {
+                    RootShell.Result inventory = root.execute(GameStartCheck.framed("PROC", GameStartCheck.FAST_PROC), 8000);
+                    if (StartupOrphans.onlyChildren(new GameStartCheck.Reply(ids.code, ids.output),
+                            new GameStartCheck.Reply(inventory.code, inventory.output))) {
+                        if (userCancelled) return;
+                        String command = GameStartCheck.framed("ORPHAN_STOP", StartupOrphans.command(pid));
+                        RootShell.Result closed = root.execute(command, 5000);
+                        record("startup_retry_orphan_cleanup", new JSONObject().put("exitedPid", pid)
+                                .put("command", command).put("exit", closed.code).put("output", closed.output));
+                        if (closed.code != 0 || !GameStartCheck.decode("ORPHAN_STOP",
+                                new GameStartCheck.Reply(closed.code, closed.output)).valid) return;
+                    }
                 }
             }
             GameStartCheck absence = new GameStartCheck((command, timeout) -> {
@@ -386,12 +439,46 @@ final class FarmSession implements Runnable {
                 return new GameStartCheck.Reply(reply.code, reply.output);
             }, (event, values) -> record("recovery_retry_" + event, new JSONObject(values)),
                     SystemClock::elapsedRealtime, Thread::sleep, () -> userCancelled);
-            if (earlySpawn) absence.useFastInventory();
+            absence.useFastInventory();
             absence.prepare(false);
             startupRetryReady = !userCancelled;
+            if (startupRetryReady) compatibility.advance(next);
             record("recovery_retry_ready", new JSONObject().put("attempt", recoveryAttempt)
                     .put("maxAttempts", RecoveryAttempts.MAX_ATTEMPTS).put("retryReady", startupRetryReady));
         } catch (Exception error) { record("recovery_retry_blocked", detail(error.toString())); }
+    }
+    private void awaitCompatibleProcess() throws Exception {
+        long until = SystemClock.elapsedRealtime() + 90_000;
+        ProcessReadiness readiness = new ProcessReadiness();
+        while (!stopping && SystemClock.elapsedRealtime() < until) {
+            if (pid <= 1) {
+                RootShell.Result found = root.execute(GameStartCheck.PIDOF, 2000);
+                int candidate = found.code == 0 ? EnginePolicy.uniquePid(found.output) : -1;
+                if (candidate > 1) {
+                    long ticks = readStart(root, candidate);
+                    RootShell.Result proof = root.execute(BoundGameProcess.command(candidate), 2500);
+                    if (BoundGameProcess.verify(proof.code, proof.output, candidate, ticks).matches()) {
+                        pid = candidate; startTicks = ticks;
+                    }
+                }
+            }
+            if (pid > 1) {
+                RootShell.Result proof = root.execute(BoundGameProcess.command(pid), 2500);
+                BoundGameProcess.Result identity = BoundGameProcess.verify(proof.code, proof.output, pid, startTicks);
+                if (identity.state == BoundGameProcess.State.CHANGED) throw startupFailure("Game ended during startup");
+                if (!identity.matches()) { readiness.reset(); Thread.sleep(500); continue; }
+                RootShell.Result sample = root.execute(ProcessReadiness.command(pid), 2000);
+                if (readiness.observe(pid, startTicks, sample.code, sample.output, SystemClock.elapsedRealtime())) {
+                    record("connection_ready", new JSONObject().put("pid", pid).put("startTicks", startTicks)
+                            .put("mappingStabilityMs", ProcessReadiness.STABLE_MS).put("route", connection.name()));
+                    return;
+                }
+            } else {
+                readiness.reset();
+            }
+            Thread.sleep(500);
+        }
+        if (!stopping) throw startupFailure("Game libraries not ready; export logs");
     }
     private void awaitEarlyProcess() throws Exception {
         long waitingSince = SystemClock.elapsedRealtime(), until = waitingSince + 150_000;
@@ -451,14 +538,14 @@ final class FarmSession implements Runnable {
         try {
             while (!stopping) {
                 if (readyAt == 0 && SystemClock.elapsedRealtime() - started >= FarmPolicy.STARTUP_LIMIT_MS) {
-                    retryCandidate = true; stopEngine("Startup incomplete; export logs"); return;
+                    stopEngine("Startup incomplete; export logs"); return;
                 }
                 checkIdentity(monitorRoot);
                 Thread.sleep(1000);
             }
         } catch (InterruptedException error) { Thread.currentThread().interrupt(); }
         catch (Exception error) {
-            if (!stopping) { retryCandidate = readyAt == 0; stopEngine("Game disconnected: " + error.getMessage()); }
+            if (!stopping) stopEngine("Game disconnected: " + error.getMessage());
         }
     }
     private void checkIdentity(RootShell shell) throws Exception {
@@ -508,6 +595,7 @@ final class FarmSession implements Runnable {
                     .put("mode", "FARMER")
                     .put("maxCatches", config.maxCatches).put("maxSpins", config.maxSpins)
                     .put("recoveryAttempt", recoveryAttempt).put("maxRecoveryAttempts", RecoveryAttempts.MAX_ATTEMPTS)
+                    .put("connection", connection.name()).put("startupChain", compatibility.chain).put("verificationOnly", verificationOnly)
                     .put("startupRetryReady", startupRetryReady())
                     .put("resolveError12", resolveError12).put("locationImplementation", "rootcatch-profile7-v2")
                     .put("spun", counters.spun).put("transferred", counters.transferred).put("discarded", counters.discarded)
