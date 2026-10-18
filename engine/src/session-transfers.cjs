@@ -1,6 +1,7 @@
 // Session-bound transfer policy: ambiguous data never authorizes deletion.
 const {ownedId, classifyPokemon} = require('./pokemon-inspection.cjs');
 function transferVerdict(data, options, source) {
+  if (data.egg) return {decision:'retain',reasons:['egg'],transferAllowed:false};
   const inspected = classifyPokemon(data);
   if (inspected.decision === 'unknown' || !Number.isInteger(data.dexId) || data.dexId <= 0
       || typeof data.buddy !== 'boolean' || typeof data.fusion !== 'boolean'

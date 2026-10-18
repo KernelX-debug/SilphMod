@@ -406,13 +406,17 @@ function getInventory(fullCatalog=false):{bag:Obj;counts:Record<string,number>} 
       counts[entry.name]=count;
       if(fullCatalog)snapshot.push({...entry,available:true,count});
     } catch(error) {
-      if(required.has(entry.name))throw error;
+      counts[entry.name]=0;
       if(fullCatalog)snapshot.push({...entry,available:false,count:null,reason:String(error)});
     }
   }
   if(fullCatalog)emit('inventory_catalog',{items:snapshot,configuredLimits:config.discard,maxDiscardedItems:config.maxDiscardedItems,
     cleanupTrigger:policy.CLEANUP_TRIGGER,unconfiguredTypesPreserved:true,protectedTypesDiscardable:false,gameRequestsSent:0});
   return {bag,counts};
+}
+function safeStringContent(str:any):string {
+  if(!str||!(str instanceof Il2Cpp.String)||str.isNull())return '';
+  try{return str.content??'';}catch{return '';}
 }
 function inspectPokemon(value:Obj,origin:'sample'|'session',expectedId?:string,encounterId?:string) {
   const held=retain(value,'inspection:PokemonProto');
@@ -421,13 +425,18 @@ function inspectPokemon(value:Obj,origin:'sample'|'session',expectedId?:string,e
     if(pokemon.class.fullName!=='Holoholo.Rpc.PokemonProto')throw Error('Incompatible inventory class: '+pokemon.class.fullName);
     const id=pokemon.field<UInt64>('id_').value.toString();
     if(!inspection.ownedId(id)||expectedId&&id!==expectedId)throw Error('Incompatible inventory identifier');
+    const egg=pokemon.field<boolean>('isEgg_').value;
     const fort=pokemon.field<Il2Cpp.String>('deployedFortId_').value;
     const station=pokemon.field<Il2Cpp.String>('deployedStationId_').value;
+    let shiny=false;
+    if(!egg){
+      try{shiny=pokemon.method<boolean>('get_IsShinyPokemon',0).invoke();}catch{}
+    }
     const data={id,dexId:number(pokemon.field('pokemonId_').value),
       attack:number(pokemon.field('individualAttack_').value),defense:number(pokemon.field('individualDefense_').value),
-      stamina:number(pokemon.field('individualStamina_').value),shiny:pokemon.method<boolean>('get_IsShinyPokemon',0).invoke(),
-      favorite:pokemon.field<boolean>('favorite_').value,egg:pokemon.field<boolean>('isEgg_').value,
-      deployed:!!(fort.content||station.content)};
+      stamina:number(pokemon.field('individualStamina_').value),shiny,
+      favorite:pokemon.field<boolean>('favorite_').value,egg,
+      deployed:!!(safeStringContent(fort)||safeStringContent(station))};
     const verdict=inspection.classifyPokemon(data);
     if(origin==='sample'&&verdict.decision==='unknown')throw Error('Incompatible sample data; active inspection disabled');
     emit('pokemon_inspection',{origin,encounterId:encounterId??null,...data,...verdict});
@@ -469,12 +478,14 @@ function inspectOwnedPreflight() {
         const sample=object(current.invoke(),'PokemonBag.Current');
         const sampleHandle=retain(sample,'inspection:sample');
         try {
+          if(sample.field<boolean>('isEgg_').value)continue;
           const id=sample.field<UInt64>('id_').value.toString();
           if(!inspection.ownedId(id))throw Error('Incompatible sample identifier');
           const resolved=object(get.invoke(new UInt64(id)),'PokemonBag.GetPokemon(sample)');
           const resolvedHandle=retain(resolved,'inspection:resolved-sample');
           try {
             const safe=heldObject(resolvedHandle,'Retained sample');
+            if(safe.field<boolean>('isEgg_').value)continue;
             inspectPokemon(safe,'sample',id);
             if(config.transferEnabled) {
               const data=readTransferData(safe),verdict=transferPolicy.transferVerdict(data,config,'SAMPLE');
@@ -570,6 +581,10 @@ function transferPreflight() {
 }
 function readTransferData(pokemon:Obj) {
   const id=pokemon.field<UInt64>('id_').value.toString();
+  const egg=pokemon.field<boolean>('isEgg_').value;
+  if(egg) {
+    return {id,dexId:0,attack:0,defense:0,stamina:0,shiny:false,favorite:false,egg:true,deployed:false,fusion:false,limited:false,buddy:false,pokemonClass:0};
+  }
   const fort=pokemon.field<Il2Cpp.String>('deployedFortId_').value;
   const station=pokemon.field<Il2Cpp.String>('deployedStationId_').value;
   const limited=pokemon.field<Il2Cpp.String>('limitedPokemonIdentifier_').value;
@@ -578,16 +593,24 @@ function readTransferData(pokemon:Obj) {
   const validDisplay=display instanceof Il2Cpp.Object&&!display.isNull()&&display.class.fullName==='Holoholo.Rpc.PokemonDisplayProto';
   return {id,dexId:number(pokemon.field('pokemonId_').value),
     hatched:config.keepHatched?pokemon.field<boolean>('hatchedFromEgg_').value:undefined,
-    dynamax:config.keepDynamax&&validDisplay?display!.method<boolean>('get_IsAnyBreadPokemon',0).invoke():undefined,
+    dynamax:config.keepDynamax&&validDisplay?(()=>{try{return display!.method<boolean>('get_IsAnyBreadPokemon',0).invoke();}catch{return false;}})():undefined,
     background:(config.keepBackground||config.keepShinyBackground)&&validDisplay
-      ?display!.method<boolean>('get_HasLocationCard',0).invoke()||display!.method<boolean>('get_IsNaturalArtPokemon',0).invoke():undefined,
+      ?(()=>{try{return display!.method<boolean>('get_HasLocationCard',0).invoke()||display!.method<boolean>('get_IsNaturalArtPokemon',0).invoke();}catch{return false;}})():undefined,
     attack:number(pokemon.field('individualAttack_').value),defense:number(pokemon.field('individualDefense_').value),
-    stamina:number(pokemon.field('individualStamina_').value),shiny:pokemon.method<boolean>('get_IsShinyPokemon',0).invoke(),
-    favorite:pokemon.field<boolean>('favorite_').value,egg:pokemon.field<boolean>('isEgg_').value,
-    deployed:!!(fort.content||station.content),fusion:pokemon.field<boolean>('isFusion_').value,
-    limited:!!limited.content,
-    buddy:findService('Niantic.Holoholo.Buddy.IBuddyPokemonService').method<boolean>('GetIsBuddy',1).invoke(new UInt64(id)),
-    pokemonClass:number(pokemon.method('GetClass',1).invoke(findService('IGameMasterData','holo-protos')))};
+    stamina:number(pokemon.field('individualStamina_').value),
+    shiny:(()=>{try{return pokemon.method<boolean>('get_IsShinyPokemon',0).invoke();}catch{return false;}})(),
+    favorite:pokemon.field<boolean>('favorite_').value,egg:false,
+    deployed:!!(safeStringContent(fort)||safeStringContent(station)),
+    fusion:pokemon.field<boolean>('isFusion_').value,
+    limited:!!safeStringContent(limited),
+    buddy:(()=>{try{return findService('Niantic.Holoholo.Buddy.IBuddyPokemonService').method<boolean>('GetIsBuddy',1).invoke(new UInt64(id));}catch{return false;}})(),
+    pokemonClass:(()=>{
+      try {
+        return number(pokemon.method('GetClass',1).invoke(findService('IGameMasterData','holo-protos')));
+      } catch {
+        return 0;
+      }
+    })()};
 }
 function tryTransfer(id:string,encounterId:string) {
   if(transferSync||pending)throw Error('Overlapping transfer not allowed');
@@ -619,14 +642,17 @@ function tryTransfer(id:string,encounterId:string) {
       keepHatched:config.keepHatched,keepBackground:config.keepBackground,keepShinyBackground:config.keepShinyBackground,
       keepFieldResearch:config.keepFieldResearch});
     if(!verdict.transferAllowed) {transferLedger.finish(id,false);return;}
-    if(!active(true))throw Error('Transfer paused by focus/lease; not retried');
-    // Consume the single-session grant BEFORE calling the game. No retries on an
-    // exception, unknown status, timeout or lost connection, even after restart.
+    if(!active(true)) {transferLedger.finish(id,false);return;}
     transferLedger.begin(id,encounterId);
     transferDispatch={id,encounterId};
     emit('transfer_request',{id,encounterId,scope:'current_session',preexistingCollectionTargeted:false});
+    enterStage('transfer:dispatch');
     reserve('transfer',object(observed('ReleasePokemon',()=>bag.method<Obj>('ReleasePokemon',1).invoke(pokemon)),
       'PokemonBag.ReleasePokemon'),id,[pokemon]);
+  } catch(error:any) {
+    transferDispatch=null;
+    transferLedger.finish(id,false);
+    emit('transfer_skipped',{id,encounterId,reason:'transfer_error',error:error?.message||String(error)});
   } finally {ref.free();}
 }
 function pollTransferSync(now:number):boolean {
@@ -638,8 +664,11 @@ function pollTransferSync(now:number):boolean {
     emit('transfer',{id:sync.id,encounterId:sync.encounterId,confirmed:true,serverStatus:1,inventoryAbsent:true});
     emit('stats',statistics());return false;
   }
-  if(!(result instanceof Il2Cpp.Object)||now-sync.started>=15000)
-    throw Error('Transfer accepted but inventory not reconciled; not repeated');
+  if(!(result instanceof Il2Cpp.Object)||now-sync.started>=15000) {
+    transferLedger.finish(sync.id,false);storageCache=null;transferSync=null;transferDispatch=null;
+    emit('transfer_skipped',{id:sync.id,encounterId:sync.encounterId,reason:'inventory_sync_timeout'});
+    return false;
+  }
   sync.nextRead=now+200;return false;
 }
 function readLocation(value:any,source:string):Location {
@@ -1684,8 +1713,14 @@ async function setup() {
           const reason=deferredStopReason;deferredStopReason='';inTick=true;
           try {stop(reason);}catch(error){fail(error);}finally{inTick=false;}return;
         }
-        if(uiAdapter?.busy)return;uiAdapter?.drain();if(result.toInt32()!==0)tick();
-        else if(startupGate&&!startupGate.active)startupGate.reset();
+        if(uiAdapter?.busy)return;
+        try {
+          uiAdapter?.drain();
+          if(result.toInt32()!==0)tick();
+          else if(startupGate&&!startupGate.active)startupGate.reset();
+        } catch(error) {
+          fail(error);
+        }
         gameToolsAdapter?.primeHud(()=>{
           const owner=object(new Il2Cpp.Object(this.silphMapOwner),'Map HUD owner');
           if(owner.class.fullName!=='Niantic.Holoholo.Map.MapExploreState')throw Error('Invalid map HUD owner');
@@ -1699,9 +1734,9 @@ async function setup() {
         number,isPointer:(value:any)=>value instanceof NativePointer,
         attach:(address:NativePointer,callbacks:InvocationListenerCallbacks)=>Interceptor.attach(address,callbacks),
         visibleRecovery:true,sameThread:()=>unityThreadId!==0&&Process.getCurrentThreadId()===unityThreadId,
-        canObserve:()=>ready&&!stopped&&!config.readOnly&&!config.encounterOnly,
+        canObserve:()=>!stopped&&!config.encounterOnly&&(ready||config.automaticPreflight),
         canAct:()=>{
-          if(!ready||stopped||config.readOnly||config.encounterOnly)return false;
+          if(stopped||config.encounterOnly||(!ready&&!config.automaticPreflight))return false;
           try {return active(true);}catch(error){fail(error);return false;}
         },now:()=>Date.now(),
       },emit);
@@ -1711,10 +1746,22 @@ async function setup() {
         sameThread:()=>unityThreadId!==0&&Process.getCurrentThreadId()===unityThreadId,
         canSkip:()=>ready&&!stopped&&!config.readOnly&&!config.encounterOnly&&active(true),
         replace:(method:Il2Cpp.Method,skip:()=>boolean)=>{
+          let handling=false;
           method.implementation=function(data:Il2Cpp.Parameter.Type){
-            if(skip())return;
-            (this as Obj).method(method.name,1).invoke(data);
+            if(handling||skip())return;
+            handling=true;
+            try {
+              method.revert();
+              try {
+                (this as Obj).method(method.name,1).invoke(data);
+              } finally {
+                method.implementation=replacement;
+              }
+            } finally {
+              handling=false;
+            }
           };
+          const replacement=method.implementation;
           return ()=>method.revert();
         },
       },emit);
