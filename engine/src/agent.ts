@@ -642,14 +642,17 @@ function tryTransfer(id:string,encounterId:string) {
       keepHatched:config.keepHatched,keepBackground:config.keepBackground,keepShinyBackground:config.keepShinyBackground,
       keepFieldResearch:config.keepFieldResearch});
     if(!verdict.transferAllowed) {transferLedger.finish(id,false);return;}
-    if(!active(true))throw Error('Transfer paused by focus/lease; not retried');
-    // Consume the single-session grant BEFORE calling the game. No retries on an
-    // exception, unknown status, timeout or lost connection, even after restart.
+    if(!active(true)) {transferLedger.finish(id,false);return;}
     transferLedger.begin(id,encounterId);
     transferDispatch={id,encounterId};
     emit('transfer_request',{id,encounterId,scope:'current_session',preexistingCollectionTargeted:false});
+    enterStage('transfer:dispatch');
     reserve('transfer',object(observed('ReleasePokemon',()=>bag.method<Obj>('ReleasePokemon',1).invoke(pokemon)),
       'PokemonBag.ReleasePokemon'),id,[pokemon]);
+  } catch(error:any) {
+    transferDispatch=null;
+    transferLedger.finish(id,false);
+    emit('transfer_skipped',{id,encounterId,reason:'transfer_error',error:error?.message||String(error)});
   } finally {ref.free();}
 }
 function pollTransferSync(now:number):boolean {
@@ -661,8 +664,11 @@ function pollTransferSync(now:number):boolean {
     emit('transfer',{id:sync.id,encounterId:sync.encounterId,confirmed:true,serverStatus:1,inventoryAbsent:true});
     emit('stats',statistics());return false;
   }
-  if(!(result instanceof Il2Cpp.Object)||now-sync.started>=15000)
-    throw Error('Transfer accepted but inventory not reconciled; not repeated');
+  if(!(result instanceof Il2Cpp.Object)||now-sync.started>=15000) {
+    transferLedger.finish(sync.id,false);storageCache=null;transferSync=null;transferDispatch=null;
+    emit('transfer_skipped',{id:sync.id,encounterId:sync.encounterId,reason:'inventory_sync_timeout'});
+    return false;
+  }
   sync.nextRead=now+200;return false;
 }
 function readLocation(value:any,source:string):Location {
