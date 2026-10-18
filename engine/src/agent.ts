@@ -406,7 +406,7 @@ function getInventory(fullCatalog=false):{bag:Obj;counts:Record<string,number>} 
       counts[entry.name]=count;
       if(fullCatalog)snapshot.push({...entry,available:true,count});
     } catch(error) {
-      if(required.has(entry.name))throw error;
+      counts[entry.name]=0;
       if(fullCatalog)snapshot.push({...entry,available:false,count:null,reason:String(error)});
     }
   }
@@ -1690,8 +1690,14 @@ async function setup() {
           const reason=deferredStopReason;deferredStopReason='';inTick=true;
           try {stop(reason);}catch(error){fail(error);}finally{inTick=false;}return;
         }
-        if(uiAdapter?.busy)return;uiAdapter?.drain();if(result.toInt32()!==0)tick();
-        else if(startupGate&&!startupGate.active)startupGate.reset();
+        if(uiAdapter?.busy)return;
+        try {
+          uiAdapter?.drain();
+          if(result.toInt32()!==0)tick();
+          else if(startupGate&&!startupGate.active)startupGate.reset();
+        } catch(error) {
+          fail(error);
+        }
         gameToolsAdapter?.primeHud(()=>{
           const owner=object(new Il2Cpp.Object(this.silphMapOwner),'Map HUD owner');
           if(owner.class.fullName!=='Niantic.Holoholo.Map.MapExploreState')throw Error('Invalid map HUD owner');
@@ -1705,9 +1711,9 @@ async function setup() {
         number,isPointer:(value:any)=>value instanceof NativePointer,
         attach:(address:NativePointer,callbacks:InvocationListenerCallbacks)=>Interceptor.attach(address,callbacks),
         visibleRecovery:true,sameThread:()=>unityThreadId!==0&&Process.getCurrentThreadId()===unityThreadId,
-        canObserve:()=>ready&&!stopped&&!config.readOnly&&!config.encounterOnly,
+        canObserve:()=>!stopped&&!config.encounterOnly&&(ready||config.automaticPreflight),
         canAct:()=>{
-          if(!ready||stopped||config.readOnly||config.encounterOnly)return false;
+          if(stopped||config.encounterOnly||(!ready&&!config.automaticPreflight))return false;
           try {return active(true);}catch(error){fail(error);return false;}
         },now:()=>Date.now(),
       },emit);
@@ -1717,10 +1723,22 @@ async function setup() {
         sameThread:()=>unityThreadId!==0&&Process.getCurrentThreadId()===unityThreadId,
         canSkip:()=>ready&&!stopped&&!config.readOnly&&!config.encounterOnly&&active(true),
         replace:(method:Il2Cpp.Method,skip:()=>boolean)=>{
+          let handling=false;
           method.implementation=function(data:Il2Cpp.Parameter.Type){
-            if(skip())return;
-            (this as Obj).method(method.name,1).invoke(data);
+            if(handling||skip())return;
+            handling=true;
+            try {
+              method.revert();
+              try {
+                (this as Obj).method(method.name,1).invoke(data);
+              } finally {
+                method.implementation=replacement;
+              }
+            } finally {
+              handling=false;
+            }
           };
+          const replacement=method.implementation;
           return ()=>method.revert();
         },
       },emit);
