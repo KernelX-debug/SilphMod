@@ -587,7 +587,13 @@ function readTransferData(pokemon:Obj) {
     deployed:!!(fort.content||station.content),fusion:pokemon.field<boolean>('isFusion_').value,
     limited:!!limited.content,
     buddy:findService('Niantic.Holoholo.Buddy.IBuddyPokemonService').method<boolean>('GetIsBuddy',1).invoke(new UInt64(id)),
-    pokemonClass:number(pokemon.method('GetClass',1).invoke(findService('IGameMasterData','holo-protos')))};
+    pokemonClass:(()=>{
+      try {
+        return number(pokemon.method('GetClass',1).invoke(findService('IGameMasterData','holo-protos')));
+      } catch {
+        return 0;
+      }
+    })()};
 }
 function tryTransfer(id:string,encounterId:string) {
   if(transferSync||pending)throw Error('Overlapping transfer not allowed');
