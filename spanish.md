@@ -4,13 +4,14 @@
 
 **[English](README.md) · Español**
 
-Automatización local para Pokémon GO original en **Android con root**, tanto en UGPhone como en teléfonos físicos ARM64. Captura Pokémon cercanos, gira Poképaradas, recoge investigaciones de campo, transfiere nuevas capturas según tus filtros y mantiene la mochila dentro de los límites que elijas.
+Automatización local para Pokémon GO original en **Android con root**, tanto en UGPhone como en teléfonos físicos ARM64. Captura de Pokémon cercanos, gira Poképaradas, recoge investigaciones de campo, transfiere nuevas capturas según tus filtros y mantiene la mochila dentro de los límites que elijas.
+Modo Kecleon (BETA) implementado en esta versión, *aún no es definitiva*
 
 Configuras las funciones, pulsas **Start service** y sigues el progreso desde la notificación. **Stop** y **Export logs** permiten detener la sesión y revisar sus resultados. La interfaz, las notificaciones y los recursos visuales están en inglés.
 
-**Edición:** `1.9.3` · [MIT](LICENSE)
+**Edición:** `2.0.15` · [MIT](LICENSE)
 
-**Entornos de referencia:** UGPhone Android 10, Motorola Edge 50 Fusion con Android 15 y Redmi Note 14 Pro+ 5G con Android 16; todos ARM64 con root.
+**Plataforma:** Android 10 o posterior, ARM64 y root. Una misma APK para UGPhone y teléfonos físicos.
 
 <details>
 <summary>Contenido</summary>
@@ -18,6 +19,7 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 - [Cómo funciona](#cómo-funciona)
 - [Compatibilidad](#compatibilidad)
 - [Funciones](#funciones)
+  - [Kecleon (BETA)](#kecleon-beta)
   - [Only catch: escoger qué Pokémon capturar](#only-catch-escoger-qué-pokémon-capturar)
   - [Transferir sin tocar la colección anterior](#transferir-sin-tocar-la-colección-anterior)
   - [Mochila: límites por tipo, no borrado indiscriminado](#mochila-límites-por-tipo-no-borrado-indiscriminado)
@@ -25,6 +27,7 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 - [Uso](#uso)
 - [Arquitectura](#arquitectura)
   - [Inicio y continuidad](#inicio-y-continuidad)
+  - [Integridad y canal de control](#integridad-y-canal-de-control)
   - [Recuperación automática del mapa](#recuperación-automática-del-mapa)
   - [Capturas y llamadas del juego](#capturas-y-llamadas-del-juego)
   - [Alcance y prioridad de captura](#alcance-y-prioridad-de-captura)
@@ -47,29 +50,29 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 
 ## Cómo funciona
 
-![SilphMod en funcionamiento — 1:01](docs/assets/demo.gif)
+![SilphMod en funcionamiento — 0:25](docs/assets/demo.gif)
 
 ## Compatibilidad
 
 | Componente | Perfil de esta edición |
 | --- | --- |
 | Sistema | Android **10 o posterior** y permiso `su` |
-| Entornos de referencia | UGPhone Android **10 / SDK 29**; teléfonos físicos Android **15 / SDK 35** y **16 / SDK 36** |
+| Entornos | UGPhone y teléfonos físicos ARM64 con root |
 | Arquitectura | **ARM64**, punteros de 64 bits |
 | Juego | Pokémon GO original **0.433.1**, `versionCode 2026101502` |
 | Motor del juego | Unity **6000.3.22f1**, IL2CPP |
 | APK | `minSdk 29`, `targetSdk 36` |
 | Tratamiento opcional de Error 12 | Contratos JNI de `Location` resueltos según la versión del sistema |
-| Conexión | Inyector adaptativo con selección automática del arranque y del runtime según el SDK y las capacidades del entorno, dentro de una misma APK |
+| Conexión | Selección adaptativa entre cuatro rutas de arranque y reutilización de la que funcionó para el entorno |
 | Identidad instalada | `dev.rootcatch.ugphonetest`, conservada para actualizar instalaciones anteriores |
 
-La aplicación conserva una sola interfaz y un solo motor Farmer. El arranque se adapta al **Android del dispositivo o de la instancia**, sin que el usuario tenga que elegir una APK diferente para cada entorno.
+La aplicación reúne **Farmer** y **Kecleon (BETA)**, con ejecución independiente y estadísticas separadas. El arranque se adapta al **Android del dispositivo o de la instancia**.
 
 ## Funciones
 
 | Función | Comportamiento actual |
 | --- | --- |
-| Autocaptura | Selecciona el objetivo elegible más cercano dentro del alcance leído del juego, hasta **50 m**, y vuelve a comprobar su existencia y distancia antes de lanzar. Reintenta mientras el encuentro siga siendo válido; si desaparece o sale del alcance, pasa al siguiente objetivo. |
+| Autocaptura | Selecciona el objetivo elegible más cercano hasta **50 m**, y vuelve a comprobar su existencia y distancia antes de lanzar. Reintenta mientras el encuentro siga siendo válido; si desaparece o sale del alcance, pasa al siguiente objetivo. |
 | Only catch | Selección de una o varias especies con miniaturas, búsqueda y orden de Pokédex. Sin selección, captura todas las especies elegibles. Las recompensas de investigación de campo se capturan independientemente de este filtro. |
 | Throw quality | Selecciona **Normal**, **Nice**, **Great** o **Excellent**. Los lanzamientos mantienen el giro de bola curva. |
 | Bayas | Usa la primera baya disponible según la selección y prioridad configuradas, confirma su aplicación y continúa con el lanzamiento. Mantiene los límites de Item limits. |
@@ -88,14 +91,28 @@ La aplicación conserva una sola interfaz y un solo motor Farmer. El arranque se
 | Fast gift opening | Acelera la apertura manual de regalos, la presentación de sus objetos y las esperas locales de esa secuencia. Activado inicialmente en **Game tools**. |
 | Hide trainer name | Muestra temporalmente **SilphMod** en el HUD, el perfil propio y la cabecera de amigos. El nombre de la cuenta no cambia. Activado inicialmente en **Game tools**. |
 | Limpiar mochila | Elimina excedentes de los tipos seleccionados **desde el inicio**, y mantiene esos límites durante la sesión. No necesita esperar a que la mochila se llene. |
+| Kecleon (BETA) | Búsqueda y captura automática de candidatos, con filtros e historial por cuenta. |
 | Solucionar error 12 | Tratamiento de ubicación dentro del proceso del juego, opcional y vinculado a la sesión. |
 | Estadísticas | Capturas, huidas, giros, transferencias, objetos eliminados, XP, polvo estelar y tiempo activo acumulados. Se conservan al detener, volver a iniciar y recuperar el mapa. |
-| Clear statistics | Restablece los contadores únicamente al pulsarlo con el servicio detenido. Se encuentra debajo de las estadísticas. |
-| Recuperación del mapa | Tras cinco minutos de lecturas válidas sin Pokémon dentro del alcance efectivo, reinicia el juego y vuelve a conectar el motor. Hasta **10 intentos de arranque por recuperación**, cancelables con Stop. Se desactiva al seleccionar especies en **Only catch**. |
-| Barra de notificaciones | Las capturas y los giros continúan al desplegarla si Pokémon GO sigue siendo la app subyacente y la pantalla está desbloqueada. |
-| Registros | Exportación manual de hasta tres sesiones recientes, con índice de tamaños y SHA-256. |
+| Clear statistics | Restablece únicamente los contadores del modo abierto, con el servicio detenido. En Kecleon también limpia su historial de candidatos. Se encuentra debajo de las estadísticas. |
+| Recuperación del mapa | Tras cinco minutos de lecturas válidas sin apariciones en el directorio del mapa, reinicia el juego y vuelve a conectar el motor. Hasta **10 intentos de arranque por recuperación**, cancelables con Stop. Se desactiva al seleccionar especies en **Only catch**. |
+| Barra de notificaciones | Las capturas y los giros continúan al desplegarla si Pokémon GO sigue siendo la app subyacente y la pantalla está desbloqueada. También es válido con mochila abierta, inventario pokémon abierto y perfil abierto. |
+| Integridad y control | Verificación de componentes antes del arranque y canal local vinculado al proceso y a la sesión, con credenciales fuera de los argumentos y de los nuevos registros. |
+| Registros | Exportación manual de hasta tres sesiones recientes en un ZIP local. |
 
-No hay ruta o joystick integrado: SilphMod trabaja con tu aplicación GPS JoyStick (desarrollado por The App Ninjas). No uses algún otro joistick que tenga un distinto nombre de paquete que el anterior mencionado.
+Farmer utiliza la ruta que configures en tu joystick. Kecleon necesita la integración pública de **GPS JoyStick de The App Ninjas** para hacer sus saltos automáticos.
+
+### Kecleon (BETA)
+
+Este modo recorre candidatos de **Moonani**, se desplaza con GPS JoyStick, busca la Poképarada correspondiente y comprueba su incidencia activa. Resuelve `fort_id`, incidencia y `encounter_id` desde el juego antes de abrir el encuentro.
+
+La carga del mapa se acompaña de movimientos acotados de **ocho metros** y lecturas espaciadas. Un tiempo agotado se guarda como **no verificado**, no como prueba de que allí no había Kecleon. El historial separa las cuentas y evita volver a procesar candidatos ya resueltos.
+
+Los filtros **Only catch 15/15/15**, **Only catch 0/0/0**, **Only catch shiny** y **Only catch shiny + 15/15/15** se combinan con «O». La última opción exige simultáneamente shiny e IV perfectos. Sin filtros se capturan todos los Kecleon válidos encontrados.
+
+**Maximum encounters** limita sus encuentros acumulados. Al llegar al máximo o agotar los candidatos pendientes, se cierra el juego y se muestra el motivo. **Clear statistics** borra sus contadores y el historial de candidatos. Farmer conserva sus propios resultados.
+
+Kecleon comparte calidad de tiro, bayas, límites de mochila y herramientas de inventario y presentación. Sus estadísticas muestran **Encounters**, **Catches**, **Shinies**, **Items deleted**, **XP** y **Stardust**. No gira Poképaradas ni transfiere su colección.
 
 ### Only catch: escoger qué Pokémon capturar
 
@@ -103,13 +120,7 @@ No hay ruta o joystick integrado: SilphMod trabaja con tu aplicación GPS JoySti
 
 El filtro se aplica antes de abrir un encuentro salvaje y se vuelve a comprobar antes de usar una baya o lanzar. Seleccionar una especie no modifica sus IV ni condiciona los filtros de conservación: estos se aplican después de capturar.
 
-```js
-allowsPokemon(readId, source = 'WILD') {
-  return source === 'FIELD_RESEARCH' || !this.active || this.allows(readId());
-}
-```
-
-*Fragmento de [catch-selection.cjs](engine/src/catch-selection.cjs). Las capturas de investigación de campo no quedan bloqueadas por Only catch.*
+El selector prepara una máscara de especies que el motor consulta antes de abrir el encuentro. Las capturas de investigación usan un origen separado y no quedan bloqueadas por **Only catch**.
 
 Cuando hay especies seleccionadas, no se activa la recuperación por cinco minutos sin Pokémon: el farmer puede esperar a que aparezcan esas especies sin reiniciar el juego. **Stop**, los límites acumulados y el control de conexión siguen funcionando de la misma forma.
 
@@ -119,7 +130,7 @@ La cola de transferencias nace vacía. Un Pokémon entra únicamente cuando una 
 
 Además de los filtros elegidos, se conservan favoritos, compañeros, huevos, Pokémon desplegados, fusiones, clases especiales y registros cuya información de protección no puede validarse. Desmarcar **Keep shiny** o **Keep 15/15/15** permite transferir esas nuevas capturas si no existe otra protección.
 
-La versión **1.7.0** añade **Keep Dynamax**, **Keep hatched**, **Keep background** y **Keep shiny + background**. Las tres primeras vienen activadas inicialmente; la combinación shiny + fondo viene desactivada. Cumplir cualquiera de los filtros marcados conserva el Pokémon. Dentro de **Keep shiny + background**, en cambio, deben cumplirse las dos condiciones a la vez.
+Se incluyen **Keep Dynamax**, **Keep hatched**, **Keep background** y **Keep shiny + background**. Las tres primeras vienen activadas inicialmente; la combinación shiny + fondo viene desactivada. Cumplir cualquiera de los filtros marcados conserva el Pokémon. Dentro de **Keep shiny + background**, en cambio, deben cumplirse las dos condiciones a la vez.
 
 Si marcas **Keep shiny** junto con **Keep shiny + background**, se conservan todos los shiny, tengan fondo o no. Si marcas **Keep background** junto con la combinación, se conservan todos los que tengan fondo. Para conservar únicamente shiny con fondo mediante estos filtros, deja marcada solo la combinación y desmarca los demás filtros opcionales. El motor sigue capturando los otros Pokémon y los transfiere si no existe otra protección.
 
@@ -127,11 +138,9 @@ La protección de eclosionados se consulta en el registro autorizado para transf
 
 **Keep field research encounters**, activado inicialmente, añade la conservación por origen. Si se desactiva, las capturas de investigación se transfieren cuando no cumplen ninguna de las demás protecciones activas. Por ejemplo, con **Keep shiny** marcado se conservan los shiny tanto salvajes como de investigación; la combinación **Keep shiny + background** exige ambas características en los dos orígenes.
 
-Las transferencias están desactivadas inicialmente y **no tienen cuota total por sesión**. El motor recibe `maxTransfers = 0`; las preferencias antiguas no restauran un límite. No se heredan autorizaciones entre sesiones, cuentas ni reinicios.
+Las transferencias están desactivadas inicialmente y **no tienen cuota total por sesión**. No se recuperan cuotas antiguas de transferencia. No se heredan autorizaciones entre sesiones, cuentas ni reinicios.
 
-![Fragmento de la autorización de transferencias](docs/assets/session-transfer.png)
-
-*Este es un fragmento del archivo [session-transfers.cjs](engine/src/session-transfers.cjs).*
+La autorización se implementa en [core.c](native/core.c), [farmer-actions.c](native/farmer-actions.c) y [transfer-policy.c](native/transfer-policy.c).
 
 ### Mochila: límites por tipo, no borrado indiscriminado
 
@@ -143,15 +152,15 @@ Potion=50,SuperPotion=50,Revive=30,NanabBerry=30
 
 Con 83 pociones y un mínimo de 50, el plan permite eliminar 33. Cada petición elimina como máximo 50 unidades, **sin cuota total por sesión**. El motor comprueba la respuesta y la sincronización del inventario antes de continuar.
 
-Hay **33 tipos seleccionables**, incluyendo tres Poké Balls comunes, cuatro pociones, dos revivires, cinco bayas y otros consumibles permitidos. El catálogo contiene otros **17 tipos protegidos**; Master Ball, Safari Ball, Premier Ball, pases, incubadoras y objetos desconocidos no se autorizan para descarte. Puedes revisar los IDs y restricciones en [ItemCatalog.java](app/src/main/java/dev/rootcatch/nativeengine/ItemCatalog.java) y [item-catalog.cjs](engine/src/item-catalog.cjs).
+Hay **33 tipos seleccionables**, incluyendo tres Poké Balls comunes, cuatro pociones, dos revivires, cinco bayas y otros consumibles permitidos. El catálogo contiene otros **17 tipos protegidos**; Master Ball, Safari Ball, Premier Ball, pases, incubadoras y objetos desconocidos no se autorizan para descarte. Puedes revisar los IDs y restricciones en [ItemCatalog.java](app/src/main/java/dev/rootcatch/nativeengine/ItemCatalog.java).
 
-La limpieza está desactivada inicialmente. El motor recibe `maxDiscardedItems = 0`, independientemente de las preferencias anteriores. Puede borrar objetos que ya estaban en la mochila, conforme a los tipos y mínimos seleccionados. Una respuesta ambigua o un rechazo conocido pausa la limpieza sin repetir la petición; las demás funciones pueden continuar.
+La limpieza está desactivada inicialmente. No se aplica una cuota total de objetos descartados. Puede borrar objetos que ya estaban en la mochila, conforme a los tipos y mínimos seleccionados. Una respuesta ambigua o un rechazo conocido pausa la limpieza sin repetir la petición; las demás funciones pueden continuar.
 
 ### Límites de captura y giros
 
 En **Engine settings → Session limits**, **Maximum catches** comienza en **4800** y **Maximum PokéStop spins** en **2400**. Ambos aceptan un máximo positivo y conservan el valor elegido para las siguientes sesiones.
 
-Los contadores se conservan entre inicios del servicio y recuperaciones automáticas. Solo consumen el límite las respuestas exitosas de las acciones emitidas por SilphMod: no los intentos fallidos, las huidas ni las capturas manuales. Son máximos sobre las estadísticas locales acumuladas, no contadores diarios de la cuenta.
+Los contadores se conservan entre inicios del servicio y recuperaciones automáticas. Solo consumen el límite las respuestas exitosas de las acciones emitidas por SilphMod: no los intentos fallidos, las huidas ni las capturas manuales. Son máximos sobre las estadísticas locales acumuladas.
 
 Si las capturas o los giros acumulados ya alcanzan su máximo, **Start service** queda bloqueado y muestra **Capture limit reached** o **Spin limit reached**. Para continuar, aumenta los límites por encima de ambos totales o utiliza **Clear statistics** con el servicio detenido. Detener el farmer no borra los resultados; limpiar estadísticas tampoco borra los logs.
 
@@ -161,17 +170,23 @@ Al alcanzar cualquiera de los dos máximos, no se envían más acciones. El agen
 
 Antes de todo, recuerda que debes de disponer de una aplicación GPS Joistick correctamente configurada.
 
-1. Instala el APK desde la sección de lanzamientos, abrela y concede permiso root y notificaciones (En caso te lo pida). Mantén tu joystick configurado y funcionando. No ejecutes otros automatismos o inyectores simultáneamente.
+1. Instala el APK desde la sección de lanzamientos, abrela y concede permiso root y notificaciones (En caso te lo pida). Mantén tu joystick configurado y funcionando. No ejecutes otros automatismos o inyectores simultáneamente. Pon a SilphMod en modo sin restricciones en batería.
+
 2. Selecciona **Catches**, **Only catch**, **Throw quality**, **Use berries**, **Berry priority**, **Remove buddy**, **Spin PokéStops**, filtros de transferencia e **Items to keep**, según lo que quieras utilizar. En **Inventory tools** puedes activar los nombres por IV y la transferencia manual ampliada. En **Game tools** puedes elegir **Fast gift opening** y **Hide trainer name**. Ajusta los máximos de capturas y giros en **Engine settings**. Las transferencias y los descartes no tienen un máximo total propio por sesión, es decir, eliminan una cantidad ilimitada de los objetos que hayas configurado para descartar mientras la sesión permanezca activa.
+
 3. Coloca una **ruta de recorrido** en tu aplicación GPS joistick o simplemente usa el Joistick de esta app para movilizarte por el mapa. Recuerda que la **ruta de recorrido** es recomendada para mayor efectividad del mod en mayor tiempo.
+
 4. Si tu dispositivo o instancia necesita el tratamiento de ubicación, marca **Fix error 12** y pulsa **Start service**. SilphMod abre Pokémon GO y prepara la conexión correspondiente al sistema. El arranque puede cerrar únicamente el juego y volver a abrirlo para instalar el tratamiento temprano; no borra caché, almacenamiento ni ajustes del joystick. Si activaste **Remove buddy**, el estado **Removing buddy…** acompaña su retirada y el reinicio necesario para continuar sin compañero.
 
 5. Espera **Active**. Hay una comprobación automática de mapa, jugador y referencias antes de enviar acciones.
+
 6. Pulsa **Stop service** o **Stop** en la notificación cuando desees terminar la sesión. Y solo en caso de querer guardar el reporte de errores, espera a que termine **Saving logs…** y utiliza **Export logs**. El ZIP se guarda en `Descargas/SilphMod/`.
 
 El servicio no tiene un temporizador de 30/60 segundos ni un límite fijo de horas. Para detenerlo, debes abrir la notificación de la app y darle en detener o en su defecto cerrar Pokémon Go y volver a la app del Mod.
 
 Cambiar de app pausa las acciones; perder el proceso, cambiar de cuenta o perder prolongadamente el controlador termina la sesión. Abrir la barra de notificaciones permite revisar las estadísticas sin pausar capturas ni giros, mientras el juego siga debajo del panel y la pantalla esté desbloqueada. Al cambiar a otra app o bloquear la pantalla, las acciones se pausan. (Recuerda que en UGPHONE el juego puede funcionar en segundo plano si cierras la instancia, pero no si cierras Pokémon Go o SilphMod).
+
+Dentro del juego, el Farmer puede continuar al abrir la mochila, la lista del inventario Pokémon o el perfil propio. Seleccionar varios Pokémon o entrar en una pantalla que no forme parte de este flujo pausa las acciones hasta volver a una vista compatible.
 
 Si el almacenamiento Pokémon se llena, se pausan las capturas y se informa el estado; SilphMod no borra la colección anterior para hacer espacio. Con la mochila llena y sin excedentes autorizados, tampoco elimina otros objetos por su cuenta. Detener no puede revertir una operación que ya fue enviada.
 
@@ -179,36 +194,48 @@ Si el almacenamiento Pokémon se llena, se pausan las capturas y se informa el e
 
 ![Arquitectura de SilphMod](docs/assets/architecture.svg)
 
-SilphMod tiene dos partes que cooperan mediante una tubería local:
+SilphMod tiene dos partes que cooperan mediante un canal local de control:
 
-- **Android / Java:** interfaz, configuración, servicio en primer plano, permiso root, identidad del proceso, foco, control, notificación y exportación.
-- **Agente / TypeScript y CommonJS:** resolución de servicios IL2CPP, selección de objetivos, solicitudes del juego, lectura de respuestas, filtros y ciclo de vida de referencias.
+- **Android / Java:** interfaz, configuración, servicio en primer plano, permiso root, identidad del proceso, foco, notificación, candidatos de Kecleon y exportación.
+- **Motor / C:** resolución de servicios IL2CPP, planificación de acciones en el hilo Unity, lectura de respuestas, políticas de inventario y ciclo de vida de referencias.
 
-El agente utiliza objetos y métodos del proceso original; el cliente del juego sigue siendo quien serializa sus solicitudes y se comunica con su servidor. SilphMod no tiene permiso `INTERNET` ni una API propia de apariciones, pero **el juego necesita conexión**: esto no es un modo offline.
+El motor utiliza objetos y métodos del proceso original; el cliente del juego sigue serializando sus solicitudes y comunicándose con su servidor. El modo Kecleon consulta además su fuente de candidatos por HTTPS. Los identificadores de cuenta y Pokémon no se envían a esa fuente.
 
 ### Inicio y continuidad
 
-Cuando la opción de ubicación está activa, el agente prepara primero el adaptador JNI y carga después los puentes Java/IL2CPP, tras un mínimo de ocho segundos y la presencia de las bibliotecas requeridas. Eso no acredita que el mapa esté listo: aún se validan escena, cuenta, firmas, referencias GC de 64 bits y muestras estables durante aproximadamente diez segundos.
+**Start service** abre Pokémon GO y comprueba versión, bibliotecas, proceso y sus tiempos de inicio. Cuando **Fix error 12** está activo, prepara primero el adaptador de ubicación. El acceso a objetos IL2CPP espera a que estén presentes las bibliotecas del juego y se cumpla el periodo de estabilidad de **20 segundos**.
 
-La activación usa una autorización de un solo uso vinculada a proceso, sesión y jugador. No hay una desconexión/reinyección entre la validación y el farmer. Las acciones se ejecutan desde el hilo Unity; los objetos retenidos se liberan al terminar.
+El arranque dispone de cuatro combinaciones: **ATTACH / FD**, **ATTACH / PATH**, **SEIZE / FD** y **SEIZE / PATH**. Cambian el mecanismo de conexión y la apertura de la biblioteca, no el motor ni sus políticas. La ruta que funcionó queda asociada al dispositivo y al perfil del juego. Hay un máximo de **diez intentos**, con confirmación de salida del intento anterior antes de continuar.
 
-El controlador envía latidos cada **500 ms** en un hilo independiente de consultas de foco y escritura de registros. Solo una lectura positiva de foco de hasta **1.500 ms** puede autorizar acciones; el panel de notificaciones se admite cuando el juego permanece como actividad subyacente. El permiso para nuevas acciones caduca a los **2.200 ms**; una demora breve puede recuperarse en la misma conexión, mientras una pérdida continua de control superior a **10 segundos** termina la sesión. La recuperación automática atiende el mapa vacío descrito a continuación y el reinicio necesario después de retirar el compañero.
+La ejecución se vincula al proceso, la sesión y la cuenta. Los latidos y la consulta de foco van separados de la escritura de registros y de las operaciones de red del feed. El planificador ejecuta las acciones en el hilo Unity y mantiene una sola solicitud pendiente.
 
-El inyector adaptativo selecciona la conexión según el SDK, el tamaño de página de memoria, el contexto root y el estado de SELinux. En Android 10 puede utilizar la conexión al proceso con Frida **17.22.1** o la conexión directa con **17.23.3**, según el entorno. En Android posteriores prioriza el arranque temprano con **17.23.3** y el adaptador nativo propio. Si una conexión falla de forma recuperable, puede utilizar una ruta alternativa dentro de la misma APK.
+La lectura de foco distingue Pokémon GO subyacente, notificaciones y superposiciones del sistema. **scrcpy**, capturas de pantalla y grabación no se interpretan por sí solos como cambio de app. Abrir otra aplicación o bloquear la pantalla pausa las acciones; **Stop** cancela el servicio.
 
-La ruta que llega a funcionar queda asociada a la configuración del dispositivo, la versión del juego, los runtimes y el estado de **Fix error 12**. El siguiente inicio puede reutilizarla cuando ese entorno no ha cambiado. Los reintentos confirman la salida del inyector anterior y el cierre del proceso antes de volver a conectar; el máximo de arranque es de **diez intentos**. La configuración del Farmer y sus políticas son las mismas en todas las rutas.
+El Farmer mantiene su ciclo desde las vistas compatibles de mochila, inventario Pokémon y perfil propio. El motor comprueba la pantalla activa antes de actuar y respeta la selección múltiple manual. Las mismas comprobaciones de proceso, sesión y foco siguen aplicándose fuera del mapa.
 
-El foco se consulta mediante Java en Android 10 y mediante el adaptador JNI de actividad en los sistemas posteriores. La lectura distingue el juego subyacente, el panel de notificaciones y la pantalla realmente enfocada al usar **scrcpy** o la grabadora del sistema. Proyectar o grabar la pantalla no se interpreta por sí solo como un cambio de app; abrir otra aplicación sigue pausando las acciones.
+### Integridad y canal de control
+
+Antes del arranque se comprueban las huellas **SHA-256** de los componentes nativos. La lectura exige archivos regulares, rutas canónicas y permisos sin escritura de grupo u otros; rechaza enlaces simbólicos y cambios de tamaño o identidad durante la verificación.
+
+El servicio y el motor se comunican por un socket local **AF_UNIX**, con comprobación de credenciales del proceso, identidad de sesión y secuencia de mensajes. Las claves se entregan al controlador por una **tubería privada**, no como argumentos del proceso. Una conexión que no se autentique en **cinco segundos** se cierra; ese plazo no limita una sesión ya autenticada.
+
+Los nuevos registros excluyen la clave de control. Al terminar se conservan las comprobaciones de restauración, desconexión y liberación de recursos. La implementación se reparte entre [NativeComponentIntegrity.java](app/src/main/java/dev/silphmod/nativecheck/NativeComponentIntegrity.java), [control.c](native/control.c), [control-client.c](native/control-client.c) y [LogPrivacy.java](app/src/main/java/dev/silphmod/nativecheck/LogPrivacy.java).
 
 ### Recuperación automática del mapa
 
-El farmer observa la presencia de Pokémon cercanos cada **cinco segundos**. Si acumula **cinco minutos continuos de lecturas válidas sin Pokémon dentro del alcance efectivo de captura**, detiene el agente, confirma la liberación de referencias y del tratamiento de ubicación, cierra únicamente el proceso verificado de Pokémon GO y guarda los registros. Después abre el juego y conecta una nueva instancia del motor con la misma configuración y cuenta.
+El Farmer consulta el número de apariciones del directorio del mapa una vez por segundo. Si acumula **cinco minutos continuos de lecturas válidas sin apariciones**, espera a que no haya ninguna acción pendiente, detiene el motor y confirma la liberación de referencias y del tratamiento de ubicación. Después cierra únicamente el proceso verificado de Pokémon GO, abre el juego y conecta de nuevo con la misma configuración y cuenta.
 
-Esta función permanece activa durante el farmeo general y no requiere marcar una opción. Una lectura con Pokémon reinicia el contador, aunque esos objetivos estén temporalmente en espera. Las muestras incompletas, la falta de lecturas, cambiar de app o bloquear la pantalla no se interpretan como un mapa vacío. Tampoco basta con quedarse sin Poké Balls o llenar el almacenamiento. **Only catch** desactiva únicamente esta recuperación mientras haya especies seleccionadas.
+Esta función permanece activa durante el farmeo general y no requiere una casilla. Una lectura con Pokémon reinicia el contador. Muestras inválidas, falta prolongada de lecturas, pausas o bloqueo de pantalla no cuentan como mapa vacío. **Only catch** desactiva esta recuperación mientras haya especies seleccionadas.
 
-Cada recuperación admite **hasta diez intentos de arranque en total, contando el primero**. Si el motor llega a **Active**, no se realizan los intentos restantes y continúa el farmeo. Si el juego se cierra durante ese arranque o la conexión no termina de activarse, puede reintentarse tras confirmar que el inyector anterior terminó y el juego está cerrado. Las esperas entre intentos aumentan de **5 a 30 segundos**; no hay inyectores simultáneos. Al agotar los diez intentos, el servicio se detiene, conserva las estadísticas y guarda los registros. Una recuperación posterior, tras volver a farmear y acumular otros cinco minutos de mapa vacío, dispone de un nuevo máximo de diez intentos.
+```c
+if (count) { s->empty = 0; return false; }
+if (!s->empty) { s->since = now; s->empty = 1; }
+return now - s->since >= UINT64_C(300000000000);
+```
 
-**Stop service** y **Stop** cancelan tanto el farmeo como cualquier reintento pendiente. Las estadísticas no se reinician y los límites siguen contando lo ya acumulado. La nueva conexión valida nuevamente al jugador y no recupera la cola de transferencias del proceso anterior.
+*Fragmento de [recovery-policy.c](native/recovery-policy.c), con reloj monotónico en nanosegundos.*
+
+Cada recuperación dispone de **hasta diez intentos de arranque**. **Stop** cancela también los reintentos. Las estadísticas y sus límites acumulados se conservan; la nueva conexión valida nuevamente al jugador y no hereda la cola de transferencias del proceso anterior.
 
 ### Capturas y llamadas del juego
 
@@ -219,7 +246,6 @@ La ingeniería inversa se utilizó para identificar contratos, estructuras y fir
 | Resolver servicios | `Zenject.Internal.ZenUtilInternal.GetAllSceneContexts` y `DiContainer.TryResolve(System.Type)` |
 | Leer posición | `Niantic.Holoholo.Avatar.IMapAvatar.get_Location`, estructura `Niantic.LatLng` |
 | Leer objetivos | `IMapPlaceDirectoryService.get_AllPokemon` / `get_ActivePokestops` |
-| Leer alcance | `IGlobalSettings.get_Settings()` → `GlobalSettingsProto.MapSettings.EncounterRangeMeters` |
 | Abrir encuentro | `MapPokemon.SendEncounterRequest()` |
 | Aplicar baya | `IItemBag.UseItemForEncounter(Item, MapPokemon)` y respuesta `UseItemEncounterOutProto` |
 | Lanzar | `MapPokemon.TryCapture(PokeballThrow, ARPlusEncounterValuesProto)` |
@@ -230,86 +256,45 @@ La ingeniería inversa se utilizó para identificar contratos, estructuras y fir
 | Regalos manuales | `OpenGiftGuiController.OnOpenClick()`, animadores del regalo y secuencias locales de presentación |
 | Nombre temporal | Textos de `PlayerHudGuiController`, `PlayerProfilePage` y `FriendsListHeaderCellView` |
 
-El motor utiliza el alcance de encuentro leído del juego, hasta **50 m para seleccionar capturas**, y mantiene **80 m para giros**. El objetivo se vuelve a validar antes de cada lanzamiento, algo importante cuando el joystick está siguiendo una ruta.
+El motor mantiene **50 m para capturas salvajes** y **80 m para giros**. Vuelve a comprobar ID, existencia y distancia antes de actuar, algo importante cuando el joystick sigue una ruta.
 
-El lanzamiento activa impacto y giro y aplica el perfil elegido en **Throw quality**. **Great** conserva el valor anterior, `ReticleSize = 0.5`, y sigue siendo la opción inicial. La elección de bola utiliza la primera disponible en el orden Poké Ball → Super Ball → Ultra Ball.
+La elección de bola usa la primera disponible en el orden Poké Ball → Super Ball → Ultra Ball. **Throw quality** permite elegir el perfil y **Curve ball** controla el giro.
 
-Solo hay una petición de acción pendiente. **Action interval** permite **100–3000 ms**, inicialmente **150 ms** en la interfaz. Separa envíos; no significa una captura cada 150 ms. Respuestas, comprobaciones, disponibilidad de objetivos y reconciliación también consumen tiempo.
+**Action interval** admite **100–3000 ms**, con valor inicial de **100 ms**. Separa operaciones; no equivale a completar una captura en ese tiempo. Las respuestas y la reconciliación del inventario conservan su propio ciclo.
 
-```ts
-// Fragmento del motor: abrir el encuentro y retener su promesa.
-reserve(
-  'encounter',
-  object(pokemon.method<Obj>('SendEncounterRequest', 0).invoke()),
-  nearestId,
-  [pokemon]
-);
+Con el intervalo en **100 ms**, las fases de captura pendientes se revisan a **33 ms** desde la actualización original del juego. Al terminar esa operación se recupera el intervalo configurado; los valores mayores conservan su cadencia. El planificador puede encadenar hasta **tres pasos internos** cuando la fase anterior termina, sin enviar solicitudes simultáneas ni adelantar una transferencia a la confirmación de captura.
+
+```c
+status = silph_action_call(s->read, permit, SILPH_ACTION_CAPTURE,
+    s->target.object, args, 2, &promise);
 ```
 
-*Fragmento simplificado de [agent.ts](engine/src/agent.ts): el archivo completo incluye comprobaciones, trazas y gestión de errores alrededor de la llamada.*
+*Llamada real de [farmer-actions.c](native/farmer-actions.c). Los argumentos y el permiso de sesión se validan antes de invocar el método del juego.*
 
 ### Alcance y prioridad de captura
 
-La ingeniería inversa permitió distinguir los campos de visibilidad y encuentro de `MapSettingsProto`. SilphMod lee **EncounterRangeMeters** para decidir qué objetivos puede seleccionar; no utiliza **PokemonVisibleRange** como si fuera un radio de captura ni modifica los ajustes del juego.
+Ver un Pokémon en el mapa y poder capturarlo son estados distintos. El motor selecciona objetivos dentro de **50 m** y vuelve a validar el encuentro antes de usar bayas o lanzar. Si la ruta lo deja fuera del alcance, continúa con otros objetivos válidos.
 
-La lectura se actualiza cada **30 segundos** en el hilo Unity. El alcance efectivo admite valores positivos de hasta **50 m**; si la lectura no está disponible, es inválida o supera los **65 segundos** de antigüedad, vuelve al umbral anterior de **40 m**. Las bonificaciones de efectos aventura no se suman a este valor.
+El escaneo, las respuestas de captura, las investigaciones, la limpieza y las transferencias comparten un planificador. Se evita releer el inventario completo mientras hay una respuesta pendiente. Las transferencias conservan su autorización individual y nunca se ejecutan en paralelo con otra operación del motor.
 
-```js
-const meters=sample.base.values?.EncounterRangeMeters;
-if(typeof meters!=='number'||!Number.isFinite(meters)||meters<=0)
-  return fallback('invalid_encounter_setting');
-if(meters>MAX_VALIDATED_METERS)return fallback('outside_validated_range');
+La resolución de campos y métodos utiliza cachés acotadas de metadatos validados. Los valores de inventario y las respuestas del juego se leen de nuevo cuando corresponde; la caché no conserva Pokémon ni autorizaciones de otra sesión. Las investigaciones, los giros y la limpieza mantienen su turno antes de elegir el siguiente objetivo.
+
+La coordinación está en [farmer-session.c](native/farmer-session.c); selección y lectura de objetivos, en [game-read.c](native/game-read.c).
+
+### Throw quality
+
+El contrato de `Niantic.Holoholo.Encounter.PokeballThrow` distingue **Normal = 1**, **Nice = 2**, **Great = 3** y **Excellent = 4**. El motor prepara la estructura de lanzamiento con `ReticleSize`, `HitBullseye`, `Missed` y `Spinning`, y la pasa a `MapPokemon.TryCapture`.
+
+```c
+const float profiles[] = {.5f, 1.1f, .85f, .5f, .05f};
+status = silph_action_capture_data(s->read, permit, (int32_t)ball,
+    profiles[s->options.quality], s->options.quality != 0,
+    s->options.curve != 0, &data, &ar);
 ```
 
-*Fragmento de [capture-planning.cjs](engine/src/capture-planning.cjs), con `MAX_VALIDATED_METERS = 50`.*
+*Fragmento de [farmer-actions.c](native/farmer-actions.c). Los índices 1–4 corresponden al selector; la opción inicial es **Excellent**.*
 
-El mismo alcance se aplica al seleccionar, antes de abrir el encuentro, antes de usar una baya o lanzar y al observar la presencia de Pokémon para la recuperación del mapa. Si la ruta aleja al personaje del objetivo, el motor lo deja pendiente y continúa buscando otros encuentros válidos.
-
-Cuando ya hay un encuentro abierto, se da prioridad a su baya y lanzamiento antes de despachar la transferencia de la captura anterior. Esta prioridad puede aplazar la cola hasta **tres segundos**; después se atiende su entrada más antigua. Se conserva una sola solicitud pendiente y la confirmación individual de las transferencias.
-
-```js
-const age=now-oldestOwnedAt;
-return Number.isFinite(age)&&age>=0&&age<MAX_TRANSFER_DEFERRAL_MS;
-```
-
-*Decisión de prioridad en [capture-planning.cjs](engine/src/capture-planning.cjs), con `MAX_TRANSFER_DEFERRAL_MS = 3000`.*
-
-El escaneo sin acciones se espacia **250 ms** y se evitan lecturas repetidas de inventario durante esa espera. **Action interval** mantiene su rango de **100–3000 ms**: la optimización cambia el orden del trabajo, no envía capturas en paralelo ni elimina la espera por las respuestas del juego.
-
-### Throw quality:
-
-El contrato de `Niantic.Holoholo.Encounter.PokeballThrow` distingue los grados **Normal = 1**, **Nice = 2**, **Great = 3** y **Excellent = 4**. Se pudieron identificar los campos `ReticleSize`, `HitBullseye`, `Missed` y `Spinning`, y la firma que recibe esa estructura en `MapPokemon.TryCapture`.
-
-La calidad no se aplica con un toque sobre la pantalla ni escribiendo una etiqueta de recompensa. SilphMod prepara la estructura de lanzamiento que utiliza el juego, con un tamaño de retícula específico para cada perfil:
-
-```js
-const PROFILES = Object.freeze({
-  NORMAL: Object.freeze({grade: 1, reticleSize: 1.1, hitBullseye: true}),
-  NICE: Object.freeze({grade: 2, reticleSize: 0.85, hitBullseye: true}),
-  GREAT: Object.freeze({grade: 3, reticleSize: 0.5, hitBullseye: true}),
-  EXCELLENT: Object.freeze({grade: 4, reticleSize: 0.05, hitBullseye: true})
-});
-```
-
-*[throw-profile.cjs](engine/src/throw-profile.cjs). `grade` identifica el perfil en las trazas; no se escribe como campo de la estructura del juego.*
-
-El motor crea `PokeballThrow`, aplica esos campos y pasa la estructura a la llamada de captura:
-
-```ts
-const data=klass('holo-game','Niantic.Holoholo.Encounter.PokeballThrow').method<Il2Cpp.ValueType>('MissedThrow',1).invoke(item);
-const profile=throwProfile.profile(config.throwQuality);
-data.field('Missed').value=false;data.field('HitBullseye').value=profile.hitBullseye;
-data.field('Spinning').value=true;data.field('ReticleSize').value=profile.reticleSize;
-const ar=proto('ARPlusEncounterValuesProto');
-```
-
-```ts
-const promise=object(observed('TryCapture',()=>pokemon.method<Obj>('TryCapture',2).invoke(data,ar)),'MapPokemon.TryCapture');
-```
-
-*Dos fragmentos de [agent.ts](engine/src/agent.ts). Entre ellos se comprueban el control activo y el ID del encuentro, y se registran la petición y el intento.*
-
-El contador suma las recompensas recibidas del juego, no una cantidad fija asociada al selector de lanzamiento.
+[managed-read.c](native/managed-read.c) crea y valida los objetos que recibe la llamada. La XP se obtiene de la respuesta real del juego, no de una cantidad fija asociada al selector.
 
 ### Bayas: confirmar el efecto antes de lanzar
 
@@ -325,38 +310,25 @@ Se pueden seleccionar las cinco bayas y ordenar su prioridad:
 | Frambu dorada · `GoldenRazzBerry` | 706 |
 | Piña plateada · `GoldenPinapBerry` | 708 |
 
-La prioridad inicial es **Frambu → Piña → Latano**; las dos bayas especiales se seleccionan expresamente. Se utiliza la primera elegida con unidades disponibles, no varias bayas seguidas para un mismo efecto activo.
+Se utiliza la primera elegida con unidades disponibles, no varias bayas para un mismo efecto activo. La prioridad inicial es **Frambu → Piña → Latano**; las dos bayas especiales se seleccionan expresamente.
 
-```ts
-const name=berryCycle.choose(config.berryOrder,counts);
+```c
+SilphReadArgument arguments[] = {
+    {.kind = SILPH_READ_ENUM32, .value.bits = (uint32_t)berry},
+    {.kind = SILPH_READ_REFERENCE, .value.reference = s->target.object}
+};
+if (!status) {
+    s->metrics.berry_requests++;
+    status = silph_action_call(s->read, permit, SILPH_ACTION_BERRY,
+        bag, arguments, 2, &pending);
+}
 ```
 
-```ts
-const berryItem=klass('holo-protos','Holoholo.Rpc.Item').field(name).value;
-const id=pokemon.method<UInt64>('get_EncounterId',0).invoke().toString();
-enterStage('capture:UseItemForEncounter');
-berryCycle.request();
-const promise=object(observed('UseItemForEncounter',()=>findService('Niantic.Holoholo.IItemBag')
-  .method<Obj>('UseItemForEncounter',2).invoke(berryItem,pokemon)),'IItemBag.UseItemForEncounter');
-emit('berry_requested',{id,name,item:berryPolicy.ITEMS[name],before:counts[name],attempt:throws+1});
-reserve('berry',promise,id,[pokemon],{item:berryPolicy.ITEMS[name]});return true;
-```
+*Fragmento de [farmer-actions.c](native/farmer-actions.c). La respuesta `UseItemEncounterOutProto` se valida antes de lanzar.*
 
-*Fragmentos de [agent.ts](engine/src/agent.ts). Entre ambos se comprueba la autorización de control activo.*
+Si ya hay una baya activa, no se aplica otra. Al salir de la bola se puede volver a utilizar una baya antes del siguiente intento. Un rechazo no provoca una cadena de reintentos; la captura puede continuar sin ella.
 
-El motor retiene la promesa y espera su respuesta antes de lanzar. Para este contrato, **Status = 0** corresponde a la aplicación de la baya; no se confunde con el código de éxito de una captura. La política comprueba también el objeto activo y solo entonces incrementa el contador:
-
-```ts
-const status=number(result.field('Status').value), activeItem=number(result.field('ActiveItem').value);
-const verdict=berryCycle.settle(status,activeItem,p.item);
-if(verdict.consumed)stats.berriesUsed++;
-```
-
-*Código de [agent.ts](engine/src/agent.ts), con la decisión en [berry-policy.cjs](engine/src/berry-policy.cjs).*
-
-Si ya existe una baya activa, no se aplica otra. Cuando la respuesta de captura indica que el Pokémon salió de la bola, el ciclo permite volver a aplicar una baya antes del siguiente intento. Un rechazo de la baya no provoca una cadena de reintentos; la captura puede continuar sin ella. La existencia y distancia del objetivo se vuelven a comprobar antes de actuar.
-
-No se añade una espera fija para la animación de la baya: se conserva **Action interval** y una sola petición pendiente. Usar bayas añade la solicitud y su respuesta reales, por lo que sí consume tiempo de comunicación. **Item limits** continúa eliminando los excedentes seleccionados; la captura usa las unidades que queden. La XP sigue proviniendo del recibo de captura, no de un bono inventado por haber aplicado una baya.
+No se espera una animación de baya. **Item limits** sigue eliminando los excedentes seleccionados y la captura utiliza las unidades restantes. La XP procede del recibo de captura, no de un bono supuesto por haber aplicado una baya.
 
 ### Interrupciones y continuidad del mapa
 
@@ -366,7 +338,7 @@ Las eclosiones tienen además un adaptador en `MapExploreState`: identifica la f
 
 Las acciones se ejecutan en el hilo Unity, con el mismo control de sesión y foco que el farmer. No hay sondeo continuo de todas las ventanas: únicamente se conserva una cola limitada cuando aparece una pantalla reconocida. Las pantallas ajenas a esa lista no se cierran automáticamente.
 
-Los registros `spin_scan` explican la selección de Poképaradas, su distancia, enfriamiento, mochila llena y límite de recorrido de la lista cargada. Esta observación reutiliza el escaneo existente y no añade solicitudes al juego ni modifica el radio o los enfriamientos.
+La cola de presentación es limitada y los componentes se conservan mediante referencias controladas. Al cerrar el motor se retiran los hooks y se liberan esas referencias. Implementación: [presentation-tools.c](native/presentation-tools.c).
 
 ### Investigaciones de campo
 
@@ -374,13 +346,15 @@ Las investigaciones de campo se gestionan **siempre** durante el Farmer, incluid
 
 El ámbito se identifica con **QuestContext = 2** y sus encuentros con **EncounterType = 6**. Las investigaciones especiales y temporales quedan fuera de ese ámbito. Las tareas de campo incompatibles —como incursiones o intercambios— y las de tipo o condición desconocidos se eliminan para dejar espacio a otras; se conserva el espacio de escaneo AR.
 
-```js
-if (!task || task.context !== FIELD_CONTEXT || typeof task.id !== 'string' || !task.id.trim())
-  return {action: 'keep', reason: 'outside_field_research'};
-if (task.redeemable === true) return {action: 'claim', reason: 'game_can_redeem'};
+```c
+if (context != 2 || redeemable > 1 || count > 32 ||
+    (count && !conditions) || transfers > 1 || berries > 1)
+    return SILPH_RESEARCH_KEEP;
+if (redeemable) return SILPH_RESEARCH_CLAIM_TASK;
+if (status != 1 || type == 46) return SILPH_RESEARCH_KEEP;
 ```
 
-*Fragmento de [field-research.cjs](engine/src/field-research.cjs). El contrato de servicios y respuestas se resuelve en [field-research.ts](engine/src/field-research.ts).*
+*Fragmento de [research-policy.c](native/research-policy.c). [research-actions.c](native/research-actions.c) coordina las llamadas y sus respuestas.*
 
 Los encuentros de recompensa usan el ciclo de bayas, calidad de tiro y captura del Farmer. Se procesan aunque su especie no esté seleccionada en **Only catch**. Después, **Keep field research encounters** decide si se conservan por origen; con esa opción desactivada se aplican las demás protecciones de transferencia.
 
@@ -390,17 +364,18 @@ Los encuentros de recompensa usan el ciclo de bayas, calidad de tiro y captura d
 
 Se utilizan los contratos `BuddyMapProto` y `SetBuddyPokemonProto`, mediante `IRpcHandler.SendRpc`, con las operaciones **1350** y **152** del perfil del juego. La retirada se realiza una vez por inicio del servicio; no se repite en cada recuperación del mapa.
 
-Retirarlo no lo transfiere ni modifica sus datos de inventario. Al terminar no se vuelve a asignar: puedes colocarlo nuevamente desde el juego cuando quieras. La coordinación de este flujo está en [buddy-removal.cjs](engine/src/buddy-removal.cjs).
+Retirarlo no lo transfiere ni modifica sus datos de inventario. Al terminar no se vuelve a asignar: puedes colocarlo nuevamente desde el juego cuando quieras. La coordinación de este flujo está en [buddy-actions.c](native/buddy-actions.c).
 
 ### Inventory tools
 
 **Show IV names**, activado inicialmente, cambia temporalmente el texto mostrado en las filas del inventario. Por ejemplo, un Pokémon con IV **15/14/13** se muestra como **93% 15/14/13**. El porcentaje es entero y el nombre guardado en la cuenta no cambia.
 
-```js
-return `${Math.floor(((data.attack+data.defense+data.stamina)/45)*100)}% ${data.attack}/${data.defense}/${data.stamina}`;
+```c
+int n = snprintf(out, capacity, "%d%% %d/%d/%d",
+    (a + d + s) * 100 / 45, a, d, s);
 ```
 
-*Formato utilizado en [inventory-tools.cjs](engine/src/inventory-tools.cjs). Se aplica durante la sesión y se retira al detener el motor.*
+*Formato de [visual-tools.c](native/visual-tools.c). Se aplica durante la sesión, sin modificar el nombre guardado.*
 
 **Extended manual transfer**, desactivado inicialmente, amplía la selección múltiple del inventario para Pokémon especiales, incluidos shiny y determinadas clases legendarias. La selección y la confirmación las hace el usuario desde el juego. Favoritos, compañeros y otras protecciones de inventario siguen excluidos; esta función no añade Pokémon anteriores a la cola de transferencias automáticas.
 
@@ -410,23 +385,9 @@ return `${Math.floor(((data.attack+data.defense+data.stamina)/45)*100)}% ${data.
 
 Gracias a todo esto se permitió indentificar `OpenGiftGuiController.giftOpenAnimationLength`, su `guiAnimator`, el animador de `GiftBox` y la creación de `MajorRewardSequenceView` dentro de las secuencias del regalo. El motor aplica los cambios únicamente a esos componentes y restaura sus valores al cerrar el regalo o detener la sesión.
 
-```js
-const LABEL='SilphMod',MAX_RECORDS=48,ANIMATION_SPEED=12,OPEN_SECONDS=0.05;
-```
+Solo se acortan las esperas locales de presentación de las dos secuencias de apertura, cuando el objeto es exactamente `Niantic.Zeppelin.Scheduler.Wait` y su duración está dentro del intervalo admitido. Las esperas de red y recursos siguen a cargo del juego.
 
-*Valores utilizados en [game-tools.cjs](engine/src/game-tools.cjs). El reloj global del juego mantiene su velocidad habitual.*
-
-También se acortan las esperas simples de presentación producidas por las dos secuencias de apertura. El motor comprueba que el objeto sea exactamente `Niantic.Zeppelin.Scheduler.Wait` antes de modificar su duración:
-
-```js
-if(!runtime.valid(current)||current.class.fullName!==WAIT)return;
-const duration=current.field('<SleepFor>k__BackingField');
-const seconds=duration.value;
-if(!Number.isFinite(seconds)||seconds<0||seconds>5)return;
-if(seconds>OPEN_SECONDS+0.001){duration.value=OPEN_SECONDS;giftWaits++;savedWaitSeconds+=seconds-OPEN_SECONDS;}
-```
-
-*Fragmento de [game-tools.cjs](engine/src/game-tools.cjs). Las esperas de red, carga de recursos y condiciones pendientes conservan su comportamiento.*
+El tratamiento está en [presentation-tools.c](native/presentation-tools.c). El reloj global del juego mantiene su velocidad habitual.
 
 **Hide trainer name**, activado inicialmente, sustituye el texto visible del jugador en el HUD del mapa, el perfil propio y la cabecera de amigos. Utiliza los componentes `UnityEngine.UI.Text` de esas pantallas; no renombra la cuenta ni modifica los datos de identidad que utiliza el juego.
 
@@ -434,27 +395,25 @@ El HUD se obtiene del estado de mapa que está ejecutándose. Los textos anterio
 
 ### Transferencias y borrado
 
-Los identificadores de 64 bits permanecen como cadenas exactas o valores `UInt64`, nunca como números JavaScript susceptibles de perder precisión. La autorización combina petición emitida, respuesta reciente y exitosa, clase correcta, ID capturado y sesión actual.
+Los identificadores se mantienen como **`uint64_t`** en C y valores de 64 bits en el controlador Android. La autorización combina solicitud emitida, respuesta reciente y exitosa, clase correcta, ID capturado y sesión actual.
 
-La política de mochila es independiente de la animación o de que visualmente parezca llena:
-
-```js
-// Fragmento de engine/src/policy.cjs
-const count = counts[name];
-if (!Number.isInteger(count) || count <= keep) continue;
-return {
-  name, item: ITEMS[name], count: Math.min(count - keep, maxBatch),
-  before: count, keep
-};
+```c
+if (!input || silph_transfer_evaluate(input, sizeof(*input), &verdict)
+    || verdict.decision != SILPH_VERDICT_CANDIDATE
+    || !silph_core_authorize(scope, input->owned_id, encounter)
+    || !silph_schedule_permitted(permit, true))
+    return SILPH_MANAGED_STATE;
 ```
 
-Una transferencia no incrementa el contador únicamente por haber sido solicitada: también debe desaparecer del inventario tras la respuesta aceptada. Los resultados desconocidos no autorizan reintentos irreversibles.
+*Puerta de autorización en [managed-read.c](native/managed-read.c). Las llamadas de transferencia no aceptan IDs encontrados únicamente al recorrer el inventario.*
+
+Una transferencia no se contabiliza solo por haber sido solicitada: se comprueba la respuesta y se reconcilia el ID en el inventario. Los resultados desconocidos no autorizan reintentos irreversibles. El borrado de objetos usa una política separada de tipos y cantidades.
 
 ### Ubicación y Error 12
 
 El adaptador usa la ABI JNI para identificar `android.location.Location.isFromMockProvider()` y, si existe, `isMock()`. Trata únicamente las respuestas booleanas correspondientes a esos métodos dentro del **proceso al que se conectó**.
 
-El tratamiento se instala al iniciar con **Fix error 12** y se retira al detener el servicio. Resuelve los métodos disponibles según el SDK del proceso, incluida la variante moderna `isMock()`, y comparte el mismo ciclo de vida en UGPhone y teléfonos físicos. La implementación está en [engine/location](engine/location).
+El tratamiento se instala al iniciar con **Fix error 12** y se retira al detener el servicio. Resuelve los métodos disponibles según el SDK del proceso, incluida la variante moderna `isMock()`, y comparte el mismo ciclo de vida en UGPhone y teléfonos físicos. La implementación está en [location-tools.c](native/location-tools.c).
 
 ### Contador XP y polvo estelar
 
@@ -464,48 +423,41 @@ No se resta el saldo de la cuenta ni se estiman premios multiplicando capturas p
 
 ## Compilación
 
-Requisitos: JDK **17 o superior**, Android SDK **36**, Android NDK **r28c / 28.2.13676358**, Node.js **22 o superior** y Python **3.11 o superior**. Android Studio puede abrir la raíz del repositorio. Configura `JAVA_HOME` y `ANDROID_HOME`, o crea tu propio `local.properties` con `sdk.dir`.
+Requisitos: JDK **17 o superior**, Android SDK **36**, Android NDK **r28c / 28.2.13676358**, Git y PowerShell. Android Studio puede abrir la raíz del repositorio. Configura `JAVA_HOME` y `ANDROID_HOME`, o crea tu propio `local.properties` con `sdk.dir`.
 
 ```powershell
-cd engine
-npm.cmd ci
-npm.cmd run typecheck
-cd ..
-python tools/prepare_native.py
-python tools/prepare_native.py --backend spawn
-.\tools\build_loader.ps1 -Ndk "$env:ANDROID_HOME\ndk\28.2.13676358"
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+$env:ANDROID_HOME = "C:\Users\usuario\AppData\Local\Android\Sdk"
 .\gradlew.bat :app:assembleRelease
 ```
 
-La preparación nativa descarga los ejecutables oficiales ARM64 de **Frida 17.22.1** y **17.23.3**, verifica archivo comprimido, binario, tamaño y formato ELF, y no los ejecuta en el ordenador. También acepta `--archive /ruta/al/archivo-oficial.xz` junto al backend correspondiente para una preparación offline. El adaptador de carga se compila desde [native](native) con el NDK indicado; [build_loader.ps1](tools/build_loader.ps1) contiene sus opciones de compilación para Windows.
+Gradle compila los componentes C desde [native](native) mediante [build_native.ps1](tools/build_native.ps1). El backend de hooks se obtiene de una revisión fija de ShadowHook y se conserva fuera del código publicable, en `.dependencies/`. Puedes indicar instalaciones existentes con `SILPH_NDK` y `SILPH_SHADOWHOOK`.
 
-Gradle reconstruye el agente desde el código fuente y genera su SHA-256 esperado durante la compilación. No necesitas editar una constante a mano ni copiar archivos desde otro proyecto. El binario nativo se verifica de nuevo antes de compilar.
+La compilación genera los **ocho componentes nativos `.so`** y sus huellas SHA-256. El servicio vuelve a verificarlas antes de cargar el motor. Estos archivos se construyen desde C y la dependencia de hooks. Gradle los incorpora al APK desde `app/src/main/jniLibs/arm64-v8a/`.
 
-Sin configuración de firma, la salida release es **unsigned**. Para firmarla, proporciona por entorno `SILPH_KEYSTORE`, `SILPH_STORE_PASSWORD`, `SILPH_KEY_ALIAS` y `SILPH_KEY_PASSWORD`. Las claves quedan fuera del repositorio; actualizar una instalación existente requiere el mismo certificado.
+Sin configuración de firma, la salida release es **unsigned**. Para firmarla, proporciona `SILPH_KEYSTORE`, `SILPH_STORE_PASSWORD`, `SILPH_KEY_ALIAS` y `SILPH_KEY_PASSWORD`. Las claves quedan fuera del repositorio; actualizar una instalación existente utiliza el mismo certificado.
 
-Salida Android: `app/build/outputs/apk/release/`. El APK, `node_modules`, caches, logs, claves y runtime descargado están excluidos de Git.
+Salida Android: `app/build/outputs/apk/release/`. APKs, componentes generados, cachés, logs y claves están excluidos de Git.
 
 ## Registros y privacidad
 
-La exportación es local y manual. Incluye estado final, configuración, eventos del motor, salud, arranque, fuentes Android accesibles, logcat y reportes de cierre, con límites de tiempo/tamaño y rotación. No equivale a recoger toda la memoria ni a conservar cada línea de una sesión indefinidamente. Las sesiones antiguas no se eliminan automáticamente: revisa el espacio disponible.
+La exportación es local y manual. Incluye hasta **tres sesiones recientes** y la identificación de la compilación. Registra configuración operativa, estado del proceso, rutas de arranque, respuestas, contadores y liberación de recursos. Cada registro tiene un máximo de **8 MB**. Los nuevos eventos guardados filtran la clave del canal de control.
 
-Los ZIP **no añaden censura** y pueden incluir coordenadas, identificadores y mensajes de otros procesos.
+Los archivos se guardan en el espacio privado de la app. **Export logs** crea un ZIP en `Descargas/SilphMod/`. Los registros pueden contener coordenadas e identificadores del dispositivo, no incluye datos sensibles y/o confidenciales.
 
 ## Estructura
 
 ```text
 SilphMod/
-├── app/                  # Una sola aplicación Android
-├── engine/
-│   ├── src/              # Motor, políticas y control de sesión
-│   └── location/         # Adaptador JNI
-├── docs/
-│   └── assets/           # Identidad, arquitectura y fragmento de código
-├── native/               # Adaptador de carga ARM64
-├── tools/                # Preparación nativa y catálogo de imágenes
+├── app/                  # Interfaz, servicio, configuración y recursos
+├── native/               # Motor C, arranque y políticas
+│   └── standalone/       # Conexión y control del proceso
+├── docs/assets/          # Identidad y recursos visuales
+├── tools/                # Compilación nativa y procedencia de recursos
 ├── gradle/               # Wrapper de compilación
 ├── LICENSE
 ├── NOTICE
+├── spanish.md
 └── README.md
 ```
 
@@ -519,7 +471,15 @@ SilphMod/
 
 **1.9.3 actualiza el perfil a Pokémon GO 0.433.1**, añade **Fast gift opening** para acelerar la apertura manual de regalos y **Hide trainer name** para mostrar temporalmente SilphMod en lugar del nombre del jugador. Integra el inyector adaptativo con rutas alternativas y reutilización de la conexión que funcionó para ese entorno.
 
-La siguiente fase es seguir optimizando la continuidad del Farmer y ampliar la compatibilidad entre dispositivos.
+**2.0.0 incorpora Kecleon (BETA)** como modo separado, con candidatos, movimientos acotados, filtros de captura e historial por cuenta. Farmer conserva la configuración y los resultados independientes.
+
+El motor pasa a **C**, con planificación en el hilo Unity, referencias de duración controlada y menor repetición de lecturas mientras espera respuestas. El arranque reúne cuatro rutas alternativas en una misma APK. Se integran las investigaciones de campo, las herramientas de inventario, la apertura rápida de regalos, la retirada de compañero y la recuperación tras cinco minutos de mapa vacío.
+
+**2.0.15 refuerza la integridad de los componentes nativos y el canal de control**. Las credenciales de sesión se entregan por una tubería privada, las conexiones sin autenticar caducan y los registros de diagnóstico excluyen la clave de control. Se mantienen las rutas de arranque y las políticas de captura y transferencia.
+
+El Farmer añade continuidad en los menús compatibles del juego, revisión más frecuente de las fases de captura con **Action interval** en **100 ms** y cachés acotadas de metadatos. Bayas, investigaciones, giros, limpieza y transferencias conservan la coordinación de una sola operación pendiente.
+
+La siguiente fase es seguir optimizando la continuidad de ambos modos y ampliar la compatibilidad entre dispositivos.
 
 Se buscará agregar la configuración del orden jerárquico del uso de pokebolas. No la de por defecto: 1. Pokeball; 2. Superball; 3. Ultraball
 

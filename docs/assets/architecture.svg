@@ -10,7 +10,7 @@
     <text x="62" y="162" font-size="21" font-weight="600">Interface + service</text>
     <text x="62" y="193" font-size="17">Settings and Stop button</text>
     <text x="62" y="219" font-size="17">PID, focus and heartbeat</text>
-    <text x="422" y="162" font-size="21" font-weight="600">Internal agent</text>
+    <text x="422" y="162" font-size="21" font-weight="600">C engine</text>
     <text x="422" y="193" font-size="17">Location option → validation</text>
     <text x="422" y="219" font-size="17">One pending request</text>
     <text x="802" y="162" font-size="21" font-weight="600">Original game</text>
@@ -21,5 +21,5 @@
     <text x="422" y="418" font-size="17">Notification + ZIP export</text>
   </g>
   <g fill="none" stroke="#61e9b6" stroke-width="2" marker-end="url(#arrow)"><path d="M300 174H400"/><path d="M680 174H780"/><path d="M910 242V282H540V324"/><path d="M400 385H170V242"/></g>
-  <g font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="#b5c3d1"><text x="333" y="159">pipe</text><text x="713" y="159">calls</text><text x="713" y="270">game response</text><text x="186" y="373">local events</text></g>
+  <g font-family="Segoe UI, Arial, sans-serif" font-size="15" fill="#b5c3d1"><text x="333" y="159">local control</text><text x="713" y="159">calls</text><text x="713" y="270">game response</text><text x="186" y="373">local events</text></g>
 </svg>
