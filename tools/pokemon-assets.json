@@ -4601,6 +4601,12 @@
       "bytes": 16720
     },
     {
+      "id": 774,
+      "source": "Preserved offline selector artwork",
+      "sha256": "1160a8739a3c11c5136fef3b1ab9dc18d755a7444baff2e37167dc5b54bce31f",
+      "bytes": 124582
+    },
+    {
       "id": 775,
       "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm775.icon.png",
       "sha256": "9b1439c695315ac553616f28e8fcdeb7109b4b807dfc330dbf627d8eca56e470",

@@ -11,6 +11,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 /** Persistent root shell. Commands are created exclusively by this application. */
 public final class RootShell implements Closeable {
@@ -36,6 +37,10 @@ public final class RootShell implements Closeable {
     }
 
     public Result execute(String command, long timeoutMs) throws IOException {
+        return execute(command,timeoutMs,null);
+    }
+
+    public Result execute(String command, long timeoutMs, Consumer<String> observer) throws IOException {
         if (command == null || command.isEmpty()) {
             throw new IllegalArgumentException("Empty command");
         }
@@ -89,11 +94,16 @@ public final class RootShell implements Closeable {
                         }
                         return new Result(code, output.toString().trim());
                     }
+                    if(output.length()+event.line.length()>131072)throw new IOException("Root response exceeded diagnostic limit");
                     output.append(event.line).append('\n');
+                    if(observer!=null)observer.accept(event.line);
                 }
             } catch (IOException e) {
                 discard(active);
                 throw e;
+            } catch (RuntimeException e) {
+                discard(active);
+                throw new IOException("Root output observer failed",e);
             }
         }
     }
@@ -144,7 +154,7 @@ public final class RootShell implements Closeable {
     private static final class Session {
         final Process process;
         final BufferedWriter writer;
-        final BlockingQueue<LineEvent> lines = new LinkedBlockingQueue<>();
+        final BlockingQueue<LineEvent> lines = new LinkedBlockingQueue<>(4096);
 
         Session(Process process) {
             this.process = process;
@@ -160,7 +170,7 @@ public final class RootShell implements Closeable {
                     process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    lines.offer(new LineEvent(line, false));
+                    if(line.length()>32768||!lines.offer(new LineEvent(line, false))){process.destroyForcibly();break;}
                 }
             } catch (IOException ignored) {
                 // The command thread observes the end-of-stream event below.

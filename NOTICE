@@ -1,50 +1,24 @@
 SilphMod — third-party components
 
-The project LICENSE applies to original SilphMod code and documentation.
-Third-party components retain their own licenses and notices.
+The MIT license applies to original SilphMod code and documentation.
+Dependencies retain their own licenses.
 
-Runtime dependencies (unmodified upstream distributions):
-- Frida 17.22.1: LGPL-2.0 with the wxWindows Library Licence 3.1 exception.
-  Source: https://github.com/frida/frida/tree/17.22.1
-  Binary: https://github.com/frida/frida/releases/tag/17.22.1
-- Frida 17.23.3: same license; unmodified ARM64 executable for early startup.
-  Source: https://github.com/frida/frida/tree/17.23.3
-  Binary: https://github.com/frida/frida/releases/tag/17.23.3
-- frida-java-bridge 7.0.13: LGPL-2.0 WITH WxWindows-exception-3.1.
-  Source: https://github.com/frida/frida-java-bridge
-- frida-il2cpp-bridge 0.14.0: MIT; copyright vfsfitvnm.
-  Source: https://github.com/vfsfitvnm/frida-il2cpp-bridge
-- buffer 6.0.3 and base64-js 1.5.1: MIT.
-  Sources: https://github.com/feross/buffer and https://github.com/beatgammit/base64-js
-- ieee754 1.2.1: BSD-3-Clause.
-  Source: https://github.com/feross/ieee754
+ShadowHook 2.0.1, revision 854c775c2c3676e57a0f383597ebf420b5204161:
+https://github.com/bytedance/android-inline-hook
+MIT, including the upstream xDL, BSD and Linux syscall support notices
+in app/src/main/assets/licenses. Sources are obtained at build time.
 
-The runtime license texts are preserved in app/src/main/assets/licenses
-and included in the APK. The Frida executable is not committed: the build
-preparation script downloads or unpacks the exact pinned upstream binary.
-It is not a game library or a proprietary automation agent.
+Gradle wrapper and Android Gradle Plugin: Apache-2.0.
+https://github.com/gradle/gradle
+https://android.googlesource.com/platform/tools/base/
+License: tools/licenses/Apache-2.0.txt.
 
-Build tools:
-- Gradle wrapper 9.3.1: Apache-2.0. Source: https://github.com/gradle/gradle
-- Android Gradle Plugin 9.1.1: Apache-2.0. Source: https://android.googlesource.com/platform/tools/base/
-- esbuild 0.28.2: MIT. Source: https://github.com/evanw/esbuild
-- TypeScript 5.9.3: Apache-2.0. Source: https://github.com/microsoft/TypeScript
-- @types/frida-gum 19.0.0: MIT. Source: https://github.com/DefinitelyTyped/DefinitelyTyped
+Pokémon and item artwork belongs to its respective game rightsholders
+and is not licensed under the project MIT license. Selector artwork:
+https://github.com/PokeMiners/pogo_assets
+https://github.com/PokeAPI/sprites
+Asset sources and hashes: tools/pokemon-assets.json and item-artwork.json.
+The PokeAPI sprites notice is retained in app/src/main/assets/licenses.
+The released-species catalog originates from pogoapi.net.
 
-The Apache-2.0 license text for the Gradle wrapper is retained in
-tools/licenses/Apache-2.0.txt. Other build tools are resolved by the build.
-
-Pokémon GO and related names are trademarks of their respective owners.
-Item artwork is owned by its respective game rightsholders, including
-The Pokémon Company and Niantic, and is not covered by the project MIT license.
-32 item icons are unmodified resources extracted from the supplied app package.
-The Poffin image is an unmodified game asset archived by PokeMiners:
-https://github.com/PokeMiners/pogo_assets/blob/df0598b84318f68a5bbe5494caa4292c9b49caae/Images/Items/poffin.3.png
-Internal Java names and installed application identity are retained for upgrade compatibility.
-
-Pokémon selector artwork is provided by PokeMiners/pogo_assets and PokeAPI/sprites.
-Sources and per-file hashes are retained in tools/pokemon-assets.json.
-Pokémon artwork belongs to its respective rightsholders and is not covered by MIT.
-The PokeAPI repository notice is included in assets/licenses/PokeAPI-sprites.txt.
-The offline released-species catalog is sourced from
-https://pogoapi.net/api/v1/released_pokemon.json during asset preparation only.
+The project does not distribute game libraries or decompiled game metadata.
