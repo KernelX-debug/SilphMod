@@ -9,7 +9,6 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Parses WindowManager focus, never inferring focus from a resumed activity. */
 final class ForegroundFocus {
     enum State { GAME, OTHER, NOTIFICATION_SHADE, NO_WINDOW, UNAVAILABLE, AMBIGUOUS }
     private static final Pattern DISPLAY = Pattern.compile("^Display: mDisplayId=([0-9]+)(?:\\s.*)?$");

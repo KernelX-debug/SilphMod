@@ -39,7 +39,7 @@ $common+=Join-Path $source 'pass-actions.c'
 foreach($mode in @('farmer','kecleon')){
     $modeFlags=if($mode -eq 'farmer'){@('-DSILPH_PILOT_TRANSFER=1','-DSILPH_PILOT_CONTINUOUS=1','-DSILPH_PILOT_COMBINED=1')}else{@('-DSILPH_PILOT_KECLEON=1')}
     $modeSources=if($mode -eq 'farmer'){@((Join-Path $source 'farmer-view.c'))}else{@()}
-    Compile ($flags+$defines+$modeFlags+@('-fPIC','-shared','-Wl,-soname,libsilph-native-observer.so','-pthread',('-I'+(Join-Path $hook 'include')))+$common+$modeSources+@(('-L'+$output),'-lshadowhook','-ldl','-lm','-Wl,-rpath,$ORIGIN','-o',(Join-Path $output ('libsilph-'+$mode+'-check.so'))))
+    Compile ($flags+$defines+$modeFlags+@('-fPIC','-shared','-Wl,-soname,libsilph-native-observer.so','-pthread',('-I'+(Join-Path $hook 'include')))+$common+$modeSources+@(('-L'+$output),'-lshadowhook','-ldl','-lm','-llog','-Wl,-rpath,$ORIGIN','-o',(Join-Path $output ('libsilph-'+$mode+'-check.so'))))
     Compile ($flags+$defines+$modeFlags+@('-fPIE','-pie',(Join-Path $source 'pilot-reader.c'),(Join-Path $source 'standalone/remote.c'),(Join-Path $source 'standalone/elf-symbol.c'),'-ldl','-o',(Join-Path $output ('libsilph-'+$mode+'-status.so'))))
 }
 Get-ChildItem -LiteralPath $output -File | Select-Object Name,Length

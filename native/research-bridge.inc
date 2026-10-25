@@ -1,3 +1,4 @@
+#include "research-policy.h"
 int silph_research_enable(void *memory,SilphManagedResolver resolve,void *context){
     if(!resolve)return SILPH_MANAGED_ARGUMENT;Read *s=memory;int status=enter_read(s);if(status)return status;
     void *symbol=resolve("il2cpp_class_get_nested_types",context),*size=resolve("il2cpp_class_value_size",context);if(!symbol||!size)status=SILPH_MANAGED_ABI_MISMATCH;
@@ -21,12 +22,12 @@ static bool research_type(Read *s,void *object,const char *space,const char *nam
     const char *ns=klass?s->api.class_get_namespace(klass):NULL,*nm=klass?s->api.class_get_name(klass):NULL;
     return ns&&nm&&!strcmp(ns,space)&&!strcmp(nm,name);
 }
-static int research_quest(Read *s,SilphManagedRef quest,SilphManagedRef *id){
+static int research_quest(Read *s,SilphManagedRef quest,SilphManagedRef *id,bool story){
     void *object=NULL;int status=silph_managed_target(s->managed,quest,&object);
     if(!status&&!research_type(s,object,"Holoholo.Rpc","QuestProto"))status=SILPH_MANAGED_CONTRACT;
     const void *context=status?NULL:find_field(s,s->base.object_get_class(object),"QuestContext",NULL,NULL,&status);
     uint32_t field=0;if(!status&&!matches_kind(s,s->api.field_get_type(context),SILPH_READ_ENUM32))status=SILPH_MANAGED_CONTRACT;
-    if(!status){s->api.field_get_value(object,context,&field);if(field!=2)status=SILPH_MANAGED_STATE;}
+    if(!status){s->api.field_get_value(object,context,&field);if(story?!silph_research_story_context(field):field!=2)status=SILPH_MANAGED_STATE;}
     SilphReadValue result={0};const void *id_field=status?NULL:find_field(s,s->base.object_get_class(object),"QuestId",NULL,NULL,&status);
     if(!status&&!matches_kind(s,s->api.field_get_type(id_field),SILPH_READ_REFERENCE))status=SILPH_MANAGED_CONTRACT;
     if(!status){void *text=NULL;s->api.field_get_value(object,id_field,&text);status=accept_reference(s,s->api.field_get_type(id_field),text,&result);}
@@ -71,9 +72,48 @@ static int research_nullable_invoke(Read *s,const void *method,void *object,uint
     }
     if(status)clear_value(out);return status;
 }
+static int research_story_invoke(Read *s,const SilphSchedulePermit *permit,uint32_t operation,SilphManagedRef receiver,const SilphReadArgument *input,uint32_t count,SilphReadValue *out){
+    void *object=NULL;int status=silph_managed_target(s->managed,receiver,&object);
+    const char *iface=operation==SILPH_RESEARCH_ALL?"IQuestService":"IQuestRpcService";
+    void *klass=status?NULL:s->base.object_get_class(object),*expected=lookup_class(s,"holo-game.dll","Niantic.Holoholo.Quests",iface);
+    if(!status&&(!expected||!s->api.class_is_assignable_from(expected,klass)))status=SILPH_MANAGED_CONTRACT;
+    if(operation==SILPH_RESEARCH_ALL)return status?status:count?SILPH_MANAGED_ARGUMENT:call_internal(s,receiver,NULL,"get_QuestsProto",SILPH_READ_REFERENCE,NULL,0,out,permit);
+    if(count!=2||input[0].kind!=SILPH_READ_REFERENCE||input[1].kind!=SILPH_READ_REFERENCE)return SILPH_MANAGED_ARGUMENT;
+    SilphManagedRef parent={0},child={0},empty={0};SilphReadValue multi={0},list={0},n={0};
+    if(!status)status=research_quest(s,input[0].value.reference,&parent,true);
+    if(!status&&input[1].value.reference.serial){
+        void *wanted=NULL;status=silph_managed_target(s->managed,input[1].value.reference,&wanted);
+        if(!status&&!research_type(s,wanted,"Holoholo.Rpc","QuestProto"))status=SILPH_MANAGED_CONTRACT;
+        if(!status)status=call_internal(s,input[0].value.reference,NULL,"get_MultiPart",SILPH_READ_REFERENCE,NULL,0,&multi,permit);
+        if(!status){void *value=NULL;status=silph_managed_target(s->managed,multi.reference,&value);const void *field=status?NULL:find_field(s,s->base.object_get_class(value),"SubQuests",NULL,NULL,&status);
+            if(!status&&!matches_kind(s,s->api.field_get_type(field),SILPH_READ_REFERENCE))status=SILPH_MANAGED_CONTRACT;
+            if(!status){void *entries=NULL;s->api.field_get_value(value,field,&entries);status=accept_reference(s,s->api.field_get_type(field),entries,&list);}}
+        if(!status)status=call_internal(s,list.reference,NULL,"get_Count",SILPH_READ_I32,NULL,0,&n,permit);
+        if(!status&&n.bits>64)status=SILPH_MANAGED_CONTRACT;bool found=false;
+        for(unsigned i=0;!status&&i<n.bits&&!found;i++){
+            SilphReadArgument index={.kind=SILPH_READ_I32,.value.bits=i};SilphReadValue entry={0};void *candidate=NULL;
+            status=call_internal(s,list.reference,NULL,"get_Item",SILPH_READ_REFERENCE,&index,1,&entry,permit);
+            if(!status)status=silph_managed_target(s->managed,entry.reference,&candidate);if(!status)found=candidate==wanted;
+            int freed=release_rpc_ref(s,&entry.reference);if(!status)status=freed;
+        }
+        if(!status&&!found)status=SILPH_MANAGED_STALE;
+        if(!status){const void *field=find_field(s,s->base.object_get_class(wanted),"QuestId",NULL,NULL,&status);
+            if(!status&&!matches_kind(s,s->api.field_get_type(field),SILPH_READ_REFERENCE))status=SILPH_MANAGED_CONTRACT;
+            if(!status){void *text=NULL;s->api.field_get_value(wanted,field,&text);status=accept_reference(s,s->api.field_get_type(field),text,&n);}}
+        if(!status){child=n.reference;n.reference=(SilphManagedRef){0};void *text=NULL;status=silph_managed_target(s->managed,child,&text);int32_t length=status?0:s->base.string_length(text);if(length<1||length>256)status=SILPH_MANAGED_CONTRACT;}
+    }else if(!status){void *text=s->base.string_new_len("",0);status=text?silph_managed_retain(s->managed,text,false,&empty):SILPH_MANAGED_CAPACITY;}
+    const void *method=status?NULL:research_method(s,klass,"CompleteQuest",4,false);
+    if(!status&&!method)status=SILPH_MANAGED_CONTRACT;
+    if(!status)status=research_nullable(s,method,2,SILPH_READ_I32);
+    SilphReadArgument args[]={{.kind=SILPH_READ_REFERENCE,.value.reference=parent},{.kind=SILPH_READ_REFERENCE,.value.reference=child.serial?child:empty},{0},{.kind=SILPH_READ_U64}};
+    if(!status)status=research_nullable_invoke(s,method,object,SILPH_READ_REFERENCE,args,4,2,out,permit);
+    SilphManagedRef *refs[]={&parent,&child,&empty,&multi.reference,&list.reference,&n.reference};
+    for(unsigned i=0;i<6;i++){int freed=release_rpc_ref(s,refs[i]);if(!status)status=freed;}return status;
+}
 int silph_research_invoke(void *memory,const SilphSchedulePermit *permit,uint32_t operation,SilphManagedRef receiver,const SilphReadArgument *input,uint32_t count,SilphReadValue *out){
-    if(!out)return SILPH_MANAGED_ARGUMENT;clear_value(out);if(operation<1||operation>13||count>2||(count&&!input)||!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;
+    if(!out)return SILPH_MANAGED_ARGUMENT;clear_value(out);if(operation<1||operation>15||count>2||(count&&!input)||!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;
     Read *s=memory;int status=enter_read(s);if(status)return status;
+    if(operation>=14)return leave_read(s,research_story_invoke(s,permit,operation,receiver,input,count,out));
     const char *names[]={"GetQuestDataOfType","get_ExclusiveQuestCompletionInProgress","CanReceiveReward","CanRedeem","CompleteQuest","RemoveQuest","GetDanglingEncounterOfType","BeginQuestEncounter","Create","get_IsStampCardFull","get_StampCardData","CompleteStampCard","GetDanglingEncounterOfType"};
     uint32_t needed[]={0,0,1,1,1,1,0,1,2,0,0,0,0};if(count!=needed[operation-1])return leave_read(s,SILPH_MANAGED_ARGUMENT);
     uint32_t phase=40;bool statik=operation==SILPH_RESEARCH_REDEEM;void *object=NULL,*klass=NULL;
@@ -88,7 +128,7 @@ int silph_research_invoke(void *memory,const SilphSchedulePermit *permit,uint32_
     SilphReadArgument args[4]={{0}};for(unsigned i=0;i<count;i++)args[i]=input[i];SilphManagedRef id={0},empty={0};
     if(!status&&operation==1)args[0]=(SilphReadArgument){.kind=SILPH_READ_ENUM32,.value.bits=2};
     if(!status&&(operation==5||operation==6)){
-        status=research_quest(s,input[0].value.reference,&id);args[0]=(SilphReadArgument){.kind=SILPH_READ_REFERENCE,.value.reference=id};
+        status=research_quest(s,input[0].value.reference,&id,false);args[0]=(SilphReadArgument){.kind=SILPH_READ_REFERENCE,.value.reference=id};
     }
     if(!status&&(operation==5||operation==7||operation==13)){void *value=s->base.string_new_len("",0);status=value?silph_managed_retain(s->managed,value,false,&empty):SILPH_MANAGED_CAPACITY;}
     if(!status&&(operation==4||operation==5)){phase=42;status=research_nullable(s,method,operation==4?1:2,operation==4?SILPH_READ_I64:SILPH_READ_I32);}

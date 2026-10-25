@@ -2,7 +2,6 @@ package dev.rootcatch.nativeengine;
 
 import java.util.List;
 
-/** Item identifiers cross-checked against the supported game schema. */
 public final class ItemCatalog {
     public static final class Entry {
         private final String name, label, group;

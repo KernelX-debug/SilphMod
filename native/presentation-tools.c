@@ -9,7 +9,7 @@
 #include <unistd.h>
 #include <stdatomic.h>
 #include <time.h>
-enum {SCENE_BADGE_INCREMENT,SCENE_INCENSE,SCENE_LEVEL,SCENE_XP,SCENE_EGG,SCENE_EGG_CUTSCENE,SCENE_SPEED,SCENE_STAMP,SCENE_FRIENDSHIP,SCENE_POKEMON_RESULT,SCENE_BADGE_AWARD,SCENE_GYM_AWARD,SCENE_VIVILLON_AWARD,SCENE_AVATAR_AWARD,SCENE_COUNT};
+enum {SCENE_BADGE_INCREMENT,SCENE_INCENSE,SCENE_LEVEL,SCENE_XP,SCENE_EGG,SCENE_EGG_CUTSCENE,SCENE_SPEED,SCENE_STAMP,SCENE_FRIENDSHIP,SCENE_POKEMON_RESULT,SCENE_BADGE_AWARD,SCENE_GYM_AWARD,SCENE_VIVILLON_AWARD,SCENE_AVATAR_AWARD,SCENE_QUEST_DIALOG,SCENE_COUNT};
 typedef struct {const char *space,*name,*action;} SceneSpec;
 static const SceneSpec scene_specs[SCENE_COUNT]={
     {"Niantic.Holoholo.UI","BadgeIncrementGuiController","Dismiss"},
@@ -25,7 +25,8 @@ static const SceneSpec scene_specs[SCENE_COUNT]={
     {"Niantic.Holoholo.UI","BadgeAwardGuiController","Dismiss"},
     {"Niantic.Holoholo.GymBadges","GymBadgeAwardGuiController","Dismiss"},
     {"Niantic.Holoholo.Vivillon","VivillonSubBadgeAwardGuiController","DismissButtonHit"},
-    {"Niantic.Holoholo.Map.UI","AvatarCustomizationAwardGuiController","Dismiss"}
+    {"Niantic.Holoholo.Map.UI","AvatarCustomizationAwardGuiController","Dismiss"},
+    {"Niantic.Holoholo.Quests","QuestDialogGuiController","ClickSkip"}
 };
 typedef struct {
     const void **(*assemblies)(void *,size_t *);

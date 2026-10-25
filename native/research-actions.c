@@ -5,10 +5,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-typedef struct {char id[257];uint32_t kind,terminal;uint64_t until;} Entry;
+#include <time.h>
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
+typedef struct {char id[800];uint32_t kind,terminal;uint64_t until;} Entry;
 typedef struct {
     void *read,*managed,*game,*pending;SilphScheduleIdentity identity;SilphManagedRef quests,rpc,factory,reward,stamp,ready;
-    uint32_t opened,transfers,berries,kind,ready_species,reward_source,ready_source,delivered_source;uint64_t sequence,due,after,encounter,ready_encounter,weekly_after,delivered_encounter;char quest_id[257];
+    uint32_t opened,transfers,berries,kind,ready_species,reward_source,ready_source,delivered_source;uint64_t sequence,due,after,encounter,ready_encounter,weekly_after,delivered_encounter;char quest_id[800];
+    uint64_t extra_due;uint32_t extra_mode,extra_index,extra_child,extra_phase,extra_context;char extra_id[257];
     Entry entries[256];SilphResearchMetrics metrics;
 } Research;
 size_t silph_research_size(void){return sizeof(Research);}
@@ -22,12 +27,12 @@ static int call(Research *s,const SilphSchedulePermit *p,uint32_t op,SilphManage
 static int count(Research *s,SilphManagedRef list,uint32_t limit,uint32_t *out){SilphReadValue v={0};int r=silph_read_call(s->read,list,"get_Count",SILPH_READ_I32,NULL,0,&v);if(!r&&v.bits>limit)r=SILPH_MANAGED_CONTRACT;if(!r)*out=(uint32_t)v.bits;return r;}
 static int item(Research *s,SilphManagedRef list,uint32_t i,const char *name,SilphManagedRef *out){SilphReadArgument arg={.kind=SILPH_READ_I32,.value.bits=i};SilphReadValue v={0};int r=silph_read_call(s->read,list,"get_Item",SILPH_READ_REFERENCE,&arg,1,&v);if(!r)r=silph_read_is_type(s->read,v.reference,"Holoholo.Rpc",name);if(!r)*out=v.reference;else drop(s,&v.reference);return r;}
 static bool available(Research *s,uint32_t kind,const char *id,uint64_t now){
-    bool empty=false;for(unsigned i=0;i<256;i++){Entry *e=&s->entries[i];if(!e->id[0])empty=true;else if(e->kind==kind&&!strcmp(e->id,id))return !e->terminal&&now>=e->until;}
+    bool empty=false;for(unsigned i=0;i<256;i++){Entry *e=&s->entries[i];if(!e->id[0])empty=true;else if(e->kind==kind&&!strcmp(e->id,id))return (kind==5||!e->terminal)&&now>=e->until;}
     return empty;
 }
 static int record(Research *s,uint32_t kind,const char *id,uint64_t now,uint32_t terminal){
     Entry *chosen=NULL;for(unsigned i=0;i<256;i++){Entry *e=&s->entries[i];if(!e->id[0]&&!chosen)chosen=e;if(e->kind==kind&&!strcmp(e->id,id)){chosen=e;break;}}
-    if(!chosen)return SILPH_MANAGED_CAPACITY;memset(chosen,0,sizeof(*chosen));memcpy(chosen->id,id,strlen(id)+1);chosen->kind=kind;chosen->terminal=terminal;chosen->until=now+UINT64_C(60000000000);return 0;
+    if(!chosen||strlen(id)>=sizeof(chosen->id))return SILPH_MANAGED_CAPACITY;memset(chosen,0,sizeof(*chosen));memcpy(chosen->id,id,strlen(id)+1);chosen->kind=kind;chosen->terminal=terminal;chosen->until=now+UINT64_C(60000000000);return 0;
 }
 static int reserve(Research *s,SilphManagedRef promise,uint32_t kind,const char *id,uint64_t now,const char *response){
     int status=record(s,kind,id,now,0);s->after=now+UINT64_C(3000000000);s->kind=kind;memcpy(s->quest_id,id,strlen(id)+1);
@@ -45,7 +50,7 @@ int silph_research_open(void *memory,size_t bytes,void *read,void *managed,void 
     if(!status)s->metrics.weekly_error=(uint32_t)silph_game_read_research_service(game,3,&s->stamp);
     s->metrics.state=status?3:1;s->metrics.error=(uint32_t)status;return 0;
 }
-bool silph_research_due(void *memory,uint64_t now){Research *s=memory;return s&&s->opened&&s->metrics.state==1&&now>=s->due&&now>=s->after;}
+bool silph_research_due(void *memory,uint64_t now){Research *s=memory;return s&&s->opened&&s->metrics.state==1&&(now>=s->due||now>=s->extra_due)&&now>=s->after;}
 bool silph_research_pending(void *memory){Research *s=memory;return s&&s->opened&&(s->metrics.state==2||s->metrics.state==4);}
 bool silph_research_available(void *memory){Research *s=memory;return s&&s->opened&&s->metrics.state==1;}
 uint32_t silph_research_target_source(void *memory,uint64_t encounter){Research *s=memory;return s&&s->opened&&encounter&&s->delivered_encounter==encounter?s->delivered_source:SILPH_SOURCE_UNKNOWN;}
@@ -76,7 +81,7 @@ static int task(Research *s,const SilphSchedulePermit *permit,SilphManagedRef qu
 static int begin_reward(Research *s,const SilphSchedulePermit *permit,const SilphGameSnapshot *snapshot,SilphManagedRef reward,uint64_t now,bool *started){
     *started=false;uint32_t type=0,ball=0;SilphReadValue pokemon={0},id={0};char key[257]={0};
     int error=silph_read_is_type(s->read,reward,"Holoholo.Rpc","QuestPokemonEncounterProto");
-    if(!error)error=integer(s,reward,"EncounterType",&type);if(!error&&type!=5&&type!=6&&type!=25)return 0;
+    if(!error)error=integer(s,reward,"EncounterType",&type);if(!error&&!silph_research_encounter_type(type))return 0;
     if(!error)error=integer(s,reward,"PokeBallOverride",&ball);if(!error)error=silph_read_field(s->read,reward,"Pokemon",SILPH_READ_REFERENCE,&pokemon);
     if(!error)error=silph_read_is_type(s->read,pokemon.reference,"Holoholo.Rpc","PokemonProto");if(!error)error=silph_read_call(s->read,pokemon.reference,"get_Id",SILPH_READ_U64,NULL,0,&id);
     if(!error&&!id.bits)error=SILPH_MANAGED_CONTRACT;
@@ -94,6 +99,7 @@ int silph_research_supply(void *memory,const SilphSchedulePermit *permit,const S
     if(snapshot->account_hi!=s->identity.account_hi||snapshot->account_lo!=s->identity.account_lo)return SILPH_MANAGED_STALE;
     bool started=false;int error=begin_reward(s,permit,snapshot,reward,now,&started);return error?error:started?0:SILPH_MANAGED_NOT_READY;
 }
+#include "research-extra.inc"
 static int weekly(Research *s,const SilphSchedulePermit *permit,const SilphGameSnapshot *snapshot,uint64_t now,bool capture,bool *handled,bool *blocked){
     *handled=*blocked=false;SilphReadValue reward={0},full={0},card={0};int status=call(s,permit,SILPH_RESEARCH_WEEKLY_REWARD,s->quests,(SilphManagedRef){0},&reward);
     if(!status&&reward.reference.serial){*blocked=true;if(capture)status=begin_reward(s,permit,snapshot,reward.reference,now,handled);}
@@ -145,7 +151,7 @@ static int poll(Research *s,const SilphSchedulePermit *permit,uint64_t now,Silph
     SilphManagedRef result={0};bool fresh=false;if(!status)status=silph_managed_promise_take(s->pending,&s->identity,now,&result,&fresh);if(!status&&!fresh)status=SILPH_MANAGED_STALE;
     uint32_t code=0;if(!status)status=integer(s,result,s->kind==3?"Result":"Status",&code);s->metrics.result=code;
     if(!status&&code==1){
-        if(s->kind==1||s->kind==4){uint64_t xp=0,dust=0;int rewards=silph_quest_reward_list(s->read,s->managed,result,s->kind==4?"CompleteQuestStampCardOutProto":"CompleteQuestOutProto",s->kind==4?"Reward":"Rewards",&xp,&dust);if(rewards)s->metrics.reward_error=(uint32_t)rewards;else{s->metrics.xp+=xp;s->metrics.stardust+=dust;}if(s->kind==4)s->metrics.weekly_claimed++;else s->metrics.claimed++;}
+        if(s->kind==1||s->kind==4||s->kind==5){uint64_t xp=0,dust=0;int rewards=silph_quest_reward_list(s->read,s->managed,result,s->kind==4?"CompleteQuestStampCardOutProto":"CompleteQuestOutProto",s->kind==4?"Reward":"Rewards",&xp,&dust);if(rewards)s->metrics.reward_error=(uint32_t)rewards;else{s->metrics.xp+=xp;s->metrics.stardust+=dust;}if(s->kind==4)s->metrics.weekly_claimed++;else s->metrics.claimed++;if(s->kind==5){s->extra_mode=s->extra_index=s->extra_child=0;s->extra_due=now+UINT64_C(500000000);}}
         else if(s->kind==2)s->metrics.discarded++;
         else{
             SilphReadArgument args[]={{.kind=SILPH_READ_REFERENCE,.value.reference=s->reward},{.kind=SILPH_READ_REFERENCE,.value.reference=result}};SilphReadValue object={0},id={0},pokemon={0},dex={0};
@@ -160,6 +166,7 @@ static int poll(Research *s,const SilphSchedulePermit *permit,uint64_t now,Silph
         }
     }
     if(!status)status=record(s,s->kind,s->quest_id,now,code==1||(s->kind==1&&(code==2||code==4))||(s->kind==2&&code==2));
+    if(s->kind==5)extra_log("result",s->extra_context,s->extra_phase,s->extra_child,code);
     int a=drop(s,&result),b=drop(s,&s->reward),c=silph_managed_promise_close(s->pending);if(!status)status=a?a:b?b:c;
     s->kind=0;s->metrics.state=status?3:1;silph_research_refresh(s,now);return status;
 }
@@ -169,7 +176,15 @@ int silph_research_tick(void *memory,const SilphSchedulePermit *permit,const Sil
     if(snapshot->account_hi!=s->identity.account_hi||snapshot->account_lo!=s->identity.account_lo)return SILPH_MANAGED_STALE;
     if(s->metrics.state==3)return 0;
     if(s->metrics.state==4){if(capture){*target=s->ready;s->ready=(SilphManagedRef){0};*encounter=s->ready_encounter;*species=s->ready_species;s->delivered_encounter=s->ready_encounter;s->delivered_source=s->ready_source;s->metrics.state=1;}return 0;}
-    int status=s->metrics.state==2?poll(s,permit,now,target,encounter,species):silph_research_due(s,now)?scan(s,permit,snapshot,now,capture):0;
+    int status=0;
+    if(s->metrics.state==2)status=poll(s,permit,now,target,encounter,species);
+    else if(silph_research_due(s,now)){
+        if(now>=s->due)status=scan(s,permit,snapshot,now,capture);
+        if(!status&&s->metrics.state==1&&now>=s->extra_due){
+            int extra=extra_scan(s,permit,snapshot,now,capture);
+            if(extra){s->metrics.reward_error=(uint32_t)extra;s->extra_due=now+UINT64_C(60000000000);s->extra_mode=s->extra_index=s->extra_child=0;extra_log("deferred",s->extra_context,s->extra_phase,s->metrics.operation,(uint32_t)extra);}
+        }
+    }
     if(!status&&target->serial&&!capture){s->ready=*target;*target=(SilphManagedRef){0};s->ready_encounter=*encounter;s->ready_species=*species;s->ready_source=s->delivered_source;s->delivered_encounter=0;s->delivered_source=0;*encounter=0;*species=0;s->metrics.state=4;}
     if(status){s->metrics.error=(uint32_t)status;s->metrics.state=3;if(s->pending)silph_managed_promise_close(s->pending);drop(s,&s->reward);}
     return 0;

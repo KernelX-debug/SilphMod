@@ -13,7 +13,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-/** Persistent root shell. Commands are created exclusively by this application. */
 public final class RootShell implements Closeable {
     private static final long DEFAULT_TIMEOUT_MS = 15_000;
     private static final long ROOT_CHECK_TIMEOUT_MS = 12_000;
@@ -173,7 +172,6 @@ public final class RootShell implements Closeable {
                     if(line.length()>32768||!lines.offer(new LineEvent(line, false))){process.destroyForcibly();break;}
                 }
             } catch (IOException ignored) {
-                // The command thread observes the end-of-stream event below.
             } finally {
                 lines.offer(new LineEvent(null, true));
             }

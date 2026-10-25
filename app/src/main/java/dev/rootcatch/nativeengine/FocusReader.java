@@ -6,7 +6,6 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Bounded, read-only focus queries. Failed/missing reads cannot authorize an attach. */
 final class FocusReader {
     static final int MAX_BYTES = 32768;
     static final long TIMEOUT_MS = 3500;

@@ -35,8 +35,8 @@ android {
         applicationId = "dev.rootcatch.ugphonetest"
         minSdk = 29
         targetSdk = 36
-        versionCode = 118
-        versionName = "2.1.1"
+        versionCode = 121
+        versionName = "2.1.4"
         ndk { abiFilters += "arm64-v8a" }
     }
     buildFeatures { buildConfig = true }

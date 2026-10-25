@@ -16,4 +16,16 @@ final class NativeRecoveryPlan {
     static boolean progressLive(int state,int stopped,int removed,int stopReason,int sessionReason){
         return state==2&&stopped==0&&removed==0&&stopReason==0&&sessionReason==0;
     }
+    static boolean transportFailure(String message,String finished){
+        return "Native control disconnected".equals(finished)||"Game process changed".equals(message)
+            ||"Native snapshots timed out".equals(message)||"Native control pulse failed".equals(message)
+            ||"Native control stopped responding".equals(message);
+    }
+    static int transportFailures(int previous,long lifetime,boolean confirmedWork){
+        if(previous<0||previous>10||lifetime<0)return 10;
+        return confirmedWork&&lifetime>=120000?1:previous>=9?10:previous+1;
+    }
+    static boolean transportRetry(boolean readonly,boolean stopped,int error,int reason,int attempts,boolean recoverable,boolean recentlyActive){
+        return !readonly&&!stopped&&error==0&&reason==0&&attempts>0&&attempts<10&&recoverable&&recentlyActive;
+    }
 }

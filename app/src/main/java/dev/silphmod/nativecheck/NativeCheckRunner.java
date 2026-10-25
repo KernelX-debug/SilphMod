@@ -67,6 +67,12 @@ final class NativeCheckRunner {
     private volatile boolean startupWorkStarted;
     private int recoveries,observedPid;
     private int progressRecoveries;
+    private int transportFailures;
+    private long connectedAt;
+    private volatile long lastGameActiveAt;
+    private volatile boolean confirmedWork;
+    private boolean connectionDiagnosed,failedProcessAlive,failedWhileActive;
+    private NativeExitReport exitReport;
     private String startupStage="prepare";
     private boolean gameNamespace;
     private long launchWallTime;
@@ -95,8 +101,8 @@ final class NativeCheckRunner {
                 if(error instanceof ProgressStalled&&((ProgressStalled)error).workStarted){
                     connectionError=error;log.write("progress_stalled",errorText(error));stopAndDrain("Recovering stalled engine");
                 }else{
-                    if(!startupTransportFailure(error))throw error;
-                    connectionError=error;log.write("startup_connection_error",errorText(error));
+                    if(!startupTransportFailure(error)&&!(error instanceof IOException&&NativeRecoveryPlan.transportFailure(error.getMessage(),finishReason)))throw error;
+                    connectionError=error;log.write("connection_error",errorText(error));
                 }
             }
             if(connectionError instanceof ProgressStalled&&((ProgressStalled)connectionError).workStarted){
@@ -108,6 +114,22 @@ final class NativeCheckRunner {
                 finishReason="Stopped by user";
             }
             boolean transportFailure=connectionError!=null||"Native control disconnected".equals(finishReason);
+            if(transportFailure&&!(connectionError instanceof ProgressStalled)){
+                diagnoseConnection();
+                if(stopping)finishReason="Stopped by user";
+                else if(!failedProcessAlive&&exitReport!=null&&exitReport.intentional){finishReason=exitReport.summary;transportFailure=false;}
+                else if(startupWorkStarted&&nativeError==0&&nativeReason==0){
+                    transportFailures=NativeRecoveryPlan.transportFailures(transportFailures,SystemClock.elapsedRealtime()-connectedAt,confirmedWork);
+                    boolean recent=failedWhileActive&&(!failedProcessAlive||focusActive&&SystemClock.elapsedRealtime()-focusAt<=2500);
+                    boolean recoverable=failedProcessAlive||exitReport!=null&&exitReport.recoverable;
+                    if(NativeRecoveryPlan.transportRetry(readonly,stopping,nativeError,nativeReason,transportFailures,recoverable,recent)){
+                        log.write("transport_recovery","completedAttempts="+transportFailures+" maximum=10 processAlive="+failedProcessAlive+" statisticsPreserved=true pendingActionsReplayed=false");
+                        releaseAttempt(false);checkStop();resetAttempt();startupAttempts=0;status("Reconnecting game ("+(transportFailures+1)+"/10)…");continue;
+                    }
+                    if(transportFailures>=10)finishReason="Game recovery failed after 10 attempts; export logs";
+                    else if(!failedProcessAlive&&exitReport!=null)finishReason=exitReport.summary;
+                }
+            }
             if(NativeRecoveryPlan.startupFailure(readonly,stopping,startupWorkStarted,nativeError,nativeReason,transportFailure)){
                 startupFailureDetails(startupAttempts);
                 if(NativeRecoveryPlan.startupRetry(readonly,stopping,startupWorkStarted,startupAttempts,nativeError,nativeReason,transportFailure)){
@@ -155,6 +177,36 @@ final class NativeCheckRunner {
             ||"Native engine progress stalled".equals(message)||"Native control stopped responding".equals(message);
         return error instanceof IOException&&NativeRecoveryPlan.startupFailure(readonly,stopping,startupWorkStarted,nativeError,nativeReason,transport);
     }
+    private void powerState(){
+        try{
+            android.os.PowerManager power=(android.os.PowerManager)context.getSystemService(Context.POWER_SERVICE);
+            android.app.ActivityManager activity=(android.app.ActivityManager)context.getSystemService(Context.ACTIVITY_SERVICE);
+            log.write("power_config","batteryOptimizationExempt="+(power!=null&&power.isIgnoringBatteryOptimizations(BuildConfig.APPLICATION_ID))+" gameBatteryOptimizationExempt="+(power!=null&&power.isIgnoringBatteryOptimizations(GAME))+" powerSave="+(power!=null&&power.isPowerSaveMode())+" backgroundRestricted="+(activity!=null&&activity.isBackgroundRestricted()));
+        }catch(Exception error){log.write("power_config_error",error.toString());}
+    }
+    private void diagnoseConnection(){
+        if(connectionDiagnosed)return;connectionDiagnosed=true;
+        long activeAt=lastGameActiveAt;
+        failedWhileActive=activeAt>0&&SystemClock.elapsedRealtime()-activeAt<=2500;
+        try{failedProcessAlive=gamePid>1&&readTicks(gamePid)==ticks;if(gamePid>1&&!failedProcessAlive){cleanup=true;log.write("process_cleanup","Original game process exited; native hooks cannot remain active");}}catch(Exception error){log.write("connection_diagnostic_error",error.toString());}
+        log.write("connection_lost","pid="+gamePid+" startTicks="+ticks+" processAlive="+failedProcessAlive+" workStarted="+startupWorkStarted+" confirmedWork="+confirmedWork+" recentGameFocus="+failedWhileActive);
+        if(stopping)return;
+        String since=new java.text.SimpleDateFormat("MM-dd HH:mm:ss.SSS",java.util.Locale.US).format(new java.util.Date(launchWallTime));
+        long began=SystemClock.elapsedRealtime();
+        for(int attempt=0;attempt<2&&!stopping;attempt++){
+            if(attempt>0){if(SystemClock.elapsedRealtime()-began>3500)break;SystemClock.sleep(250);}
+            String crash="",history="";
+            try{crash=command("logcat -b crash -d -v threadtime -T "+quote(since)+" 2>&1 | tail -c 65536",2500);}catch(Exception error){log.write("connection_diagnostic_error",error.toString());}
+            if(!stopping&&android.os.Build.VERSION.SDK_INT>=30)try{history=command("dumpsys activity exit-info "+GAME+" 2>&1 | head -c 65536",2500);}catch(Exception error){log.write("connection_diagnostic_error",error.toString());}
+            exitReport=NativeExitReport.inspect(crash,history,gamePid,GAME,launchWallTime);
+            if(failedProcessAlive||exitReport.recoverable||exitReport.intentional)break;
+        }
+        if(exitReport==null)exitReport=NativeExitReport.inspect("","",gamePid,GAME,launchWallTime);
+        log.write("failure_crash_log",exitReport.crash.isEmpty()?"No matching native crash record for pid="+gamePid:exitReport.crash);
+        log.write("failure_exit_info",exitReport.history.isEmpty()?"No matching exit record for pid="+gamePid:exitReport.history);
+        log.write("connection_classification",failedProcessAlive?"Control connection lost; bound game process still alive":exitReport.summary);
+        powerState();
+    }
     private void releaseAttempt(boolean returnToApp) throws Exception {
             settings.elapsedPulse(mode,false);
             if(kecleon!=null)kecleon.close();
@@ -183,12 +235,14 @@ final class NativeCheckRunner {
         frames=sequence=0;gamePid=0;ticks=0;snapshotKey="";snapshotLoggedAt=0;injected=cleanup=false;finishReason="";statusAddress=nonceText=null;
         startupWorkStarted=false;nativeReason=nativeError=0;progressWatch=null;controlKey=null;
         farmerMenuBlocked=false;
+        connectedAt=lastGameActiveAt=0;confirmedWork=connectionDiagnosed=failedProcessAlive=failedWhileActive=false;exitReport=null;
     }
     private void prepare() throws Exception {
         status("Checking root and game…");startupStage="root";
         RootShell.Result root=shell.execute("id",12000);log.write("root_check","exit="+root.code+" "+root.output);
         if(root.code!=0||!root.output.contains("uid=0"))throw new IOException("Root access required");checkStop();
         log.write("session_config","mode="+mode+" fixLocation="+settings.prefs.getBoolean("fixLocation",false));
+        powerState();
         String environment=command("getprop ro.build.version.sdk; getprop ro.product.cpu.abilist; getprop ro.dalvik.vm.native.bridge; getconf PAGESIZE; getenforce; uname -r",5000);
         log.write("environment",environment);
         namespaceCache="namespace."+android.os.Build.FINGERPRINT.hashCode()+"."+GAME_SHA.substring(0,16);
@@ -250,6 +304,7 @@ final class NativeCheckRunner {
                 frames++;sequence=snapshot.sequence;rewardsAvailable=snapshot.rewardsAvailable;
                 progressWatch.snapshot(SystemClock.elapsedRealtime());
                 if(snapshot.caught!=0||snapshot.spun!=0||snapshot.transferred!=0||snapshot.discarded!=0||snapshot.encounters!=0||snapshot.berries!=0||snapshot.throwsCount!=0)startupWorkStarted=true;
+                if(snapshot.caught!=0||snapshot.spun!=0||snapshot.transferred!=0||snapshot.discarded!=0)confirmedWork=true;
                 nativeReason=snapshot.reason;nativeError=snapshot.error;
                 if((snapshot.flags&2)!=0){if(accountHi==0&&accountLo==0){accountHi=snapshot.accountHi;accountLo=snapshot.accountLo;}else if(accountHi!=snapshot.accountHi||accountLo!=snapshot.accountLo)throw new IllegalStateException("Account changed during recovery");}
                 String key="state="+snapshot.state+" flags="+snapshot.flags+" error="+snapshot.error+" reason="+snapshot.reason+" catches="+snapshot.caught+" spins="+snapshot.spun+" transferred="+snapshot.transferred+" items="+snapshot.discarded+" encounters="+snapshot.encounters+" candidateState="+snapshot.candidateState+" xp="+snapshot.xp+" stardust="+snapshot.stardust+" rewardsAvailable="+snapshot.rewardsAvailable+" encounterId="+Long.toUnsignedString(snapshot.encounterId)+" capturedId="+Long.toUnsignedString(snapshot.capturedId)+" visualAvailable="+snapshot.visualAvailable+" visualFailed="+snapshot.visualFailed+" ivReads="+snapshot.ivReads+" nameUpdates="+snapshot.nameUpdates;
@@ -423,9 +478,10 @@ final class NativeCheckRunner {
         },"native-check-replies");readerThread.setDaemon(true);readerThread.start();
     }
     private void connect(){
+        connectedAt=SystemClock.elapsedRealtime();
         focusThread=new Thread(()->{try(RootShell focusShell=new RootShell()){
             NativeFocus focus=new NativeFocus(focusShell,()->focusQuit,s->log.write("focus",s));
-            while(!focusQuit){focusActive=focus.active();focusAt=SystemClock.elapsedRealtime();SystemClock.sleep(800);}
+            while(!focusQuit){focusActive=focus.active();focusAt=SystemClock.elapsedRealtime();if(focusActive)lastGameActiveAt=focusAt;SystemClock.sleep(800);}
         }catch(Exception error){focusActive=false;log.write("focus_error",error.toString());}},"native-check-focus");focusThread.setDaemon(true);focusThread.start();
         pulseThread=new Thread(()->{
             long previous=SystemClock.elapsedRealtime();
@@ -493,6 +549,7 @@ final class NativeCheckRunner {
             if(injected&&statusAddress!=null&&readTicks(gamePid)==ticks){
                 File diagnostic=new File(context.getApplicationInfo().nativeLibraryDir,mode==1?"libsilph-farmer-status.so":"libsilph-kecleon-status.so");
                 JSONObject value=new JSONObject(command(quote(diagnostic.getAbsolutePath())+" "+gamePid+" "+ticks+" "+statusAddress+" "+nonceText,4000));log.write("native_failure_status",value.toString());
+                if(mode==1&&value.optInt("sessionReason")!=0){nativeReason=value.optInt("sessionReason");if(nativeReason==1)finishReason="Session catch limit reached";else if(nativeReason==2)finishReason="Session spin limit reached";}
                 cleanup=value.optInt("stopped")==1&&value.optInt("hookRemoved")==1&&value.optInt("remaining")==0&&value.getString("created").equals(value.getString("released"))&&value.optInt("locationRemaining")==0&&value.optInt("locationRefs")==0&&value.optInt("presentationHooks",-1)==0&&value.optInt("presentationRefs",-1)==0;
                 if(value.optInt("error")!=0){
                     nativeError=value.optInt("error");finishReason="Native engine error "+nativeError;
