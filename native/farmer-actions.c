@@ -207,6 +207,7 @@ int silph_farmer_actions_tick(void *memory,const SilphSchedulePermit *permit,con
                         s->metrics.state=s->transfer_enabled&&accepted==1?SILPH_FARMER_OWNED:SILPH_FARMER_DONE;}
                     else if(!status&&code.bits==2&&!id.bits){s->active_item=0;s->berry_attempted=0;s->metrics.state=SILPH_FARMER_RETRY;}
                     else if(!status&&code.bits==3&&!id.bits){s->metrics.fled++;s->metrics.state=SILPH_FARMER_DONE;}
+                    else if(!status&&!id.bits){s->metrics.skipped++;s->metrics.state=SILPH_FARMER_DONE;}
                     else status=SILPH_MANAGED_CONTRACT;
                 }
             }else if(!status&&s->metrics.state==SILPH_FARMER_TRANSFER){
