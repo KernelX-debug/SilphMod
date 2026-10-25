@@ -4,12 +4,12 @@
 
 **[English](README.md) · Español**
 
-Automatización local para Pokémon GO original en **Android con root**, tanto en UGPhone como en teléfonos físicos ARM64. Captura de Pokémon cercanos, gira Poképaradas, recoge investigaciones de campo y semanales, reclama recompensas del GO Pass, transfiere nuevas capturas según tus filtros y mantiene la mochila dentro de los límites que elijas.
+Automatización local para Pokémon GO original en **Android con root**, tanto en UGPhone como en teléfonos físicos ARM64. Captura de Pokémon cercanos, gira Poképaradas, recoge investigaciones de campo, semanales, especiales y de eventos, reclama recompensas del GO Pass, transfiere nuevas capturas según tus filtros y mantiene la mochila dentro de los límites que elijas.
 Modo Kecleon (BETA) implementado en esta versión, *aún no es definitiva*
 
 Configuras las funciones, pulsas **Start service** y sigues el progreso desde la notificación. **Stop** y **Export logs** permiten detener la sesión y revisar sus resultados. La interfaz, las notificaciones y los recursos visuales están en inglés.
 
-**Edición:** `2.1.1` · [MIT](LICENSE)
+**Edición:** `2.1.4` · [MIT](LICENSE)
 
 **Plataforma:** Android 10 o posterior, ARM64 y root. Una misma APK para UGPhone y teléfonos físicos.
 
@@ -35,6 +35,7 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
   - [Bayas](#bayas-confirmar-el-efecto-antes-de-lanzar)
   - [Interrupciones y continuidad del mapa](#interrupciones-y-continuidad-del-mapa)
   - [Investigaciones de campo y logro semanal](#investigaciones-de-campo-y-logro-semanal)
+  - [Investigaciones especiales y de eventos](#investigaciones-especiales-y-de-eventos)
   - [GO Pass](#go-pass)
   - [Remove buddy](#remove-buddy)
   - [Inventory tools](#inventory-tools)
@@ -74,20 +75,21 @@ La aplicación reúne **Farmer** y **Kecleon (BETA)**, con ejecución independie
 | Función | Comportamiento actual |
 | --- | --- |
 | Autocaptura | Selecciona el objetivo elegible más cercano hasta **50 m**, y vuelve a comprobar su existencia y distancia antes de lanzar. Reintenta mientras el encuentro siga siendo válido; si desaparece o sale del alcance, pasa al siguiente objetivo. |
-| Only catch | Selección de una o varias especies con miniaturas, búsqueda y orden de Pokédex. Sin selección, captura todas las especies elegibles. Los encuentros de investigación de campo, logro semanal y GO Pass se capturan independientemente de este filtro. |
+| Only catch | Selección de una o varias especies con miniaturas, búsqueda y orden de Pokédex. Sin selección, captura todas las especies elegibles. Los encuentros de investigación de campo, logro semanal, especiales, de eventos y GO Pass se capturan independientemente de este filtro. |
 | Throw quality | Selecciona **Normal**, **Nice**, **Great** o **Excellent**. Los lanzamientos mantienen el giro de bola curva. |
 | Bayas | Usa la primera baya disponible según la selección y prioridad configuradas, confirma su aplicación y continúa con el lanzamiento. Mantiene los límites de Item limits. |
 | Poképaradas | Envía giros para objetivos dentro del alcance configurado en el motor y contabiliza respuestas exitosas. |
 | Límites de sesión | Máximos configurables de capturas y giros, inicialmente **4.800** y **2.400**, aplicados a las estadísticas acumuladas. Alcanzar cualquiera detiene el farmeo, cierra Pokémon GO y guarda los registros. |
-| Interrupciones | Cierre automático de medallas, subida de nivel, recompensas de XP, resumen del incienso diario, eclosiones, aviso de velocidad, aviso de Stamp Rally y subida de nivel de amistad. Se prepara desde el inicio del motor. |
-| Investigaciones de campo y semanales | Reclama recompensas disponibles, captura sus encuentros y recoge el logro semanal pendiente antes de continuar con las tareas de campo. Descarta tareas incompatibles, incluidas caminar kilómetros y conseguir caramelos con el compañero. Conserva las investigaciones especiales, temporales y el espacio de escaneo AR. |
+| Interrupciones | Cierre automático de medallas, subida de nivel, recompensas de XP, resumen del incienso diario, eclosiones, aviso de velocidad, aviso de Stamp Rally, subida de nivel de amistad y diálogos de investigación de Willow. Se prepara desde el inicio del motor. |
+| Investigaciones de campo y semanales | Reclama recompensas disponibles, captura sus encuentros y recoge el logro semanal pendiente antes de continuar con las tareas de campo. Descarta tareas incompatibles, incluidas caminar kilómetros y conseguir caramelos con el compañero. Conserva el espacio de escaneo AR; el descarte se limita a tareas de campo. |
+| Investigaciones especiales y de eventos | Reclama las recompensas disponibles de tareas y etapas, y captura sus encuentros. Mantiene las tareas incompletas y deja las elecciones de rama al usuario. |
 | GO Pass | Reclama las recompensas desbloqueadas del pase actual y captura sus encuentros. Los objetos, XP y polvo estelar se contabilizan según las respuestas del juego. |
 | Remove buddy | Retira el compañero al iniciar, sin transferirlo ni volver a asignarlo al terminar. Desactivado inicialmente. |
 | Transferencias | Solo Pokémon capturados por **esta sesión de SilphMod**, con respuesta de captura acreditada e ID exacto. |
 | Conservar shiny / 15/15/15 | Dos filtros independientes. Cumplir cualquiera de los filtros activos impide transferir ese Pokémon. |
 | Conservar Dynamax / eclosionados / fondo | Nuevos filtros de protección para las capturas autorizadas por el servicio. No recorren ni modifican la colección anterior. |
 | Conservar shiny + fondo | Protege los Pokémon que cumplen ambas condiciones. Se combina con los demás filtros de conservación. |
-| Conservar encuentros de investigación | **Keep field research encounters** protege las capturas de campo y del logro semanal. Si se desactiva, siguen aplicándose los filtros shiny, IV y demás protecciones globales. |
+| Conservar encuentros de investigación | **Keep field research encounters** protege las capturas de campo, del logro semanal, de investigaciones especiales y de eventos. Si se desactiva, siguen aplicándose los filtros shiny, IV y demás protecciones globales. |
 | Conservar encuentros del GO Pass | **Keep GO Pass encounters**, activado inicialmente, protege las capturas del pase por su origen. Los legendarios permanecen protegidos incluso con esta casilla desactivada. |
 | Show IV names | Muestra temporalmente el porcentaje entero y los IV en la lista del inventario, sin renombrar los Pokémon de la cuenta. |
 | Extended manual transfer | Amplía la selección manual múltiple de Pokémon especiales desde el inventario del juego. Es independiente de las transferencias automáticas. |
@@ -102,6 +104,7 @@ La aplicación reúne **Farmer** y **Kecleon (BETA)**, con ejecución independie
 | Recuperación del mapa | Tras cinco minutos de lecturas válidas sin apariciones en el directorio del mapa, reinicia el juego y vuelve a conectar el motor. Hasta **10 intentos de arranque por recuperación**, cancelables con Stop. Se desactiva al seleccionar especies en **Only catch**. |
 | Barra de notificaciones | Las capturas y los giros continúan al desplegarla si Pokémon GO sigue siendo la app subyacente y la pantalla está desbloqueada. También continúa en la mochila, el inventario Pokémon, la ficha individual de un Pokémon, el perfil propio, la tienda y la Pokédex. |
 | Integridad y control | Verificación de componentes antes del arranque y canal local vinculado al proceso y a la sesión, con credenciales fuera de los argumentos y de los nuevos registros. |
+| Recuperación de conexión | Reintenta desconexiones recuperables del canal nativo, conserva estadísticas y valida de nuevo el proceso y la cuenta. Los reintentos respetan Stop y los límites de sesión. |
 | Registros | Exportación manual de hasta tres sesiones recientes en un ZIP local. |
 
 Farmer utiliza la ruta que configures en tu joystick. Kecleon necesita la integración pública de **GPS JoyStick de The App Ninjas** para hacer sus saltos automáticos.
@@ -124,7 +127,7 @@ Kecleon comparte calidad de tiro, bayas, límites de mochila y herramientas de i
 
 El filtro se aplica antes de abrir un encuentro salvaje y se vuelve a comprobar antes de usar una baya o lanzar. Seleccionar una especie no modifica sus IV ni condiciona los filtros de conservación: estos se aplican después de capturar.
 
-El selector prepara una máscara de especies que el motor consulta antes de abrir el encuentro. Las capturas de investigación de campo, logro semanal y GO Pass usan orígenes de recompensa separados y no quedan bloqueadas por **Only catch**.
+El selector prepara una máscara de especies que el motor consulta antes de abrir el encuentro. Las capturas de investigación de campo, logro semanal, especiales, de eventos y GO Pass usan orígenes de recompensa separados y no quedan bloqueadas por **Only catch**.
 
 Cuando hay especies seleccionadas, no se activa la recuperación por cinco minutos sin Pokémon: el farmer puede esperar a que aparezcan esas especies sin reiniciar el juego. **Stop**, los límites acumulados y el control de conexión siguen funcionando de la misma forma.
 
@@ -132,7 +135,7 @@ Cuando hay especies seleccionadas, no se activa la recuperación por cinco minut
 
 La cola de transferencias nace vacía. Un Pokémon entra únicamente cuando una petición de captura emitida por esta sesión obtiene una respuesta válida y exitosa con su ID de almacenamiento. Encontrar un ID en la colección **no basta** para autorizar su transferencia.
 
-Además de los filtros elegidos, se conservan favoritos, compañeros, huevos, Pokémon desplegados, fusiones, legendarios, singulares, Ultraentes y registros cuya información de protección no puede validarse. Desmarcar **Keep shiny** o **Keep 15/15/15** permite transferir esas nuevas capturas si no existe otra protección.
+Además de los filtros elegidos, se conservan favoritos, compañeros, huevos, Pokémon desplegados, fusiones, legendarios, míticos o singulares, Ultraentes y registros cuya información de protección no puede validarse. Desmarcar **Keep shiny** o **Keep 15/15/15** permite transferir esas nuevas capturas si no existe otra protección.
 
 Se incluyen **Keep Dynamax**, **Keep hatched**, **Keep background** y **Keep shiny + background**. Las tres primeras vienen activadas inicialmente; la combinación shiny + fondo viene desactivada. Cumplir cualquiera de los filtros marcados conserva el Pokémon. Dentro de **Keep shiny + background**, en cambio, deben cumplirse las dos condiciones a la vez.
 
@@ -140,9 +143,9 @@ Si marcas **Keep shiny** junto con **Keep shiny + background**, se conservan tod
 
 La protección de eclosionados se consulta en el registro autorizado para transferencia; no convierte las eclosiones en nuevas autorizaciones ni añade Pokémon de la colección anterior a la cola.
 
-**Keep field research encounters**, activado inicialmente, conserva por origen las capturas de investigación de campo y del logro semanal. **Keep GO Pass encounters**, también activado inicialmente, hace lo mismo con las capturas del pase. Desactivar una de estas opciones permite transferir las capturas de ese origen cuando no cumplen ninguna otra protección.
+**Keep field research encounters**, activado inicialmente, conserva por origen las capturas de investigación de campo, del logro semanal, especiales y de eventos. **Keep GO Pass encounters**, también activado inicialmente, hace lo mismo con las capturas del pase. Desactivar una de estas opciones permite transferir las capturas de ese origen cuando no cumplen ninguna otra protección.
 
-**Keep shiny**, **Keep 15/15/15**, **Keep shiny + background** y los demás filtros globales se aplican a todos los orígenes: salvaje, campo, semanal y GO Pass. Los filtros se combinan con «O»: basta cumplir uno para conservar el Pokémon. Los legendarios del GO Pass permanecen protegidos aunque **Keep GO Pass encounters** esté desactivado; los encuentros comunes del pase pueden transferirse según el resto de filtros.
+**Keep shiny**, **Keep 15/15/15**, **Keep shiny + background** y los demás filtros globales se aplican a todos los orígenes: salvaje, campo, semanal, especial, de evento y GO Pass. Los filtros se combinan con «O»: basta cumplir uno para conservar el Pokémon. Los legendarios, míticos o singulares y Ultraentes permanecen protegidos en todos los orígenes, aunque sus casillas de conservación estén desactivadas. Los encuentros comunes pueden transferirse según los filtros restantes.
 
 Las transferencias están desactivadas inicialmente y **no tienen cuota total por sesión**. No se recuperan cuotas antiguas de transferencia. No se heredan autorizaciones entre sesiones, cuentas ni reinicios.
 
@@ -219,6 +222,8 @@ La lectura de foco distingue Pokémon GO subyacente, notificaciones y superposic
 
 El Farmer mantiene su ciclo desde las vistas compatibles de mochila, inventario Pokémon, ficha individual, perfil propio, tienda y Pokédex. El motor comprueba la pantalla activa antes de actuar y respeta la selección múltiple manual. Las mismas comprobaciones de proceso, sesión y foco siguen aplicándose fuera del mapa.
 
+Las desconexiones recuperables del canal nativo se atienden con hasta **diez intentos consecutivos**, según el estado del proceso y la causa registrada de su salida. Cada nueva conexión conserva las estadísticas, valida de nuevo la identidad del jugador y empieza sin autorizaciones de transferencia anteriores ni solicitudes pendientes para repetir. **Stop** y los límites acumulados cancelan la recuperación.
+
 ### Integridad y canal de control
 
 Antes del arranque se comprueban las huellas **SHA-256** de los componentes nativos. La lectura exige archivos regulares, rutas canónicas y permisos sin escritura de grupo u otros; rechaza enlaces simbólicos y cambios de tamaño o identidad durante la verificación.
@@ -259,6 +264,7 @@ La ingeniería inversa se utilizó para identificar contratos, estructuras y fir
 | Reciclar objetos | `IRpcHandler.SendRpc<RecycleItemProto, RecycleItemOutProto>`; ID `137` |
 | Transferir | `IPokemonBag.ReleasePokemon(pokemon)`, seguido de reconciliación por ID |
 | Investigaciones de campo | `IQuestService` e `IQuestRpcService.CompleteQuest`, `RemoveQuest` y `BeginQuestEncounter` |
+| Investigaciones especiales y de eventos | `IQuestService.get_QuestsProto`, `QuestProtoExt.CanRedeem` e `IQuestRpcService.CompleteQuest` con ID de etapa y subtarea |
 | Logro semanal | `IQuestStampCardService`, `IQuestRpcService.CompleteStampCard` y encuentro pendiente de tipo `5` |
 | GO Pass | `IEventPassService` y `ClaimEventPassRewardsRequestProto`; operaciones `3034` y `3035` |
 | Regalos automáticos | Servicios de amigos, inventario de regalos y respuestas de apertura o envío del juego |
@@ -279,6 +285,8 @@ status = silph_action_call(s->read, permit, SILPH_ACTION_CAPTURE,
 ```
 
 *Llamada real de [farmer-actions.c](native/farmer-actions.c). Los argumentos y el permiso de sesión se validan antes de invocar el método del juego.*
+
+Las respuestas de captura distinguen resultado exitoso, escape de la bola, huida, lanzamiento fallado, error de captura y sustitución de objeto. Un lanzamiento fallado puede continuar si el encuentro sigue siendo válido. Un resultado conocido sin captura confirmada permite aplazar ese objetivo y continuar con otros; los contadores y la autorización de transferencia solo se actualizan con una respuesta reciente y exitosa con ID válido.
 
 ### Alcance y prioridad de captura
 
@@ -341,7 +349,7 @@ No se espera una animación de baya. **Item limits** sigue eliminando los excede
 
 ### Interrupciones y continuidad del mapa
 
-El manejo de interrupciones se prepara **desde el inicio del motor** y permanece siempre activo durante el farmeo. Observa la apertura y visibilidad de pantallas compatibles y utiliza `Dismiss()`, `Click()` o `LuckyBonusSkipButtonClicked()` según el controlador. Incluye medallas, subida de nivel, XP, resumen del incienso diario, aviso de velocidad, subida de nivel de amistad y el aviso de nueva colección de sellos de **Stamp Rally**.
+El manejo de interrupciones se prepara **desde el inicio del motor** y permanece siempre activo durante el farmeo. Observa la apertura y visibilidad de pantallas compatibles y utiliza `Dismiss()`, `Click()` o `LuckyBonusSkipButtonClicked()` según el controlador. Incluye medallas, subida de nivel, XP, resumen del incienso diario, aviso de velocidad, subida de nivel de amistad y el aviso de nueva colección de sellos de **Stamp Rally**. Los diálogos de investigación de Willow se omiten mediante `QuestDialogGuiController.ClickSkip()`, usando la acción de omisión del propio juego.
 
 Las medallas se reconocen tanto al incrementar su progreso como al recibir una nueva categoría. El tratamiento incluye los controladores de insignias de gimnasio, submedallas de Vivillon y recompensas de personalización del avatar. También comprueba las pantallas ya abiertas y reintenta su cierre durante un intervalo acotado mientras el controlador sigue disponible.
 
@@ -355,7 +363,7 @@ La cola de presentación es limitada y los componentes se conservan mediante ref
 
 Las investigaciones de campo se gestionan **siempre** durante el Farmer, incluidas las que llegan al girar Poképaradas. El motor consulta `IQuestService`, reclama las tareas que el juego permite canjear y procesa las recompensas de objetos, bayas, XP, polvo estelar o encuentros que reciba.
 
-El ámbito se identifica con **QuestContext = 2** y sus encuentros con **EncounterType = 6**. Las investigaciones especiales y temporales quedan fuera de ese ámbito. Las tareas de campo incompatibles —como incursiones, intercambios, explorar kilómetros y conseguir caramelos con el compañero— y las de tipo o condición desconocidos se eliminan para dejar espacio a otras; se conserva el espacio de escaneo AR. Una tarea ya completada se reclama antes de valorar su descarte.
+El ámbito se identifica con **QuestContext = 2** y sus encuentros con **EncounterType = 6**. El descarte se limita a este ámbito; las investigaciones especiales y de eventos siguen su propio flujo de reclamación. Las tareas de campo incompatibles —como incursiones, intercambios, explorar kilómetros y conseguir caramelos con el compañero— y las de tipo o condición desconocidos se eliminan para dejar espacio a otras; se conserva el espacio de escaneo AR. Una tarea ya completada se reclama antes de valorar su descarte.
 
 ```c
 if (context != 2 || redeemable > 1 || count > 32 ||
@@ -372,6 +380,29 @@ Si hay un **logro de investigación semanal** pendiente, el motor lo atiende ant
 Los encuentros de campo y semanales usan el ciclo de bayas, calidad de tiro y captura del Farmer. Se procesan aunque su especie no esté seleccionada en **Only catch**. **Keep field research encounters** protege ambos orígenes; con esa opción desactivada siguen aplicándose **Keep shiny**, **Keep 15/15/15**, **Keep shiny + background** y las demás protecciones globales.
 
 Las respuestas se consultan por fases, sin una espera bloqueante del Farmer. El encuentro se entrega al ciclo de captura cuando la operación anterior ha terminado y se identifica por su ID para evitar procesarlo dos veces.
+
+### Investigaciones especiales y de eventos
+
+Las investigaciones especiales y de eventos se recogen automáticamente durante el Farmer. El motor lee las tareas y subtareas de cada etapa desde `IQuestService.get_QuestsProto` y consulta `QuestProtoExt.CanRedeem` sobre cada tarea individual. Reclama únicamente las recompensas que el juego permite recibir mediante `IQuestRpcService.CompleteQuest`, con el ID de la etapa y el de la subtarea cuando corresponde.
+
+Las tareas incompletas se conservan. Las recompensas que requieren elegir una rama quedan pendientes de la elección del usuario. El descarte de tareas incompatibles sigue limitado a las investigaciones de campo.
+
+```c
+SilphReadArgument args[] = {
+    {.kind = SILPH_READ_REFERENCE, .value.reference = parent},
+    {.kind = SILPH_READ_REFERENCE, .value.reference = child}
+};
+status = silph_research_invoke(s->read, permit,
+    SILPH_RESEARCH_STORY_CLAIM, s->rpc, args, 2, &result);
+```
+
+*Llamada de [research-extra.inc](native/research-extra.inc). [research-bridge.inc](native/research-bridge.inc) valida la relación entre etapa y subtarea antes de invocar el servicio.*
+
+Los encuentros especiales utilizan **EncounterType = 4** y los temporales **EncounterType = 10**; también se admite el tipo **23** de investigación personalizada. Se abren mediante `BeginQuestEncounter` y reutilizan las bayas, la calidad de tiro y las comprobaciones de captura del Farmer, independientemente de **Only catch**.
+
+**Keep field research encounters** incluye campo, logro semanal, especiales y eventos. Las protecciones globales por shiny, IV y fondo se aplican también a estos encuentros. Los legendarios, míticos o singulares y Ultraentes permanecen protegidos aunque se desactive la conservación por origen.
+
+Las lecturas se reparten en bloques acotados y las reclamaciones mantienen una sola respuesta pendiente. El motor identifica cada tarea y etapa para evitar reclamaciones duplicadas, procesa los objetos y contabiliza XP y polvo estelar según las respuestas del juego. Los diálogos de Willow se omiten mediante su acción **Skip**.
 
 ### GO Pass
 
@@ -454,7 +485,7 @@ El tratamiento se instala al iniciar con **Fix error 12** y se retira al detener
 
 ### Contador XP y polvo estelar
 
-Se contabilizan las recompensas de respuestas exitosas de **capturas, giros, investigaciones de campo, logro semanal, GO Pass y regalos emitidos por SilphMod**: `CaptureScoreProto.Exp`, `Stardust`, recompensas de evolución temporal/mega, `FortSearchOutProto.XpAwarded`, `Loot`, `BonusLoot`, `CompleteQuestOutProto.Rewards`, las recompensas de la tarjeta semanal y `ClaimEventPassRewardsResponseProto.RewardsGranted`, además del polvo estelar confirmado al abrir regalos, según el contrato validado. Los totales se conservan al detener o recuperar el servicio y solo se restablecen con **Clear statistics**.
+Se contabilizan las recompensas de respuestas exitosas de **capturas, giros, investigaciones de campo, logro semanal, especiales, de eventos, GO Pass y regalos emitidos por SilphMod**: `CaptureScoreProto.Exp`, `Stardust`, recompensas de evolución temporal/mega, `FortSearchOutProto.XpAwarded`, `Loot`, `BonusLoot`, `CompleteQuestOutProto.Rewards`, las recompensas de la tarjeta semanal y `ClaimEventPassRewardsResponseProto.RewardsGranted`, además del polvo estelar confirmado al abrir regalos, según el contrato validado. Los totales se conservan al detener o recuperar el servicio y solo se restablecen con **Clear statistics**.
 
 No se resta el saldo de la cuenta ni se estiman premios multiplicando capturas por una constante. No se vuelven a multiplicar los importes por bonos que ya pudiera haber aplicado el juego. Una secuencia creciente evita duplicados; los totales Android usan `long`. `—` indica lectura no disponible y `+` un total parcial con recompensas faltantes.
 
@@ -517,6 +548,10 @@ El Farmer añade continuidad en los menús compatibles del juego, revisión más
 **2.1.0 amplía la continuidad del Farmer** a la ficha individual de Pokémon, la tienda y la Pokédex. Incorpora apertura y envío automáticos de regalos durante la sesión, apertura con mochila llena mediante conversión a polvo estelar y cierre de las ventanas de amistad. El nombre temporal y la omisión de escenas se preparan desde el inicio del motor; el cierre de medallas cubre sus distintos controladores y pantallas ya abiertas.
 
 **2.1.1 incorpora el logro de investigación semanal y las recompensas del GO Pass** al ciclo de captura. Añade **Keep GO Pass encounters**, extiende **Keep field research encounters** al logro semanal y aplica los filtros globales de conservación a todos los orígenes. Los legendarios del pase permanecen protegidos. Las tareas de campo de explorar kilómetros y conseguir caramelos con el compañero se descartan junto con las demás incompatibles. Esto puede variar dependiendo de los eventos activos en el juego, asi que queda estar pendiente a ello..
+
+**2.1.4 incorpora las recompensas de investigaciones especiales y de eventos**, tanto de sus tareas como de sus etapas, y las integra en el ciclo de captura del Farmer. **Keep field research encounters** incluye también estos orígenes, con las mismas protecciones globales. Se omiten los diálogos de Willow, se conserva la protección de legendarios, míticos o singulares y Ultraentes, y se mantienen las tareas incompletas y las decisiones de rama del usuario.
+
+Esta edición también mejora la recuperación de desconexiones del canal nativo y el manejo de respuestas de captura sin confirmación. Conserva las estadísticas, las rutas de arranque y la autorización individual de las transferencias.
 
 La siguiente fase es seguir optimizando la continuidad de ambos modos y ampliar la compatibilidad entre dispositivos.
 
