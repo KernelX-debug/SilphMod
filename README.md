@@ -4,12 +4,12 @@
 
 **English · [Español](spanish.md)**
 
-Local automation for the original Pokémon GO app on **rooted Android**, both on UGPhone and on physical ARM64 phones. It catches nearby Pokémon, spins PokéStops, collects field research, transfers new catches according to your filters, and keeps the item bag within your chosen limits.
+Local automation for the original Pokémon GO app on **rooted Android**, both on UGPhone and on physical ARM64 phones. Catches nearby Pokémon, spins PokéStops, collects field research and Research Breakthrough rewards, claims GO Pass rewards, transfers new catches according to your filters, and keeps the item bag within the limits you choose.
 Kecleon mode (BETA) is implemented in this version, *but is not yet final*
 
 Configure the features, press **Start service**, and follow progress from the notification. **Stop** and **Export logs** let you stop the session and review its results. The interface, notifications, and visual resources are in English.
 
-**Edition:** `2.0.15` · [MIT](LICENSE)
+**Edition:** `2.1.1` · [MIT](LICENSE)
 
 **Platform:** Android 10 or later, ARM64, and root. The same APK for UGPhone and physical phones.
 
@@ -34,7 +34,8 @@ Configure the features, press **Start service**, and follow progress from the no
   - [Throw quality](#throw-quality)
   - [Berries](#berries-confirm-the-effect-before-throwing)
   - [Interruptions and map continuity](#interruptions-and-map-continuity)
-  - [Field research](#field-research)
+  - [Field research and Research Breakthrough](#field-research-and-research-breakthrough)
+  - [GO Pass](#go-pass)
   - [Remove buddy](#remove-buddy)
   - [Inventory tools](#inventory-tools)
   - [Game tools: gifts and temporary name](#game-tools-gifts-and-temporary-name)
@@ -73,30 +74,33 @@ The app brings together **Farmer** and **Kecleon (BETA)**, with independent exec
 | Feature | Current behavior |
 | --- | --- |
 | Autocatch | Selects the nearest eligible target within **50 m**, and checks its existence and distance again before throwing. Retries while the encounter remains valid; if it disappears or goes out of range, moves on to the next target. |
-| Only catch | Select one or more species with thumbnails, search, and Pokédex ordering. With no selection, catches all eligible species. Field research rewards are caught regardless of this filter. |
+| Only catch | Select one or more species using thumbnails, search, and Pokédex order. With nothing selected, catches all eligible species. Field research, Research Breakthrough, and GO Pass encounters are caught regardless of this filter. |
 | Throw quality | Choose **Normal**, **Nice**, **Great**, or **Excellent**. Throws retain the curveball spin. |
 | Berries | Uses the first available berry according to the configured selection and priority, confirms its application, and proceeds with the throw. Respects Item limits. |
 | PokéStops | Sends spins for targets within the range configured in the engine and counts successful responses. |
 | Session limits | Configurable catch and spin maximums, initially **4,800** and **2,400**, applied to accumulated statistics. Reaching either stops farming, closes Pokémon GO, and saves the logs. |
-| Interruptions | Automatic handling of medals, level-ups, XP rewards, the Daily Adventure Incense summary, egg hatches, the speed warning, and the Stamp Rally notice. Remains active during farming. |
-| Field research | Claims available rewards, catches their encounters, and discards incompatible tasks or tasks of an unknown type. Preserves special and timed research and the AR scanning slot. |
+| Interruptions | Automatically closes medal, level-up, XP reward, Daily Adventure Incense recap, egg hatch, speed warning, Stamp Rally, and friendship level-up screens. Prepared as the engine starts. |
+| Field research and Research Breakthrough | Claims available rewards, catches their encounters, and collects a pending Research Breakthrough before continuing with field tasks. Discards incompatible tasks, including walking kilometers and earning candy with your buddy. Preserves Special Research, Timed Research, and the AR scanning slot. |
+| GO Pass | Claims unlocked rewards from the current pass and catches its encounters. Items, XP, and Stardust are counted according to the game responses. |
 | Remove buddy | Removes the buddy at startup, without transferring it or reassigning it at the end. Disabled by default. |
 | Transfers | Only Pokémon caught during **this SilphMod session**, with a verified catch response and exact ID. |
 | Keep shiny / 15/15/15 | Two independent filters. Meeting any active filter prevents that Pokémon from being transferred. |
 | Keep Dynamax / hatched / background | Additional protection filters for catches authorized by the service. They do not scan or modify the existing collection. |
 | Keep shiny + background | Protects Pokémon that meet both conditions. Combines with the other keep filters. |
-| Keep research encounters | **Keep field research encounters** protects those catches. When disabled, the same shiny, IV, and other protections used for wild catches apply. |
+| Keep research encounters | **Keep field research encounters** protects field research and Research Breakthrough catches. When disabled, shiny, IV, and other global protections still apply. |
+| Keep GO Pass encounters | **Keep GO Pass encounters**, enabled by default, protects pass catches by their source. Legendary Pokémon remain protected even with this checkbox disabled. |
 | Show IV names | Temporarily displays the whole-number percentage and IVs in the inventory list, without renaming the account's Pokémon. |
 | Extended manual transfer | Expands manual multi-selection of special Pokémon from the game's inventory. Independent of automatic transfers. |
 | Fast gift opening | Speeds up manual gift opening, the display of its items, and local waits in that sequence. Enabled by default in **Game tools**. |
-| Hide trainer name | Temporarily displays **SilphMod** in the HUD, your own profile, and the friends header. The account name does not change. Enabled by default in **Game tools**. |
+| Auto-open gifts / Auto-send gifts | Opens and sends gifts to available friends throughout the session without stopping Farmer. When the item bag is full, opening requests conversion to Stardust. Both options are disabled by default. |
+| Hide trainer name | Temporarily displays **SilphMod** in the HUD, your own profile, and the friends header as soon as their components connect during engine startup. The account name does not change. Enabled by default in **Game tools**. |
 | Clean item bag | Deletes excess quantities of selected types **from the start**, and maintains those limits throughout the session. Does not need to wait for the bag to fill up. |
 | Kecleon (BETA) | Automatic candidate search and capture, with filters and per-account history. |
 | Fix error 12 | Location treatment within the game process, optional and tied to the session. |
 | Statistics | Accumulated catches, flees, spins, transfers, items deleted, XP, Stardust, and active time. Preserved when stopping, restarting, and recovering the map. |
 | Clear statistics | Resets only the counters of the open mode, with the service stopped. In Kecleon, also clears its candidate history. Located below the statistics. |
 | Map recovery | After five minutes of valid readings with no spawns in the map directory, restarts the game and reconnects the engine. Up to **10 startup attempts per recovery**, cancelable with Stop. Disabled when species are selected in **Only catch**. |
-| Notification panel | Catches and spins continue while it is pulled down if Pokémon GO remains the underlying app and the screen is unlocked. This also applies with the item bag, Pokémon inventory, and profile open. |
+| Notification shade | Catches and spins continue when it is pulled down if Pokémon GO remains the underlying app and the screen is unlocked. Farmer also continues in the item bag, Pokémon inventory, an individual Pokémon's details, your own profile, the shop, and the Pokédex. |
 | Integrity and control | Component verification before startup and a local channel bound to the process and session, with credentials excluded from arguments and new logs. |
 | Logs | Manual export of up to three recent sessions to a local ZIP. |
 
@@ -120,7 +124,7 @@ Kecleon shares throw quality, berries, item bag limits, and inventory and presen
 
 The filter applies before opening a wild encounter and is checked again before using a berry or throwing. Selecting a species does not modify its IVs or determine the keep filters: those apply after the catch.
 
-The selector prepares a species mask that the engine checks before opening the encounter. Research catches use a separate source and are not blocked by **Only catch**.
+The selector prepares a species mask that the engine checks before opening the encounter. Field research, Research Breakthrough, and GO Pass catches use separate reward sources and are not blocked by **Only catch**.
 
 When species are selected, recovery after five minutes without Pokémon is not activated: Farmer can wait for those species to appear without restarting the game. **Stop**, accumulated limits, and connection control continue to work in the same way.
 
@@ -128,7 +132,7 @@ When species are selected, recovery after five minutes without Pokémon is not a
 
 The transfer queue starts empty. A Pokémon enters it only when a catch request issued by this session obtains a valid, successful response with its storage ID. Finding an ID in the collection **is not enough** to authorize its transfer.
 
-In addition to the selected filters, favorites, buddies, eggs, deployed Pokémon, fusions, special classes, and records whose protection information cannot be validated are retained. Unchecking **Keep shiny** or **Keep 15/15/15** allows those new catches to be transferred if no other protection applies.
+In addition to the selected filters, favorites, buddies, eggs, deployed Pokémon, fusions, Legendary Pokémon, Mythical Pokémon, Ultra Beasts, and records whose protection data cannot be validated are retained. Unchecking **Keep shiny** or **Keep 15/15/15** allows those new catches to be transferred if no other protection applies.
 
 The options include **Keep Dynamax**, **Keep hatched**, **Keep background**, and **Keep shiny + background**. The first three are enabled by default; the shiny + background combination is disabled. Meeting any checked filter retains the Pokémon. Within **Keep shiny + background**, however, both conditions must be met at the same time.
 
@@ -136,7 +140,9 @@ If you check **Keep shiny** together with **Keep shiny + background**, all shiny
 
 Hatched protection is checked on the record authorized for transfer; it does not turn hatches into new authorizations or add Pokémon from the existing collection to the queue.
 
-**Keep field research encounters**, enabled by default, adds retention by source. When disabled, research catches are transferred when they do not meet any other active protection. For example, with **Keep shiny** checked, both wild and research shiny Pokémon are retained; the **Keep shiny + background** combination requires both characteristics for both sources.
+**Keep field research encounters**, enabled by default, retains field research and Research Breakthrough catches by their source. **Keep GO Pass encounters**, also enabled by default, does the same for pass catches. Disabling either option allows catches from that source to be transferred when they meet no other protection.
+
+**Keep shiny**, **Keep 15/15/15**, **Keep shiny + background**, and the other global filters apply to every source: wild, field research, Research Breakthrough, and GO Pass. Filters are combined with “OR”: meeting any one of them is enough to retain the Pokémon. Legendary GO Pass Pokémon remain protected even when **Keep GO Pass encounters** is disabled; ordinary pass encounters can be transferred according to the remaining filters.
 
 Transfers are disabled by default and **have no total per-session quota**. Old transfer quotas are not restored. Authorizations are not inherited between sessions, accounts, or restarts.
 
@@ -172,7 +178,7 @@ First, remember that you need a correctly configured GPS joystick app.
 
 1. Install the APK from the releases section, open it, and grant root and notification permissions (if requested). Keep your joystick configured and working. Do not run other automation tools or injectors at the same time. Set SilphMod's battery mode to unrestricted.
 
-2. Select **Catches**, **Only catch**, **Throw quality**, **Use berries**, **Berry priority**, **Remove buddy**, **Spin PokéStops**, transfer filters, and **Items to keep**, according to what you want to use. In **Inventory tools**, you can enable IV names and extended manual transfer. In **Game tools**, you can choose **Fast gift opening** and **Hide trainer name**. Adjust the catch and spin maximums in **Engine settings**. Transfers and discards have no total maximum of their own per session; in other words, they delete an unlimited number of the items you have configured for deletion while the session remains active.
+2. Select **Catches**, **Only catch**, **Throw quality**, **Use berries**, **Berry priority**, **Remove buddy**, **Spin PokéStops**, transfer filters, and **Items to keep**, according to what you want to use. In **Inventory tools**, you can enable IV names and extended manual transfer. In **Game tools**, you can choose **Fast gift opening**, **Auto-open gifts**, **Auto-send gifts**, and **Hide trainer name**. The **Keep field research encounters** and **Keep GO Pass encounters** filters let you retain catches from those rewards. Adjust catch and spin maximums in **Engine settings**. Transfers and discards have no separate total maximum per session: they delete an unlimited number of the items you configured for discarding while the session remains active.
 
 3. Set a **walking route** in your GPS joystick app, or simply use that app's joystick to move around the map. Remember that a **walking route** is recommended for greater effectiveness over longer periods.
 
@@ -186,7 +192,7 @@ The service has no 30/60-second timer or fixed limit on hours. To stop it, open 
 
 Switching apps pauses actions; losing the process, changing accounts, or losing the controller for a prolonged period ends the session. Opening the notification panel lets you review statistics without pausing catches or spins, while the game remains underneath the panel and the screen is unlocked. Switching to another app or locking the screen pauses actions. (Remember that on UGPHONE, the game can run in the background if you close the instance, but not if you close Pokémon GO or SilphMod.)
 
-Within the game, Farmer can continue when opening the item bag, the Pokémon inventory list, or your own profile. Selecting multiple Pokémon or entering a screen outside this flow pauses actions until you return to a compatible view.
+Within the game, Farmer can continue when opening the item bag, the Pokémon inventory list, an individual Pokémon's details, your own profile, the shop, or the Pokédex. Selecting multiple Pokémon or entering a screen outside this flow pauses actions until you return to a compatible view.
 
 If Pokémon storage fills up, catches pause and the status is reported; SilphMod does not delete the existing collection to make room. With a full item bag and no authorized excess to delete, it does not delete other items on its own either. Stopping cannot reverse an operation that has already been sent.
 
@@ -211,7 +217,7 @@ Execution is bound to the process, session, and account. Heartbeats and focus ch
 
 Focus detection distinguishes Pokémon GO underneath, notifications, and system overlays. **scrcpy**, screenshots, and recording are not treated as app switches by themselves. Opening another app or locking the screen pauses actions; **Stop** cancels the service.
 
-Farmer maintains its cycle from compatible item bag, Pokémon inventory, and profile views. The engine checks the active screen before acting and respects manual multi-selection. The same process, session, and focus checks continue to apply outside the map.
+Farmer maintains its cycle from compatible item bag, Pokémon inventory, individual Pokémon details, profile, shop, and Pokédex views. The engine checks the active screen before acting and respects manual multi-selection. The same process, session, and focus checks still apply outside the map.
 
 ### Integrity and control channel
 
@@ -253,6 +259,9 @@ Reverse engineering was used to identify contracts, structures, and signatures f
 | Recycle items | `IRpcHandler.SendRpc<RecycleItemProto, RecycleItemOutProto>`; ID `137` |
 | Transfer | `IPokemonBag.ReleasePokemon(pokemon)`, followed by reconciliation by ID |
 | Field research | `IQuestService` and `IQuestRpcService.CompleteQuest`, `RemoveQuest`, and `BeginQuestEncounter` |
+| Research Breakthrough | `IQuestStampCardService`, `IQuestRpcService.CompleteStampCard`, and the pending type `5` encounter |
+| GO Pass | `IEventPassService` and `ClaimEventPassRewardsRequestProto`; operations `3034` and `3035` |
+| Automatic gifts | Friend services, gift inventory, and the game's opening or sending responses |
 | Manual gifts | `OpenGiftGuiController.OnOpenClick()`, gift animators, and local presentation sequences |
 | Temporary name | Text in `PlayerHudGuiController`, `PlayerProfilePage`, and `FriendsListHeaderCellView` |
 
@@ -298,7 +307,7 @@ status = silph_action_capture_data(s->read, permit, (int32_t)ball,
 
 ### Berries: confirm the effect before throwing
 
-`PokemonEncounterResponse.InitialActiveItem`, the two-argument method `IItemBag.UseItemForEncounter`, and the `Status` and `ActiveItem` fields of `UseItemEncounterOutProto` were identified. The agent validates those contracts and uses the game's service.
+`PokemonEncounterResponse.InitialActiveItem`, the two-argument method `IItemBag.UseItemForEncounter`, and the `Status` and `ActiveItem` fields of `UseItemEncounterOutProto` were identified. The agent validates those contracts and uses the game service.
 
 All five berries can be selected and their priority arranged:
 
@@ -332,19 +341,21 @@ No berry animation is awaited. **Item limits** continues deleting the selected e
 
 ### Interruptions and map continuity
 
-Interruption handling remains **always active** during farming. It observes compatible screens opening and becoming visible and uses `Dismiss()`, `Click()`, or `LuckyBonusSkipButtonClicked()` according to the controller. It includes medals, level-ups, XP, the Daily Adventure Incense summary, the speed warning, and the **Stamp Rally** new stamp collection notice.
+Interruption handling is prepared **as the engine starts** and remains always active during farming. It observes compatible screens opening and becoming visible and uses `Dismiss()`, `Click()`, or `LuckyBonusSkipButtonClicked()`, depending on the controller. This includes medals, level-ups, XP, the Daily Adventure Incense recap, the speed warning, friendship level-ups, and the new **Stamp Rally** stamp collection notice.
 
-Egg hatches also have an adapter in `MapExploreState`: it identifies the signature that receives `HatchedPokemonsData` and skips presentation before the scene opens. Obtaining the Pokémon and reward responses remain the game's responsibility. If a hatch screen is already open, it is handled through its compatible controller.
+Medals are recognized both when their progress increases and when a new tier is awarded. Handling includes controllers for Gym Badges, Vivillon sub-badges, and avatar customization rewards. It also checks screens that are already open and retries closing them for a bounded interval while the controller remains available.
+
+Egg hatches also have an adapter in `MapExploreState`: it identifies the signature that receives `HatchedPokemonsData` and skips presentation before the scene opens. Obtaining the Pokémon and reward responses remain the game's responsibility. If an egg hatch screen is already open, it is handled through its compatible controller. The hatch result view closes when that flow ends; a view you open manually from the inventory remains open until you close it.
 
 Actions execute on the Unity thread, with the same session and focus control as Farmer. There is no continuous polling of all windows: only a bounded queue is retained when a recognized screen appears. Screens outside that list are not closed automatically.
 
 The presentation queue is bounded, and components are retained through controlled references. When the engine closes, hooks are removed and those references are released. Implementation: [presentation-tools.c](native/presentation-tools.c).
 
-### Field research
+### Field research and Research Breakthrough
 
 Field research is **always** managed during Farmer, including tasks received when spinning PokéStops. The engine queries `IQuestService`, claims tasks that the game allows to be redeemed, and processes the item, berry, XP, Stardust, or encounter rewards it receives.
 
-The scope is identified by **QuestContext = 2**, and its encounters by **EncounterType = 6**. Special and timed research remain outside that scope. Incompatible field tasks—such as raids or trades—and tasks with an unknown type or condition are removed to make room for others; the AR scanning slot is preserved.
+The scope is identified by **QuestContext = 2**, and its encounters by **EncounterType = 6**. Special Research and Timed Research are outside this scope. Incompatible field tasks—such as raids, trades, exploring kilometers, and earning candy with your buddy—and tasks with unknown types or conditions are removed to make room for others; the AR scanning slot is retained. An already completed task is claimed before considering its removal.
 
 ```c
 if (context != 2 || redeemable > 1 || count > 32 ||
@@ -356,7 +367,29 @@ if (status != 1 || type == 46) return SILPH_RESEARCH_KEEP;
 
 *Excerpt from [research-policy.c](native/research-policy.c). [research-actions.c](native/research-actions.c) coordinates calls and their responses.*
 
-Reward encounters use Farmer's berry, throw-quality, and catch cycle. They are processed even if their species is not selected in **Only catch**. Afterward, **Keep field research encounters** determines whether they are retained by source; with that option disabled, the other transfer protections apply.
+If a **Research Breakthrough** is pending, the engine handles it before continuing with field tasks. It checks the seven-stamp card through `IQuestStampCardService`, requests `CompleteStampCard` when available, and retrieves its pending encounter, identified by **EncounterType = 5**.
+
+Field research and Research Breakthrough encounters use Farmer's berry, throw-quality, and catch cycle. They are processed even if their species is not selected in **Only catch**. **Keep field research encounters** protects both sources; when disabled, **Keep shiny**, **Keep 15/15/15**, **Keep shiny + background**, and the other global protections still apply.
+
+Responses are checked in phases without a blocking wait for Farmer. The encounter is handed to the catch cycle once the previous operation has finished and is identified by its ID to avoid processing it twice.
+
+### GO Pass
+
+Farmer checks the **current GO Pass** and claims rewards unlocked according to the account's rank. It reads free tracks and paid tracks the account already has available; the engine uses the pass's current data, so it does not depend on a fixed monthly reward list.
+
+Items, XP, and Stardust are claimed through `ClaimEventPassRewardsRequestProto` and its `ClaimEventPassRewardsResponseProto` responses. Encounters are requested by pass, track, and rank, then enter the shared berry, throw-quality, and catch cycle. The **Only catch** filter does not block these rewards.
+
+**Keep GO Pass encounters**, enabled by default under **Transfer new catches**, retains pass Pokémon. If you disable it, ordinary encounters can be transferred when they meet no other protection. **Legendary Pokémon are always retained**, along with the other protected special classes. Shiny, 15/15/15, and shiny + background filters still apply regardless of that checkbox.
+
+The source is obtained from the original reward, **EncounterType = 25**, and kept alongside the encounter ID throughout the catch. The label on the object used to present the encounter does not replace that source.
+
+```c
+s->reward_source = type == 25 ? SILPH_SOURCE_GO_PASS : SILPH_SOURCE_RESEARCH;
+```
+
+*Assignment from [research-actions.c](native/research-actions.c). [pass-actions.c](native/pass-actions.c) coordinates the pass, and [transfer-policy.c](native/transfer-policy.c) applies the protections.*
+
+Pass checks and requests progress in phases while Farmer continues. At most one pending encounter reward is retained for handoff to the catch cycle, with spaced readings and retries. XP and Stardust are added to the statistics only from rewards confirmed by the game.
 
 ### Remove buddy
 
@@ -364,7 +397,7 @@ Reward encounters use Farmer's berry, throw-quality, and catch cycle. They are p
 
 The `BuddyMapProto` and `SetBuddyPokemonProto` contracts are used through `IRpcHandler.SendRpc`, with operations **1350** and **152** from the game profile. Removal happens once per service start; it is not repeated during every map recovery.
 
-Removing it does not transfer it or modify its inventory data. It is not reassigned at the end: you can set it again from the game whenever you want. Coordination of this flow is in [buddy-actions.c](native/buddy-actions.c).
+Removing it does not transfer it or modify its inventory data. It is not reassigned at the end: the user can assign it again from the game. This flow is coordinated in [buddy-actions.c](native/buddy-actions.c).
 
 ### Inventory tools
 
@@ -389,9 +422,13 @@ Only local presentation waits in the two opening sequences are shortened, when t
 
 The treatment is in [presentation-tools.c](native/presentation-tools.c). The game's global clock keeps its usual speed.
 
-**Hide trainer name**, enabled by default, replaces the player's visible text in the map HUD, their own profile, and the friends header. It uses the `UnityEngine.UI.Text` components of those screens; it does not rename the account or modify the identity data used by the game.
+**Auto-open gifts** and **Auto-send gifts** are independent options, disabled by default. They go through available friends during the session and check the list again periodically; they are not limited to service startup. They open gifts the account can receive and send available gifts to eligible friends. When the item bag is full, opening requests conversion to Stardust. The game responses determine the result and the opening or sending limits.
 
-The HUD is obtained from the currently running map state. Previous text is retained during the session and restored when stopping, on the Unity thread. References are limited to **48 components** and released when the engine closes; destroyed components are removed to avoid accumulating them while navigating between screens.
+The automatic flow uses a single pending request, retains already processed identifiers, and spaces out friend checks. It progresses alongside Farmer without opening the friends list or stopping catches and spins. The friendship level-up window is closed through its controller. Implementation: [gift-actions.c](native/gift-actions.c).
+
+**Hide trainer name**, enabled by default, replaces the player's visible text in the map HUD, their own profile, and the friends header. It uses the `UnityEngine.UI.Text` components on those screens; it does not rename the user's account or modify the identity data used by the game.
+
+Name handling is prepared as the engine starts and applied as soon as the HUD and profile components are available, without waiting for the first catch. The HUD is obtained from the currently running map state. Previous text is retained during the session and restored when it stops, on the Unity thread. References are limited to **48 components** and released when the engine closes; destroyed components are removed so they do not accumulate while navigating between screens.
 
 ### Transfers and deletion
 
@@ -417,7 +454,7 @@ The treatment is installed when starting with **Fix error 12** and removed when 
 
 ### XP and Stardust counters
 
-Rewards from successful responses to **catches, spins, and field research issued by SilphMod** are counted: `CaptureScoreProto.Exp`, `Stardust`, temporary/Mega Evolution rewards, `FortSearchOutProto.XpAwarded`, `Loot`, `BonusLoot`, and `CompleteQuestOutProto.Rewards`, according to the validated contract. Totals are preserved when stopping or recovering the service and reset only with **Clear statistics**.
+Rewards from successful responses to **catches, spins, field research, Research Breakthrough, GO Pass, and gifts issued by SilphMod** are counted: `CaptureScoreProto.Exp`, `Stardust`, temporary/Mega Evolution rewards, `FortSearchOutProto.XpAwarded`, `Loot`, `BonusLoot`, `CompleteQuestOutProto.Rewards`, weekly stamp card rewards, and `ClaimEventPassRewardsResponseProto.RewardsGranted`, along with Stardust confirmed when opening gifts, according to the validated contract. Totals are preserved when stopping or recovering the service and are reset only with **Clear statistics**.
 
 The account balance is not subtracted, and rewards are not estimated by multiplying catches by a constant. Amounts are not multiplied again by bonuses the game may already have applied. An increasing sequence prevents duplicates; Android totals use `long`. `—` indicates an unavailable reading, and `+` indicates a partial total with missing rewards.
 
@@ -436,8 +473,6 @@ Gradle compiles the C components from [native](native) through [build_native.ps1
 The build generates the **eight native `.so` components** and their SHA-256 hashes. The service verifies them again before loading the engine. These files are built from C and the hooking dependency. Gradle includes them in the APK from `app/src/main/jniLibs/arm64-v8a/`.
 
 Without signing configuration, the release output is **unsigned**. To sign it, provide `SILPH_KEYSTORE`, `SILPH_STORE_PASSWORD`, `SILPH_KEY_ALIAS`, and `SILPH_KEY_PASSWORD`. Keys remain outside the repository; updating an existing installation uses the same certificate.
-
-Android output: `app/build/outputs/apk/release/`. APKs, generated components, caches, logs, and keys are excluded from Git.
 
 ## Logs and privacy
 
@@ -479,11 +514,17 @@ The engine moves to **C**, with scheduling on the Unity thread, controlled-lifet
 
 Farmer adds continuity in compatible game menus, more frequent catch-phase checks with **Action interval** at **100 ms**, and bounded metadata caches. Berries, research, spins, cleaning, and transfers retain coordination with a single pending operation.
 
+**2.1.0 extends Farmer continuity** to individual Pokémon details, the shop, and the Pokédex. It introduces automatic gift opening and sending throughout the session, opening with a full item bag through conversion to Stardust, and closing friendship windows. The temporary name and scene skipping are prepared as the engine starts; medal closing covers the different controllers and screens that are already open.
+
+**2.1.1 brings Research Breakthrough and GO Pass rewards** into the catch cycle. It adds **Keep GO Pass encounters**, extends **Keep field research encounters** to Research Breakthrough, and applies global retention filters to every source. Legendary pass Pokémon remain protected. Field tasks for exploring kilometers and earning candy with your buddy are discarded alongside the other incompatible tasks. This may vary depending on the events active in the game, so keep an eye on it..
+
 The next phase is to continue optimizing continuity in both modes and expand compatibility across devices.
 
 Configuration of the priority order for Poké Ball use is planned, rather than the default: 1. Poké Ball; 2. Great Ball; 3. Ultra Ball.
 
-Another pending improvement is to keep expanding the catalog of Pokémon that can be configured not to transfer, for example nundos (0/0/0).
+New modes are coming to SilphMod, stay tuned..
+
+Another pending improvement is to keep expanding the catalog of Pokémon that can be configured not to transfer, for example nundos (0/0/0) or rank 1 Pokémon (PvP).
 
 [MIT](LICENSE) license. Dependencies retain their notices in [NOTICE](NOTICE) and their licenses within the assets. An independent, personal project, with no affiliation to the game's rights holders or other parties.
 
