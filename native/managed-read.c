@@ -10,6 +10,8 @@
 #include <math.h>
 #include "managed-proto.h"
 #include "research-bridge.h"
+#include "gift-actions.h"
+#include "pass-actions.h"
 #endif
 
 #define READ_MAGIC UINT32_C(0x53524431)
@@ -375,6 +377,8 @@ int silph_read_close(void *memory) {
 #include "managed-rpc.inc"
 #include "managed-proto.inc"
 #include "research-bridge.inc"
+#include "gift-bridge.inc"
+#include "pass-bridge.inc"
 int silph_action_enable(void *memory,SilphManagedResolver resolve,void *context) {
     if(!resolve)return SILPH_MANAGED_ARGUMENT;
     Read *state=memory;int status=enter_read(state);if(status)return status;

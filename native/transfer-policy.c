@@ -9,7 +9,7 @@ int silph_transfer_evaluate(const SilphTransferInput *input, size_t bytes, Silph
     output->decision=SILPH_VERDICT_UNKNOWN;output->reasons=SILPH_REASON_INVALID;
     if (!input || bytes!=sizeof(*input) || input->abi!=SILPH_TRANSFER_ABI || input->reserved
         || (input->valid&~15u) || (input->known_flags&~1023u) || (input->flags&~input->known_flags)
-        || (input->options_present&~127u) || (input->options_known&~input->options_present)
+        || (input->options_present&~255u) || (input->options_known&~input->options_present)
         || (input->options&~input->options_known)) return 1;
     if ((input->valid&SILPH_VALID_ID) && input->owned_id && (input->known_flags&SILPH_DATA_EGG)
         && (input->flags&SILPH_DATA_EGG)) {
@@ -20,11 +20,12 @@ int silph_transfer_evaluate(const SilphTransferInput *input, size_t bytes, Silph
         || input->pokemon_class<0 || input->pokemon_class>3 || (input->known_flags&127u)!=127u
         || (input->options_known&3u)!=3u) return 0;
     uint32_t present=input->options_present, known=input->options_known, options=input->options, flags=input->flags;
-    if ((present&SILPH_KEEP_RESEARCH) && !(known&SILPH_KEEP_RESEARCH)) { output->reasons=SILPH_REASON_ORIGIN;return 0; }
-    if ((options&SILPH_KEEP_RESEARCH) && (input->source<SILPH_SOURCE_WILD || input->source>SILPH_SOURCE_SAMPLE)) {
+    if ((present&(SILPH_KEEP_RESEARCH|SILPH_KEEP_GO_PASS))&~known) { output->reasons=SILPH_REASON_ORIGIN;return 0; }
+    if ((options&(SILPH_KEEP_RESEARCH|SILPH_KEEP_GO_PASS)) && (input->source<SILPH_SOURCE_WILD || input->source>SILPH_SOURCE_GO_PASS)) {
         output->reasons=SILPH_REASON_ORIGIN;return 0;
     }
     uint32_t reasons=(options&SILPH_KEEP_RESEARCH) && input->source==SILPH_SOURCE_RESEARCH ? SILPH_REASON_RESEARCH : 0;
+    if((options&SILPH_KEEP_GO_PASS)&&input->source==SILPH_SOURCE_GO_PASS)reasons|=SILPH_REASON_GO_PASS;
     const uint32_t optional[]={SILPH_KEEP_DYNAMAX,SILPH_KEEP_HATCHED,SILPH_KEEP_BACKGROUND,SILPH_KEEP_SHINY_BACKGROUND};
     const uint32_t required[]={SILPH_DATA_DYNAMAX,SILPH_DATA_HATCHED,SILPH_DATA_BACKGROUND,SILPH_DATA_BACKGROUND};
     for (unsigned i=0;i<4;i++) if (((present&optional[i]) && !(known&optional[i]))

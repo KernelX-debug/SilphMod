@@ -7,7 +7,10 @@ static const RpcSchema rpc_schemas[]={
     {101,"FortSearchProto","FortSearchOutProto"},
     {137,"RecycleItemProto","RecycleItemOutProto"},
     {1350,"BuddyMapProto","BuddyMapOutProto"},
-    {152,"SetBuddyPokemonProto","SetBuddyPokemonOutProto"}
+    {152,"SetBuddyPokemonProto","SetBuddyPokemonOutProto"},
+    {951,"OpenGiftProto","OpenGiftOutProto"},
+    {3034,"ClaimEventPassRewardsRequestProto","ClaimEventPassRewardsResponseProto"},
+    {3035,"ClaimEventPassRewardsRequestProto","ClaimEventPassRewardsResponseProto"}
 };
 int silph_rpc_enable(void *memory,SilphManagedResolver resolve,void *context){
     if(!resolve)return SILPH_MANAGED_ARGUMENT;

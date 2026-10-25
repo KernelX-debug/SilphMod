@@ -77,6 +77,7 @@ public final class MainActivity extends Activity {
             LinearLayout options=ui.column();features.addView(options);options.setPadding(ui.dp(8),0,0,ui.dp(12));
             String[] names={"Keep shiny","Keep 15/15/15","Keep Dynamax","Keep hatched","Keep background","Keep shiny + background","Keep field research encounters"};
             for(int i=0;i<names.length;i++)bit(options,names[i],"keep",1<<i,95);
+            check(options,"Keep GO Pass encounters","keepGoPass",true);
             transfer.setOnCheckedChangeListener((v,on)->{settings.prefs.edit().putBoolean("transfer",on).apply();options.setVisibility(on?View.VISIBLE:View.GONE);});options.setVisibility(transfer.isChecked()?View.VISIBLE:View.GONE);
         }
         CompoundButton clean=toggle(features,"Clean item bag","clean",false);
@@ -88,6 +89,8 @@ public final class MainActivity extends Activity {
         toggle(inventory,"Extended manual transfer","extendedManualTransfer",false);
         LinearLayout game=ui.card("Game tools");
         toggle(game,"Fast gift opening","fastGiftOpening",true);
+        toggle(game,"Auto-open gifts","autoOpenGifts",false);
+        toggle(game,"Auto-send gifts","autoSendGifts",false);
         toggle(game,"Hide trainer name","hideTrainerName",true);
         Button engine=ui.button(ui.page,"Engine settings",false);edits.add(engine);engine.setOnClickListener(v->engineDialog());
         start=ui.button(ui.controls,"Start service",true);start.setOnClickListener(v->{if(CheckService.view.running){startService(new Intent(this,CheckService.class).setAction(CheckService.STOP));return;}

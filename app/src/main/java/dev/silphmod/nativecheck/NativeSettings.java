@@ -43,13 +43,15 @@ final class NativeSettings {
         if(readonly){if(prefs.getBoolean("fixLocation",false))throw new IllegalArgumentException("Turn off Read-only check to use Fix error 12");c.flags=NativeSessionWire.READ_ONLY;return c;}
         c.flags=mode==2?NativeSessionWire.CATCH:(prefs.getBoolean("catches",true)?1:0)|(prefs.getBoolean("spins",true)?2:0);
         if((c.flags&1)!=0&&prefs.getBoolean("berries",true)){c.flags|=16;c.berries=integers(prefs.getString("berriesOrder","701,705,703"));}
-        if(prefs.getBoolean("curve",true))c.flags|=32;c.quality=prefs.getInt("quality",4);c.keep=prefs.getInt("keep",95);
+        if(prefs.getBoolean("curve",true))c.flags|=32;c.quality=prefs.getInt("quality",4);c.keep=prefs.getInt("keep",95)|(prefs.getBoolean("keepGoPass",true)?128:0);
         if(prefs.getBoolean("hideTrainerName",true))c.flags|=NativeSessionWire.TRAINER_NAME;
         if(prefs.getBoolean("showIvNames",true))c.flags|=NativeSessionWire.IV_NAMES;
         if(prefs.getBoolean("fixLocation",false))c.flags|=NativeSessionWire.FIX_LOCATION;
         c.flags|=NativeSessionWire.SCENES;
         if(prefs.getBoolean("extendedManualTransfer",false))c.flags|=NativeSessionWire.MANUAL_TRANSFER;
         if(prefs.getBoolean("fastGiftOpening",true))c.flags|=NativeSessionWire.FAST_GIFTS;
+        if(prefs.getBoolean("autoOpenGifts",false))c.flags|=NativeSessionWire.AUTO_OPEN_GIFTS;
+        if(prefs.getBoolean("autoSendGifts",false))c.flags|=NativeSessionWire.AUTO_SEND_GIFTS;
         if(prefs.getBoolean("removeBuddy",false))c.flags|=NativeSessionWire.REMOVE_BUDDY;
         if(mode==1&&(c.flags&1)!=0&&prefs.getBoolean("transfer",false))c.flags|=8;
         if(prefs.getBoolean("clean",false)){String text=prefs.getString("limits","").trim();ArrayList<int[]> limits=new ArrayList<>();

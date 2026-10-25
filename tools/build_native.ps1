@@ -34,6 +34,8 @@ Compile ($flags+@('-fPIE','-pie')+$control+@('-lm','-o',(Join-Path $output 'libs
 $common=@('unity-pilot.c','managed.c','managed-read.c','game-read.c','scheduler.c','control.c','promise.c','managed-promise.c','farmer-actions.c','transfer-policy.c','rpc-actions.c','kecleon-actions.c','maintenance-actions.c','farmer-session.c','session-wire.c','session-link.c','kecleon-wire.c','kecleon-plan.c','kecleon-session.c','visual-tools.c','research-policy.c','research-actions.c','location-tools.c','code-memory.c','presentation-tools.c','buddy-actions.c','recovery-policy.c','readback.c','core.c') | ForEach-Object {Join-Path $source $_}
 $defines=@('-DSILPH_PILOT_GAME_READ=1','-DSILPH_PILOT_EXTERNAL=1','-DSILPH_PILOT_ACTIONS=1','-DSILPH_ENABLE_ACTIONS=1','-DSILPH_PILOT_CONFIGURED=1','-DSILPH_PILOT_SERVICE=1')
 $common+=Join-Path $source 'startup-thread.c'
+$common+=Join-Path $source 'gift-actions.c'
+$common+=Join-Path $source 'pass-actions.c'
 foreach($mode in @('farmer','kecleon')){
     $modeFlags=if($mode -eq 'farmer'){@('-DSILPH_PILOT_TRANSFER=1','-DSILPH_PILOT_CONTINUOUS=1','-DSILPH_PILOT_COMBINED=1')}else{@('-DSILPH_PILOT_KECLEON=1')}
     $modeSources=if($mode -eq 'farmer'){@((Join-Path $source 'farmer-view.c'))}else{@()}

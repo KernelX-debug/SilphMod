@@ -7,7 +7,7 @@
 typedef struct {
     void *read,*managed,*game,*farmer,*maintenance;
 #ifdef SILPH_PILOT_SERVICE
-    void *research;
+    void *research,*go_pass;SilphManagedRef pass_reward;
 #endif
     SilphScheduleIdentity identity;
     SilphFarmerSessionOptions options;
@@ -41,7 +41,8 @@ int silph_farmer_session_open(void *memory,size_t bytes,void *read,void *managed
     if(!status&&(options->spins||options->clean)){s->maintenance=calloc(1,silph_maintenance_size());if(!s->maintenance)status=SILPH_MANAGED_CAPACITY;}
 #ifdef SILPH_PILOT_SERVICE
     if(!status&&options->research){s->research=calloc(1,silph_research_size());if(!s->research)status=SILPH_MANAGED_CAPACITY;
-        if(!status)status=silph_research_open(s->research,silph_research_size(),read,managed,game,identity,transfers,options->farmer.use_berries);}
+        if(!status)status=silph_research_open(s->research,silph_research_size(),read,managed,game,identity,transfers,options->farmer.use_berries);
+        if(!status){s->go_pass=calloc(1,silph_pass_size());if(!s->go_pass)status=SILPH_MANAGED_CAPACITY;else status=silph_pass_open(s->go_pass,silph_pass_size(),read,managed,game,identity);}}
 #endif
     if(status)silph_farmer_session_close(s);return status;
 }
@@ -83,10 +84,11 @@ static int poll(Session *s,uint64_t now){
     return status;
 }
 #ifdef SILPH_PILOT_SERVICE
-static int research_tick(Session *s,const SilphSchedulePermit *permit,const SilphGameSnapshot *snapshot,uint64_t now){
+static int research_tick(Session *s,const SilphSchedulePermit *permit,const SilphGameSnapshot *snapshot,uint64_t now,bool *accepted){
     uint64_t started=clock_ns();SilphManagedRef target={0};uint64_t encounter=0;uint32_t species=0;
-    int status=silph_research_tick(s->research,permit,snapshot,now,!!s->farmer_opened,&target,&encounter,&species);
-    if(!status&&target.serial){status=silph_farmer_research_target(s->farmer,target,encounter,species);if(!status)status=silph_farmer_actions_metrics(s->farmer,&s->metrics.farmer);}
+    bool capture=s->farmer_opened&&s->metrics.farmer.state==SILPH_FARMER_SELECT&&!s->lane;*accepted=false;
+    int status=silph_research_tick(s->research,permit,snapshot,now,capture,&target,&encounter,&species);
+    if(!status&&target.serial){uint32_t source=silph_research_target_source(s->research,encounter);status=silph_farmer_research_target(s->farmer,target,encounter,species,source);if(!status){*accepted=true;status=silph_farmer_actions_metrics(s->farmer,&s->metrics.farmer);}}
     if(target.serial){if(status)silph_research_destroy(s->read,target);int freed=silph_managed_release(s->managed,target);if(!status)status=freed;}
     if(!status)status=silph_research_metrics(s->research,&s->metrics.research);
     uint64_t spent=clock_ns()-started;s->metrics.research_ns+=spent;if(spent>s->metrics.max_research_ns)s->metrics.max_research_ns=spent;return status;
@@ -99,11 +101,20 @@ int silph_farmer_session_tick(void *memory,const SilphSchedulePermit *permit,con
     if(now<s->clock)return SILPH_MANAGED_STATE;s->clock=now;s->metrics.callbacks++;int status=0;uint64_t began=clock_ns();bool maintaining=false;
     if(s->metrics.state!=SILPH_SESSION_RUNNING){*output=s->metrics;return 0;}
 #ifdef SILPH_PILOT_SERVICE
-    if(s->research&&silph_research_pending(s->research)){maintaining=true;status=research_tick(s,permit,snapshot,now);}
-    else
+    bool research_stepped=false;
+    if(s->go_pass){
+        bool capture=s->farmer_opened&&snapshot->pokemon_count<snapshot->max_pokemon&&(snapshot->items[0]||snapshot->items[1]||snapshot->items[2]);SilphManagedRef reward={0};
+        status=silph_pass_tick(s->go_pass,permit,snapshot,now,capture,!s->pass_reward.serial,&reward,&s->metrics.go_pass);
+        if(!status&&reward.serial){s->pass_reward=reward;reward=(SilphManagedRef){0};}
+        if(!status&&s->pass_reward.serial&&capture&&s->metrics.farmer.state==SILPH_FARMER_SELECT&&!s->lane&&silph_research_available(s->research)){
+            int supplied=silph_research_supply(s->research,permit,snapshot,s->pass_reward,now);if(supplied&&supplied!=SILPH_MANAGED_NOT_READY)s->metrics.research.error=(uint32_t)supplied;
+            int freed=silph_managed_release(s->managed,s->pass_reward);if(!status)status=freed;s->pass_reward=(SilphManagedRef){0};
+        }
+    }
+    if(!status&&s->research&&silph_research_pending(s->research)){research_stepped=true;status=research_tick(s,permit,snapshot,now,&maintaining);}
 #endif
-    if(s->lane){maintaining=true;status=poll(s,now);}
-    else{
+    if(!status&&!maintaining&&s->lane){maintaining=true;status=poll(s,now);}
+    else if(!status&&!maintaining){
         bool boundary=!s->farmer_opened||s->metrics.farmer.state==0||s->metrics.farmer.state==SILPH_FARMER_SELECT,force_farmer=false;
         if(boundary&&s->options.clean&&now>=s->clean_due){
 #if defined(SILPH_PILOT_COMBINED) && defined(SILPH_PILOT_SERVICE)
@@ -134,8 +145,8 @@ int silph_farmer_session_tick(void *memory,const SilphSchedulePermit *permit,con
             else if(!status)status=poll(s,now);
         }
 #ifdef SILPH_PILOT_SERVICE
-        if(!status&&!maintaining&&boundary&&s->research&&(silph_research_pending(s->research)||silph_research_due(s->research,now))){
-            maintaining=true;status=research_tick(s,permit,snapshot,now);
+        if(!status&&!maintaining&&!research_stepped&&boundary&&s->research&&(silph_research_pending(s->research)||silph_research_due(s->research,now))){
+            status=research_tick(s,permit,snapshot,now,&maintaining);
         }
 #endif
         if(!status&&!maintaining&&s->farmer_opened){
@@ -197,6 +208,8 @@ bool silph_farmer_session_idle(void *memory){
 int silph_farmer_session_close(void *memory){
     Session *s=memory;if(!s||!s->opened)return 0;int a=s->farmer_opened?silph_farmer_actions_close(s->farmer):0,b=s->maintenance_opened?maintenance_close(s):0;
 #ifdef SILPH_PILOT_SERVICE
+    if(s->pass_reward.serial){int freed=silph_managed_release(s->managed,s->pass_reward);if(freed)return freed;s->pass_reward=(SilphManagedRef){0};}
+    int d=s->go_pass?silph_pass_close(s->go_pass):0;if(d)return d;free(s->go_pass);s->go_pass=NULL;
     int c=s->research?silph_research_close(s->research):0;if(c)return c;free(s->research);s->research=NULL;
 #endif
     if(a||b)return a?a:b;free(s->farmer);free(s->maintenance);memset(s,0,sizeof(*s));return 0;

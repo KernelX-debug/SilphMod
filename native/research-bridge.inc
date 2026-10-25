@@ -72,29 +72,29 @@ static int research_nullable_invoke(Read *s,const void *method,void *object,uint
     if(status)clear_value(out);return status;
 }
 int silph_research_invoke(void *memory,const SilphSchedulePermit *permit,uint32_t operation,SilphManagedRef receiver,const SilphReadArgument *input,uint32_t count,SilphReadValue *out){
-    if(!out)return SILPH_MANAGED_ARGUMENT;clear_value(out);if(operation<1||operation>9||count>2||(count&&!input)||!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;
+    if(!out)return SILPH_MANAGED_ARGUMENT;clear_value(out);if(operation<1||operation>13||count>2||(count&&!input)||!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;
     Read *s=memory;int status=enter_read(s);if(status)return status;
-    const char *names[]={"GetQuestDataOfType","get_ExclusiveQuestCompletionInProgress","CanReceiveReward","CanRedeem","CompleteQuest","RemoveQuest","GetDanglingEncounterOfType","BeginQuestEncounter","Create"};
-    uint32_t needed[]={0,0,1,1,1,1,0,1,2};if(count!=needed[operation-1])return leave_read(s,SILPH_MANAGED_ARGUMENT);
+    const char *names[]={"GetQuestDataOfType","get_ExclusiveQuestCompletionInProgress","CanReceiveReward","CanRedeem","CompleteQuest","RemoveQuest","GetDanglingEncounterOfType","BeginQuestEncounter","Create","get_IsStampCardFull","get_StampCardData","CompleteStampCard","GetDanglingEncounterOfType"};
+    uint32_t needed[]={0,0,1,1,1,1,0,1,2,0,0,0,0};if(count!=needed[operation-1])return leave_read(s,SILPH_MANAGED_ARGUMENT);
     uint32_t phase=40;bool statik=operation==SILPH_RESEARCH_REDEEM;void *object=NULL,*klass=NULL;
-    const char *iface=operation==5||operation==6||operation==8?"IQuestRpcService":"IQuestService";
+    bool stamp=operation==10||operation==11;const char *iface=stamp?"IQuestStampCardService":operation==5||operation==6||operation==8||operation==12?"IQuestRpcService":"IQuestService";
     if(statik)klass=lookup_class(s,"holo-game.dll","Niantic.Holoholo.Quests","QuestProtoExt");
     else{status=silph_managed_target(s->managed,receiver,&object);klass=status?NULL:s->base.object_get_class(object);
-        void *expected=operation==9?research_factory(s):lookup_class(s,"holo-game.dll","Niantic.Holoholo.Quests",iface);
+        void *expected=operation==9?research_factory(s):lookup_class(s,stamp?"holo-game-interfaces.dll":"holo-game.dll","Niantic.Holoholo.Quests",iface);
         if(!status&&(!expected||!s->api.class_is_assignable_from(expected,klass)))status=SILPH_MANAGED_CONTRACT;
     }
-    uint32_t nargs=operation==1?1:operation==4||operation==7||operation==9?2:operation==5?4:count;
+    uint32_t nargs=operation==1?1:operation==4||operation==7||operation==9||operation==13?2:operation==5?4:count;
     const void *method=NULL;if(!status&&(operation==4||operation==5)){phase=41;method=research_method(s,klass,names[operation-1],nargs,statik);if(!method)status=SILPH_MANAGED_CONTRACT;}
     SilphReadArgument args[4]={{0}};for(unsigned i=0;i<count;i++)args[i]=input[i];SilphManagedRef id={0},empty={0};
     if(!status&&operation==1)args[0]=(SilphReadArgument){.kind=SILPH_READ_ENUM32,.value.bits=2};
     if(!status&&(operation==5||operation==6)){
         status=research_quest(s,input[0].value.reference,&id);args[0]=(SilphReadArgument){.kind=SILPH_READ_REFERENCE,.value.reference=id};
     }
-    if(!status&&(operation==5||operation==7)){void *value=s->base.string_new_len("",0);status=value?silph_managed_retain(s->managed,value,false,&empty):SILPH_MANAGED_CAPACITY;}
+    if(!status&&(operation==5||operation==7||operation==13)){void *value=s->base.string_new_len("",0);status=value?silph_managed_retain(s->managed,value,false,&empty):SILPH_MANAGED_CAPACITY;}
     if(!status&&(operation==4||operation==5)){phase=42;status=research_nullable(s,method,operation==4?1:2,operation==4?SILPH_READ_I64:SILPH_READ_I32);}
     if(!status&&operation==5){args[1]=(SilphReadArgument){.kind=SILPH_READ_REFERENCE,.value.reference=empty};args[3]=(SilphReadArgument){.kind=SILPH_READ_U64};}
-    if(!status&&operation==7){args[0]=(SilphReadArgument){.kind=SILPH_READ_ENUM32,.value.bits=6};args[1]=(SilphReadArgument){.kind=SILPH_READ_REFERENCE,.value.reference=empty};}
-    uint32_t result_kind=operation==2||operation==3||operation==4?SILPH_READ_BOOL:SILPH_READ_REFERENCE;
+    if(!status&&(operation==7||operation==13)){args[0]=(SilphReadArgument){.kind=SILPH_READ_ENUM32,.value.bits=operation==13?5:6};args[1]=(SilphReadArgument){.kind=SILPH_READ_REFERENCE,.value.reference=empty};}
+    uint32_t result_kind=operation==2||operation==3||operation==4||operation==10?SILPH_READ_BOOL:SILPH_READ_REFERENCE;
     if(!status){phase=43;if(method)status=research_nullable_invoke(s,method,object,result_kind,args,nargs,operation==4?1:2,out,permit);
         else status=call_internal(s,receiver,NULL,names[operation-1],result_kind,args,nargs,out,permit);}
     int a=release_rpc_ref(s,&id),b=release_rpc_ref(s,&empty);if(!status){phase=44;status=a?a:b;}if(status)out->bits=phase;return leave_read(s,status);

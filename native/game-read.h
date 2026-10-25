@@ -37,6 +37,7 @@ int silph_game_read_item(void *,int32_t,uint32_t *);
 int silph_game_read_owned(void *,uint64_t,SilphManagedRef *);
 int silph_game_read_rpc_handler(void *,SilphManagedRef *);
 int silph_game_read_service(void *,uint32_t,SilphManagedRef *);
+int silph_game_read_gift_service(void *,uint32_t,SilphManagedRef *);
 int silph_game_read_map_count(void *,uint32_t *);
 int silph_game_read_research_service(void *,uint32_t,SilphManagedRef *);
 int silph_game_read_transfer_data(void *,uint64_t,SilphTransferInput *,SilphManagedRef *,SilphManagedRef *);

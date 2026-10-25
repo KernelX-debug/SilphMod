@@ -4,10 +4,11 @@
 #include "response-rewards.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 typedef struct {char id[257];uint32_t kind,terminal;uint64_t until;} Entry;
 typedef struct {
-    void *read,*managed,*game,*pending;SilphScheduleIdentity identity;SilphManagedRef quests,rpc,factory,reward;
-    uint32_t opened,transfers,berries,kind;uint64_t sequence,due,after,encounter;char quest_id[257];
+    void *read,*managed,*game,*pending;SilphScheduleIdentity identity;SilphManagedRef quests,rpc,factory,reward,stamp,ready;
+    uint32_t opened,transfers,berries,kind,ready_species,reward_source,ready_source,delivered_source;uint64_t sequence,due,after,encounter,ready_encounter,weekly_after,delivered_encounter;char quest_id[257];
     Entry entries[256];SilphResearchMetrics metrics;
 } Research;
 size_t silph_research_size(void){return sizeof(Research);}
@@ -31,7 +32,7 @@ static int record(Research *s,uint32_t kind,const char *id,uint64_t now,uint32_t
 static int reserve(Research *s,SilphManagedRef promise,uint32_t kind,const char *id,uint64_t now,const char *response){
     int status=record(s,kind,id,now,0);s->after=now+UINT64_C(3000000000);s->kind=kind;memcpy(s->quest_id,id,strlen(id)+1);
     uint64_t sequence=++s->sequence;
-    if(!status)status=silph_managed_promise_open(s->pending,silph_managed_promise_size(),s->read,s->managed,promise,&s->identity,sequence,kind==3?s->encounter:sequence,now,"Holoholo.Rpc",response);
+    if(!status)status=(kind==4?silph_managed_promise_open_rpc:silph_managed_promise_open)(s->pending,silph_managed_promise_size(),s->read,s->managed,promise,&s->identity,sequence,kind==3?s->encounter:sequence,now,"Holoholo.Rpc",response);
     int freed=drop(s,&promise);if(!status)status=freed;if(!status)s->metrics.state=2;return status;
 }
 int silph_research_open(void *memory,size_t bytes,void *read,void *managed,void *game,const SilphScheduleIdentity *id,uint32_t transfers,uint32_t berries){
@@ -41,10 +42,13 @@ int silph_research_open(void *memory,size_t bytes,void *read,void *managed,void 
     if(!status){s->metrics.operation=11;status=silph_game_read_research_service(game,0,&s->quests);}
     if(!status){s->metrics.operation=12;status=silph_game_read_research_service(game,1,&s->rpc);}
     if(!status){s->metrics.operation=13;status=silph_game_read_research_service(game,2,&s->factory);}
+    if(!status)s->metrics.weekly_error=(uint32_t)silph_game_read_research_service(game,3,&s->stamp);
     s->metrics.state=status?3:1;s->metrics.error=(uint32_t)status;return 0;
 }
 bool silph_research_due(void *memory,uint64_t now){Research *s=memory;return s&&s->opened&&s->metrics.state==1&&now>=s->due&&now>=s->after;}
-bool silph_research_pending(void *memory){Research *s=memory;return s&&s->opened&&s->metrics.state==2;}
+bool silph_research_pending(void *memory){Research *s=memory;return s&&s->opened&&(s->metrics.state==2||s->metrics.state==4);}
+bool silph_research_available(void *memory){Research *s=memory;return s&&s->opened&&s->metrics.state==1;}
+uint32_t silph_research_target_source(void *memory,uint64_t encounter){Research *s=memory;return s&&s->opened&&encounter&&s->delivered_encounter==encounter?s->delivered_source:SILPH_SOURCE_UNKNOWN;}
 void silph_research_refresh(void *memory,uint64_t now){Research *s=memory;if(s&&s->opened){uint64_t next=now+UINT64_C(500000000);if(s->due>next)s->due=next;}}
 static int task(Research *s,const SilphSchedulePermit *permit,SilphManagedRef quest,uint32_t *decision,bool *receivable){
     uint32_t context=0,type=0,status=0,conditions[32]={0},condition_count=0;SilphReadValue redeem={0},goal={0},list={0},rewards={0};*decision=0;*receivable=false;
@@ -69,14 +73,49 @@ static int task(Research *s,const SilphSchedulePermit *permit,SilphManagedRef qu
     }
     int a=drop(s,&goal.reference),b=drop(s,&list.reference),c=drop(s,&rewards.reference);return error?error:a?a:b?b:c;
 }
+static int begin_reward(Research *s,const SilphSchedulePermit *permit,const SilphGameSnapshot *snapshot,SilphManagedRef reward,uint64_t now,bool *started){
+    *started=false;uint32_t type=0,ball=0;SilphReadValue pokemon={0},id={0};char key[257]={0};
+    int error=silph_read_is_type(s->read,reward,"Holoholo.Rpc","QuestPokemonEncounterProto");
+    if(!error)error=integer(s,reward,"EncounterType",&type);if(!error&&type!=5&&type!=6&&type!=25)return 0;
+    if(!error)error=integer(s,reward,"PokeBallOverride",&ball);if(!error)error=silph_read_field(s->read,reward,"Pokemon",SILPH_READ_REFERENCE,&pokemon);
+    if(!error)error=silph_read_is_type(s->read,pokemon.reference,"Holoholo.Rpc","PokemonProto");if(!error)error=silph_read_call(s->read,pokemon.reference,"get_Id",SILPH_READ_U64,NULL,0,&id);
+    if(!error&&!id.bits)error=SILPH_MANAGED_CONTRACT;
+    if(!error)snprintf(key,sizeof(key),"reward-%u-%llu",type,(unsigned long long)id.bits);
+    if(!error&&!ball&&snapshot->pokemon_count<snapshot->max_pokemon&&(snapshot->items[0]||snapshot->items[1]||snapshot->items[2])&&available(s,3,key,now)){
+        void *object=NULL;error=silph_managed_target(s->managed,reward,&object);if(!error)error=silph_managed_retain(s->managed,object,false,&s->reward);
+        SilphReadValue pending={0};s->encounter=id.bits;s->reward_source=type==25?SILPH_SOURCE_GO_PASS:SILPH_SOURCE_RESEARCH;if(!error)error=call(s,permit,SILPH_RESEARCH_BEGIN,s->rpc,reward,&pending);
+        if(!error){s->metrics.requests++;error=reserve(s,pending.reference,3,key,now,"QuestEncounterOutProto");if(!error)*started=true;}
+        if(error)drop(s,&s->reward);
+    }
+    int freed=drop(s,&pokemon.reference);return error?error:freed;
+}
+int silph_research_supply(void *memory,const SilphSchedulePermit *permit,const SilphGameSnapshot *snapshot,SilphManagedRef reward,uint64_t now){
+    Research *s=memory;if(!silph_research_available(s)||!snapshot||!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;
+    if(snapshot->account_hi!=s->identity.account_hi||snapshot->account_lo!=s->identity.account_lo)return SILPH_MANAGED_STALE;
+    bool started=false;int error=begin_reward(s,permit,snapshot,reward,now,&started);return error?error:started?0:SILPH_MANAGED_NOT_READY;
+}
+static int weekly(Research *s,const SilphSchedulePermit *permit,const SilphGameSnapshot *snapshot,uint64_t now,bool capture,bool *handled,bool *blocked){
+    *handled=*blocked=false;SilphReadValue reward={0},full={0},card={0};int status=call(s,permit,SILPH_RESEARCH_WEEKLY_REWARD,s->quests,(SilphManagedRef){0},&reward);
+    if(!status&&reward.reference.serial){*blocked=true;if(capture)status=begin_reward(s,permit,snapshot,reward.reference,now,handled);}
+    else if(!status&&s->stamp.serial&&now>=s->weekly_after){
+        status=call(s,permit,SILPH_RESEARCH_STAMP_FULL,s->stamp,(SilphManagedRef){0},&full);if(!status&&full.bits){
+            *blocked=true;status=call(s,permit,SILPH_RESEARCH_STAMP_DATA,s->stamp,(SilphManagedRef){0},&card);char id[257]={0};if(!status)status=text(s,card.reference,"Id",id);
+            if(!status&&available(s,4,id,now)){SilphReadValue pending={0};status=call(s,permit,SILPH_RESEARCH_STAMP_CLAIM,s->rpc,(SilphManagedRef){0},&pending);
+                if(!status){s->metrics.requests++;status=reserve(s,pending.reference,4,id,now,"CompleteQuestStampCardOutProto");if(!status)*handled=true;}}
+        }
+    }
+    int a=drop(s,&reward.reference),b=drop(s,&card.reference);if(!status)status=a?a:b;
+    if(status){s->metrics.weekly_error=(uint32_t)status;s->weekly_after=now+UINT64_C(60000000000);return 0;}return 0;
+}
 static int scan(Research *s,const SilphSchedulePermit *permit,const SilphGameSnapshot *snapshot,uint64_t now,bool capture){
     SilphReadValue busy={0},list={0},reward={0};SilphManagedRef selected={0},remove={0};char ids[17][257]={{0}},selected_id[257]={0},remove_id[257]={0};uint32_t n=0;
     int status=call(s,permit,SILPH_RESEARCH_BUSY,s->quests,(SilphManagedRef){0},&busy);s->due=now+UINT64_C(10000000000);if(!status&&busy.bits)return 0;
+    bool handled=false,weekly_blocked=false;if(!status)status=weekly(s,permit,snapshot,now,capture,&handled,&weekly_blocked);if(status||handled)return status;
     if(!status)status=call(s,permit,SILPH_RESEARCH_LIST,s->quests,(SilphManagedRef){0},&list);if(!status)status=count(s,list.reference,16,&n);if(!status)s->metrics.scans++;
     for(uint32_t i=0;!status&&i<n;i++){
         SilphManagedRef quest={0};uint32_t decision=0;bool receivable=false;status=item(s,list.reference,i,"QuestProto",&quest);
         if(!status)status=text(s,quest,"QuestId",ids[i]);if(!status)status=task(s,permit,quest,&decision,&receivable);
-        if(!status&&decision==1&&receivable&&!selected.serial&&available(s,1,ids[i],now)){selected=quest;quest=(SilphManagedRef){0};memcpy(selected_id,ids[i],257);}
+        if(!status&&decision==1&&receivable&&!weekly_blocked&&!selected.serial&&available(s,1,ids[i],now)){selected=quest;quest=(SilphManagedRef){0};memcpy(selected_id,ids[i],257);}
         if(!status&&decision==2&&!remove.serial&&available(s,2,ids[i],now)){remove=quest;quest=(SilphManagedRef){0};memcpy(remove_id,ids[i],257);}
         int freed=drop(s,&quest);if(!status)status=freed;
     }
@@ -95,9 +134,8 @@ static int scan(Research *s,const SilphSchedulePermit *permit,const SilphGameSna
         uint32_t kind=selected.serial?1:2,op=selected.serial?SILPH_RESEARCH_CLAIM:SILPH_RESEARCH_REMOVE;SilphReadValue pending={0};
         status=call(s,permit,op,s->rpc,selected.serial?selected:remove,&pending);
         if(!status){s->metrics.requests++;status=reserve(s,pending.reference,kind,selected.serial?selected_id:remove_id,now,kind==1?"CompleteQuestOutProto":"RemoveQuestOutProto");}
-    }else if(!status&&capture&&reward.reference.serial&&!ball&&snapshot->pokemon_count<snapshot->max_pokemon&&(snapshot->items[0]||snapshot->items[1]||snapshot->items[2])&&available(s,3,ids[16],now)){
-        SilphReadValue pending={0};s->encounter=encounter;status=call(s,permit,SILPH_RESEARCH_BEGIN,s->rpc,reward.reference,&pending);
-        if(!status){s->metrics.requests++;s->reward=reward.reference;reward.reference=(SilphManagedRef){0};status=reserve(s,pending.reference,3,ids[16],now,"QuestEncounterOutProto");}
+    }else if(!status&&capture&&reward.reference.serial&&!ball){
+        bool started=false;status=begin_reward(s,permit,snapshot,reward.reference,now,&started);
     }
     int a=drop(s,&list.reference),b=drop(s,&reward.reference),c=drop(s,&selected),d=drop(s,&remove);return status?status:a?a:b?b:c?c:d;
 }
@@ -107,7 +145,7 @@ static int poll(Research *s,const SilphSchedulePermit *permit,uint64_t now,Silph
     SilphManagedRef result={0};bool fresh=false;if(!status)status=silph_managed_promise_take(s->pending,&s->identity,now,&result,&fresh);if(!status&&!fresh)status=SILPH_MANAGED_STALE;
     uint32_t code=0;if(!status)status=integer(s,result,s->kind==3?"Result":"Status",&code);s->metrics.result=code;
     if(!status&&code==1){
-        if(s->kind==1){uint64_t xp=0,dust=0;int rewards=silph_quest_rewards(s->read,s->managed,result,&xp,&dust);if(rewards)s->metrics.reward_error=(uint32_t)rewards;else{s->metrics.xp+=xp;s->metrics.stardust+=dust;}s->metrics.claimed++;}
+        if(s->kind==1||s->kind==4){uint64_t xp=0,dust=0;int rewards=silph_quest_reward_list(s->read,s->managed,result,s->kind==4?"CompleteQuestStampCardOutProto":"CompleteQuestOutProto",s->kind==4?"Reward":"Rewards",&xp,&dust);if(rewards)s->metrics.reward_error=(uint32_t)rewards;else{s->metrics.xp+=xp;s->metrics.stardust+=dust;}if(s->kind==4)s->metrics.weekly_claimed++;else s->metrics.claimed++;}
         else if(s->kind==2)s->metrics.discarded++;
         else{
             SilphReadArgument args[]={{.kind=SILPH_READ_REFERENCE,.value.reference=s->reward},{.kind=SILPH_READ_REFERENCE,.value.reference=result}};SilphReadValue object={0},id={0},pokemon={0},dex={0};
@@ -117,7 +155,7 @@ static int poll(Research *s,const SilphSchedulePermit *permit,uint64_t now,Silph
             if(!status)status=silph_read_field(s->read,result,"Pokemon",SILPH_READ_REFERENCE,&pokemon);
             if(!status)status=silph_read_is_type(s->read,pokemon.reference,"Holoholo.Rpc","PokemonProto");
             if(!status)status=silph_read_field(s->read,pokemon.reference,"pokemonId_",SILPH_READ_I32,&dex);if(!status&&(!dex.bits||dex.bits>=2048))status=SILPH_MANAGED_CONTRACT;
-            if(!status){*target=object.reference;object.reference=(SilphManagedRef){0};*encounter=s->encounter;*species=(uint32_t)dex.bits;s->metrics.encounters++;}
+            if(!status){*target=object.reference;object.reference=(SilphManagedRef){0};*encounter=s->encounter;*species=(uint32_t)dex.bits;s->delivered_encounter=s->encounter;s->delivered_source=s->reward_source;s->metrics.encounters++;}
             if(object.reference.serial){silph_research_destroy(s->read,object.reference);drop(s,&object.reference);}int freed=drop(s,&pokemon.reference);if(!status)status=freed;
         }
     }
@@ -130,11 +168,14 @@ int silph_research_tick(void *memory,const SilphSchedulePermit *permit,const Sil
     if(!s||!s->opened||!snapshot||!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;
     if(snapshot->account_hi!=s->identity.account_hi||snapshot->account_lo!=s->identity.account_lo)return SILPH_MANAGED_STALE;
     if(s->metrics.state==3)return 0;
+    if(s->metrics.state==4){if(capture){*target=s->ready;s->ready=(SilphManagedRef){0};*encounter=s->ready_encounter;*species=s->ready_species;s->delivered_encounter=s->ready_encounter;s->delivered_source=s->ready_source;s->metrics.state=1;}return 0;}
     int status=s->metrics.state==2?poll(s,permit,now,target,encounter,species):silph_research_due(s,now)?scan(s,permit,snapshot,now,capture):0;
+    if(!status&&target->serial&&!capture){s->ready=*target;*target=(SilphManagedRef){0};s->ready_encounter=*encounter;s->ready_species=*species;s->ready_source=s->delivered_source;s->delivered_encounter=0;s->delivered_source=0;*encounter=0;*species=0;s->metrics.state=4;}
     if(status){s->metrics.error=(uint32_t)status;s->metrics.state=3;if(s->pending)silph_managed_promise_close(s->pending);drop(s,&s->reward);}
     return 0;
 }
 int silph_research_metrics(void *memory,SilphResearchMetrics *out){Research *s=memory;if(!s||!s->opened||!out)return SILPH_MANAGED_ARGUMENT;*out=s->metrics;return 0;}
 int silph_research_close(void *memory){Research *s=memory;if(!s||!s->opened)return 0;int status=s->pending?silph_managed_promise_close(s->pending):0;
-    SilphManagedRef *refs[]={&s->quests,&s->rpc,&s->factory,&s->reward};for(unsigned i=0;i<4;i++){int freed=drop(s,refs[i]);if(!status)status=freed;}if(!status){free(s->pending);memset(s,0,sizeof(*s));}return status;
+    if(s->ready.serial){int destroyed=silph_research_destroy(s->read,s->ready);if(!status)status=destroyed;}
+    SilphManagedRef *refs[]={&s->quests,&s->rpc,&s->factory,&s->reward,&s->stamp,&s->ready};for(unsigned i=0;i<6;i++){int freed=drop(s,refs[i]);if(!status)status=freed;}if(!status){free(s->pending);memset(s,0,sizeof(*s));}return status;
 }

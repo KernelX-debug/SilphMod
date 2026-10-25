@@ -310,6 +310,10 @@ int silph_game_read_service(void *memory,uint32_t kind,SilphManagedRef *output){
     GameRead *s=memory;if(!s||!s->opened||!output||kind>1)return SILPH_MANAGED_ARGUMENT;memset(output,0,sizeof(*output));
     return kind?service(s,"holo-game.dll","Niantic.Holoholo.Buddy","IBuddyPokemonService",output):service(s,"holo-protos.dll","","IGameMasterData",output);
 }
+int silph_game_read_gift_service(void *memory,uint32_t kind,SilphManagedRef *output){
+    GameRead *s=memory;if(!s||!s->opened||!output||kind>2)return SILPH_MANAGED_ARGUMENT;memset(output,0,sizeof(*output));
+    return service(s,kind?"holo-game-interfaces.dll":"holo-game.dll",kind?"Niantic.Holoholo.Social.Gifting":"Niantic.Holoholo.Social",kind==0?"IFriendsRpcService":kind==1?"IGiftingRpcService":"IGiftingService",output);
+}
 int silph_game_read_map_count(void *memory,uint32_t *output){
     GameRead *s=memory;if(!s||!s->opened||!output)return SILPH_MANAGED_ARGUMENT;SilphReadValue dictionary={0};
     int status=silph_read_field(s->read,s->directory,"emds",SILPH_READ_REFERENCE,&dictionary);if(!status)status=scalar(s,dictionary.reference,"get_Count",output);int freed=release(s,&dictionary.reference);return status?status:freed;
@@ -317,8 +321,10 @@ int silph_game_read_map_count(void *memory,uint32_t *output){
 #ifdef SILPH_ENABLE_ACTIONS
 #include "research-bridge.h"
 int silph_game_read_research_service(void *memory,uint32_t kind,SilphManagedRef *out){
-    GameRead *s=memory;if(!s||!s->opened||!out||kind>2)return SILPH_MANAGED_ARGUMENT;memset(out,0,sizeof(*out));
+    GameRead *s=memory;if(!s||!s->opened||!out||kind>4)return SILPH_MANAGED_ARGUMENT;memset(out,0,sizeof(*out));
     if(kind<2)return service(s,"holo-game.dll","Niantic.Holoholo.Quests",kind?"IQuestRpcService":"IQuestService",out);
+    if(kind==3)return service(s,"holo-game-interfaces.dll","Niantic.Holoholo.Quests","IQuestStampCardService",out);
+    if(kind==4)return service(s,"holo-game.dll","Niantic.Holoholo.UI.TodayView.EventPass","IEventPassService",out);
     SilphManagedRef type={0};SilphReadValue value={0};int status=silph_research_factory_type(s->read,&type);
     SilphReadArgument arg={.kind=SILPH_READ_REFERENCE,.value.reference=type};
     if(!status)status=silph_read_call(s->read,s->container,"TryResolve",SILPH_READ_REFERENCE,&arg,1,&value);
@@ -350,7 +356,7 @@ int silph_game_read_transfer_data(void *memory,uint64_t id,SilphTransferInput *d
     if(!status)status=silph_read_field(s->read,*pokemon,"id_",SILPH_READ_U64,&value);
     if(!status&&value.bits!=id)status=SILPH_MANAGED_STALE;
     if(!status){data->owned_id=id;data->abi=1;data->valid=SILPH_VALID_ID;data->source=SILPH_SOURCE_WILD;
-        data->options_present=data->options_known=data->options=127;}
+        data->options_present=data->options_known=data->options=255;}
     if(!status)status=flag_field(s,*pokemon,"isEgg_",SILPH_DATA_EGG,data);
     const char *integers[]={"pokemonId_","individualAttack_","individualDefense_","individualStamina_"};
     int32_t *destinations[]={&data->species,&data->attack,&data->defense,&data->stamina};

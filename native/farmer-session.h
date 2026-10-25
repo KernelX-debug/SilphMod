@@ -3,6 +3,7 @@
 #include "farmer-actions.h"
 #include "maintenance-actions.h"
 #include "research-actions.h"
+#include "pass-actions.h"
 
 enum {SILPH_SESSION_RUNNING=1,SILPH_SESSION_DONE=2,SILPH_SESSION_UNVERIFIED=3};
 enum {SILPH_SESSION_CATCH_LIMIT=1,SILPH_SESSION_SPIN_LIMIT=2,SILPH_SESSION_RESPONSE_UNKNOWN=3};
@@ -17,6 +18,7 @@ typedef struct {
     uint32_t state,reason,error,maintenance_state,spin_result;
     uint64_t spin_stardust;uint32_t reward_error;
     SilphResearchMetrics research;uint64_t research_ns,max_research_ns;
+    SilphPassMetrics go_pass;
 } SilphFarmerSessionMetrics;
 int silph_farmer_session_validate(const SilphFarmerSessionOptions *);
 size_t silph_farmer_session_size(void);

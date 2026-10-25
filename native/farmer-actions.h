@@ -10,6 +10,7 @@ typedef struct { uint64_t encounters,throws,catches,captured_id,target_id,fresh_
     uint64_t berries,fled,skipped,berry_requests;
     uint64_t xp,stardust;uint32_t reward_error;
     uint64_t research_catches,research_transferred;
+    uint64_t go_pass_catches,go_pass_transferred;
     uint32_t promise_phase,promise_state,promise_reason;
 } SilphFarmerMetrics;
 typedef struct {
@@ -21,7 +22,7 @@ size_t silph_farmer_actions_size(void);
 int silph_farmer_actions_metrics(void *,SilphFarmerMetrics *);
 int silph_farmer_actions_open(void *,size_t,void *,void *,void *,const SilphScheduleIdentity *,uint32_t);
 int silph_farmer_actions_configure(void *,const SilphFarmerOptions *);
-int silph_farmer_research_target(void *,SilphManagedRef,uint64_t,uint32_t);
+int silph_farmer_research_target(void *,SilphManagedRef,uint64_t,uint32_t,uint32_t);
 bool silph_farmer_actions_inventory_due(void *);
 int silph_farmer_actions_tick(void *,const SilphSchedulePermit *,const SilphGameSnapshot *,uint64_t,SilphFarmerMetrics *);
 int silph_farmer_actions_close(void *);

@@ -30,16 +30,19 @@ bool silph_farmer_actions_inventory_due(void *memory){
         ;
 }
 static int release(Farmer *s,SilphManagedRef *ref){if(!ref->serial)return 0;int r=silph_managed_release(s->managed,*ref);if(!r)memset(ref,0,sizeof(*ref));return r;}
-static int drop_target(Farmer *s){int status=0;if(s->target.object.serial&&s->source==SILPH_SOURCE_RESEARCH)status=silph_research_destroy(s->read,s->target.object);int freed=release(s,&s->target.object);return status?status:freed;}
-int silph_farmer_research_target(void *memory,SilphManagedRef target,uint64_t encounter,uint32_t species){
+static int drop_target(Farmer *s){int status=0;if(s->target.object.serial&&s->source!=SILPH_SOURCE_WILD)status=silph_research_destroy(s->read,s->target.object);int freed=release(s,&s->target.object);return status?status:freed;}
+int silph_farmer_research_target(void *memory,SilphManagedRef target,uint64_t encounter,uint32_t species,uint32_t source){
     Farmer *s=memory;if(!s||!s->opened||s->metrics.state!=SILPH_FARMER_SELECT||s->target.object.serial||!encounter||!species||species>=2048)return SILPH_MANAGED_STATE;
-    int status=silph_read_is_type(s->read,target,"Niantic.Holoholo.Quests","QuestMapPokemon");SilphReadValue id={0},destroyed={0};
+    if(source!=SILPH_SOURCE_RESEARCH&&source!=SILPH_SOURCE_GO_PASS)return SILPH_MANAGED_CONTRACT;
+    int status=silph_read_is_type(s->read,target,"Niantic.Holoholo.Quests","QuestMapPokemon");SilphReadValue id={0},destroyed={0},type={0};
     if(!status)status=silph_read_call(s->read,target,"get_EncounterId",SILPH_READ_U64,NULL,0,&id);
     if(!status)status=silph_read_call(s->read,target,"get_Destroyed",SILPH_READ_BOOL,NULL,0,&destroyed);
+    if(!status)status=silph_read_call(s->read,target,"get_EncounterType",SILPH_READ_ENUM32,NULL,0,&type);
+    if(!status&&type.bits!=5&&type.bits!=6&&type.bits!=25)status=SILPH_MANAGED_CONTRACT;
     if(!status&&(id.bits!=encounter||destroyed.bits))status=SILPH_MANAGED_STALE;
     void *object=NULL;if(!status)status=silph_managed_target(s->managed,target,&object);
     if(!status)status=silph_managed_retain(s->managed,object,false,&s->target.object);
-    if(!status){s->source=SILPH_SOURCE_RESEARCH;s->target.encounter=encounter;s->target.species=species;s->metrics.target_id=encounter;s->metrics.species=species;s->metrics.encounters++;s->metrics.state=SILPH_FARMER_RETRY;}
+    if(!status){s->source=source;s->target.encounter=encounter;s->target.species=species;s->metrics.target_id=encounter;s->metrics.species=species;s->metrics.encounters++;s->metrics.state=SILPH_FARMER_RETRY;}
     return status;
 }
 int silph_farmer_actions_open(void *memory,size_t bytes,void *read,void *managed,void *game,const SilphScheduleIdentity *identity,uint32_t transfers){
@@ -48,13 +51,13 @@ int silph_farmer_actions_open(void *memory,size_t bytes,void *read,void *managed
     s->pending=calloc(1,silph_managed_promise_size());if(!s->pending)return SILPH_MANAGED_CAPACITY;
     uint32_t scope_bytes=silph_core_size(4);s->scope=calloc(1,scope_bytes);
     if(!s->scope||silph_core_open(s->scope,scope_bytes,4,1)){free(s->pending);free(s->scope);memset(s,0,bytes);return SILPH_MANAGED_CAPACITY;}
-    s->transfer_enabled=transfers;s->options=(SilphFarmerOptions){.abi=1,.max_catches=1,.keep_options=127};
+    s->transfer_enabled=transfers;s->options=(SilphFarmerOptions){.abi=1,.max_catches=1,.keep_options=255};
     s->read=read;s->managed=managed;s->game=game;s->identity=*identity;s->metrics.state=SILPH_FARMER_SELECT;s->opened=1;return 0;
 }
 int silph_farmer_actions_configure(void *memory,const SilphFarmerOptions *options){
     Farmer *s=memory;if(!s||!s->opened||s->metrics.encounters||s->metrics.state!=SILPH_FARMER_SELECT)return SILPH_MANAGED_STATE;
     if(!options||options->abi!=1||options->continuous>1||!options->max_catches||options->max_catches>SILPH_CORE_MAX_CAPTURES||options->quality<1||options->quality>4
-        ||options->curve>1||options->use_berries>1||options->keep_options>127||options->berry_count>5||(options->use_berries&&!options->berry_count))return SILPH_MANAGED_ARGUMENT;
+        ||options->curve>1||options->use_berries>1||options->keep_options>255||options->berry_count>5||(options->use_berries&&!options->berry_count))return SILPH_MANAGED_ARGUMENT;
     for(unsigned i=0;i<options->berry_count;i++){
         int32_t v=options->berries[i];if(v!=701&&v!=703&&v!=705&&v!=706&&v!=708)return SILPH_MANAGED_ARGUMENT;
         for(unsigned j=0;j<i;j++)if(v==options->berries[j])return SILPH_MANAGED_ARGUMENT;
@@ -77,7 +80,7 @@ static void remember_target(Farmer *s){
 }
 static int continue_session(Farmer *s){
     if(s->metrics.state!=SILPH_FARMER_DONE||!s->options.continuous||s->metrics.catches>=s->options.max_catches)return 0;
-    if(s->source!=SILPH_SOURCE_RESEARCH)remember_target(s);int status=drop_target(s);if(status)return status;
+    if(s->source==SILPH_SOURCE_WILD)remember_target(s);int status=drop_target(s);if(status)return status;
     memset(&s->target,0,sizeof(s->target));s->target_throws=s->berry_attempted=s->berry_suppressed=s->active_item=s->selected_berry=0;
     s->source=SILPH_SOURCE_WILD;s->metrics.scope_granted=0;s->metrics.state=SILPH_FARMER_SELECT;return 0;
 }
@@ -91,7 +94,7 @@ static int target_valid(Farmer *s){
     if(!status&&value.bits)return SILPH_MANAGED_NOT_READY;
     if(!status)status=silph_read_call(s->read,s->target.object,"get_EncounterId",SILPH_READ_U64,NULL,0,&value);
     if(!status&&value.bits!=s->target.encounter)status=SILPH_MANAGED_STALE;
-    if(!status&&s->source==SILPH_SOURCE_RESEARCH)return 0;
+    if(!status&&s->source!=SILPH_SOURCE_WILD)return 0;
     double meters=INFINITY;if(!status)status=silph_game_read_distance(s->game,s->target.object,&meters);
     if(!status&&(!isfinite(meters)||meters>50))status=SILPH_MANAGED_NOT_READY;return status;
 }
@@ -115,7 +118,7 @@ static int throw_ball(Farmer *s,const SilphSchedulePermit *permit,const SilphGam
     const float profiles[]={.5f,1.1f,.85f,.5f,.05f};
     status=silph_action_capture_data(s->read,permit,(int32_t)ball,profiles[s->options.quality],s->options.quality!=0,s->options.curve!=0,&data,&ar);
     SilphReadArgument args[]={{.kind=SILPH_READ_BOXED,.value.reference=data},{.kind=SILPH_READ_REFERENCE,.value.reference=ar}};
-    if(!status){s->capture_sent=now/1000000;s->capture_sequence=silph_core_issue(s->scope,s->target.encounter,s->capture_sent,s->source==SILPH_SOURCE_RESEARCH?SILPH_SOURCE_RESEARCH:SILPH_SOURCE_WILD);if(!s->capture_sequence)status=SILPH_MANAGED_STATE;}
+    if(!status){s->capture_sent=now/1000000;s->capture_sequence=silph_core_issue(s->scope,s->target.encounter,s->capture_sent,s->source==SILPH_SOURCE_WILD?SILPH_SOURCE_WILD:SILPH_SOURCE_RESEARCH);if(!s->capture_sequence)status=SILPH_MANAGED_STATE;}
     if(!status)status=silph_action_call(s->read,permit,SILPH_ACTION_CAPTURE,s->target.object,args,2,&promise);
     if(!status){s->metrics.throws++;s->target_throws++;status=reserve(s,promise.reference,now,"Holoholo.Rpc","CatchPokemonOutProto");s->metrics.state=SILPH_FARMER_CAPTURE;}
     int a=release(s,&data),b=release(s,&ar);return status?status:a?a:b;
@@ -127,7 +130,7 @@ static int transfer_new(Farmer *s,const SilphSchedulePermit *permit,uint64_t now
     int status=silph_game_read_transfer_data(s->game,id,&data,&bag,&pokemon);
     if(status==SILPH_MANAGED_NOT_READY&&now-s->owned_started<UINT64_C(15000000000))return 0;
     SilphTransferVerdict verdict={0};
-    if(!status){data.options=s->options.keep_options;data.source=s->source==SILPH_SOURCE_RESEARCH?SILPH_SOURCE_RESEARCH:SILPH_SOURCE_WILD;if(silph_transfer_evaluate(&data,sizeof(data),&verdict))status=SILPH_MANAGED_CONTRACT;}
+    if(!status){data.options=s->options.keep_options;data.source=s->source;if(silph_transfer_evaluate(&data,sizeof(data),&verdict))status=SILPH_MANAGED_CONTRACT;}
     s->metrics.transfer_decision=verdict.decision;s->metrics.transfer_reasons=verdict.reasons;
     if(status||verdict.decision!=SILPH_VERDICT_CANDIDATE){
         s->metrics.transfer_error=status;silph_core_finish(s->scope,id,0);s->metrics.state=SILPH_FARMER_DONE;status=0;
@@ -145,7 +148,7 @@ static int transfer_sync(Farmer *s,bool present,uint64_t now){
     if(present&&now-s->owned_started<UINT64_C(15000000000))return 0;
     if(silph_core_finish(s->scope,s->metrics.captured_id,present?0:1))return SILPH_MANAGED_STATE;
     if(present){s->metrics.transfer_error=104;s->metrics.skipped++;}
-    else{s->metrics.transferred++;if(s->source==SILPH_SOURCE_RESEARCH)s->metrics.research_transferred++;}
+    else{s->metrics.transferred++;if(s->source==SILPH_SOURCE_RESEARCH)s->metrics.research_transferred++;if(s->source==SILPH_SOURCE_GO_PASS)s->metrics.go_pass_transferred++;}
     s->metrics.scope_granted=0;s->metrics.state=SILPH_FARMER_DONE;return 0;
 }
 static int terminal_response(Farmer *s,const SilphPromiseMetrics *promise){
@@ -195,7 +198,7 @@ int silph_farmer_actions_tick(void *memory,const SilphSchedulePermit *permit,con
                 if(!status){s->metrics.status=(uint32_t)code.bits;
                     uint64_t proof[]={s->capture_sequence,s->target.encounter,s->capture_sent,now/1000000,id.bits,(code.bits==1&&id.bits&&fresh)?15u:0u};
                     int accepted=silph_core_settle(s->scope,proof,6);if(accepted<0)status=SILPH_MANAGED_STATE;
-                    if(!status&&code.bits==1&&id.bits){s->metrics.catches++;if(s->source==SILPH_SOURCE_RESEARCH)s->metrics.research_catches++;s->metrics.captured_id=id.bits;s->metrics.fresh_response=fresh;
+                    if(!status&&code.bits==1&&id.bits){s->metrics.catches++;if(s->source==SILPH_SOURCE_RESEARCH)s->metrics.research_catches++;if(s->source==SILPH_SOURCE_GO_PASS)s->metrics.go_pass_catches++;s->metrics.captured_id=id.bits;s->metrics.fresh_response=fresh;
 #ifdef SILPH_PILOT_SERVICE
                         if(!s->metrics.reward_error){uint64_t xp=0,dust=0;int reward=silph_capture_rewards(s->read,s->managed,result,&xp,&dust);
                             if(reward)s->metrics.reward_error=(uint32_t)reward;else{s->metrics.xp+=xp;s->metrics.stardust+=dust;}}

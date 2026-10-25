@@ -22,7 +22,7 @@ typedef struct {
 } ViewApi;
 typedef struct {
     SilphManagedApi base;ViewApi api;
-    void *managed,*context,*allowed_context,*scheduler,*pokemon,*items,*profile;
+    void *managed,*context,*allowed_context,*scheduler,*pokemon,*items,*profile,*info,*stores[3],*pokedex;
     SilphManagedRef map,gui;
     const void *top,*active,*visible,*selection,*selection_active,*remote;
     void *stub;uintptr_t address;unsigned char before[16];
@@ -63,6 +63,9 @@ static uint32_t classify(View *s,void *map){
     }
     if(k==s->items)return SILPH_VIEW_ITEMS;
     if(k==s->profile)return SILPH_VIEW_PROFILE;
+    if(k&&k==s->info)return SILPH_VIEW_POKEMON_INFO;
+    if(k&&k==s->pokedex)return SILPH_VIEW_POKEDEX;
+    for(unsigned i=0;i<3;i++)if(k&&k==s->stores[i])return SILPH_VIEW_STORE;
     return visible?SILPH_VIEW_MAP:0;
 }
 static void update(void *object,const void *m){
@@ -94,6 +97,10 @@ int silph_farmer_view_open(void *memory,size_t bytes,const SilphManagedApi *base
     s->pokemon=klass(s,"holo-game.dll","Niantic.Holoholo.UI.Pokemon","PokemonInventoryGuiController");
     s->items=klass(s,"holo-game.dll","Niantic.Holoholo.UI.Items","ItemInventoryGuiController");
     s->profile=klass(s,"holo-game.dll","Niantic.Holoholo.Social.UI","PlayerProfileGuiController");
+    s->info=klass(s,"holo-game.dll","Niantic.Holoholo.UI.Pokemon","PokemonInfoGuiController");
+    s->pokedex=klass(s,"holo-game.dll","Niantic.Holoholo.UI.PokedexV2","PokedexGuiController");
+    const char *stores[]={"StorefrontGuiController","StorefrontGuiControllerV2","StorefrontGuiControllerLinkout"};
+    for(unsigned i=0;i<3;i++)s->stores[i]=klass(s,"holo-game.dll","Niantic.Holoholo.Storefront",stores[i]);
     void *gui=klass(s,"holo-game.dll","Niantic.Holoholo.NUI","GuiLayerService"),*go=klass(s,"UnityEngine.CoreModule.dll","UnityEngine","GameObject");
     s->top=method(s,gui,"TopGui",18);s->active=method(s,s->base.object_get_class(map),"get_IsActiveState",2);s->visible=method(s,s->base.object_get_class(map),"get_IsActiveAndVisible",2);
     s->remote=method(s,s->pokemon,"get_IsRemoteTradeView",2);s->selection=field(s,s->pokemon,"multiChoiceButtons","UnityEngine.GameObject");s->selection_active=method(s,go,"get_activeInHierarchy",2);

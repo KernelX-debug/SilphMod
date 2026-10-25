@@ -40,9 +40,9 @@ static inline int silph_reward_loot(void *read,void *managed,SilphManagedRef res
     }
     int a=silph_reward_drop(managed,&item.reference),b=silph_reward_drop(managed,&list.reference),c=silph_reward_drop(managed,&loot.reference);return status?status:a?a:b?b:c;
 }
-static inline int silph_quest_rewards(void *read,void *managed,SilphManagedRef result,uint64_t *xp,uint64_t *dust){
-    SilphReadValue list={0},count={0};uint64_t a=0,b=0;int status=silph_read_is_type(read,result,"Holoholo.Rpc","CompleteQuestOutProto");
-    if(!status)status=silph_read_field(read,result,"Rewards",SILPH_READ_REFERENCE,&list);
+static inline int silph_quest_reward_list(void *read,void *managed,SilphManagedRef result,const char *type,const char *field,uint64_t *xp,uint64_t *dust){
+    SilphReadValue list={0},count={0};uint64_t a=0,b=0;int status=silph_read_is_type(read,result,"Holoholo.Rpc",type);
+    if(!status)status=silph_read_field(read,result,field,SILPH_READ_REFERENCE,&list);
     if(!status)status=silph_read_call(read,list.reference,"get_Count",SILPH_READ_I32,NULL,0,&count);if(!status&&count.bits>32)status=SILPH_MANAGED_CONTRACT;
     for(uint32_t i=0;!status&&i<count.bits;i++){
         SilphReadValue reward={0},kind={0},amount={0};SilphReadArgument index={.kind=SILPH_READ_I32,.value.bits=i};
@@ -60,6 +60,7 @@ static inline int silph_quest_rewards(void *read,void *managed,SilphManagedRef r
     int freed=silph_reward_drop(managed,&list.reference);if(!status)status=freed;if(!status&&(a>10000000||b>10000000))status=SILPH_MANAGED_CONTRACT;
     if(!status){*xp=a;*dust=b;}return status;
 }
+static inline int silph_quest_rewards(void *read,void *managed,SilphManagedRef result,uint64_t *xp,uint64_t *dust){return silph_quest_reward_list(read,managed,result,"CompleteQuestOutProto","Rewards",xp,dust);}
 static inline int silph_spin_rewards(void *read,void *managed,SilphManagedRef result,uint64_t *xp,uint64_t *dust){
     uint64_t a=0,b=0;int status=silph_reward_integer(read,result,"XpAwarded",&a);
     if(!status)status=silph_reward_loot(read,managed,result,"Loot",&a,&b);if(!status)status=silph_reward_loot(read,managed,result,"BonusLoot",&a,&b);

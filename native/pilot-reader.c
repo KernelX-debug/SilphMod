@@ -68,6 +68,9 @@ int main(int argc,char **argv) {
         "farmerViewName0","farmerViewName1","farmerViewName2","farmerViewName3","farmerViewName4","farmerViewName5","farmerViewName6","farmerViewName7",
         "readCacheHits","readCacheMisses"
 #endif
+        ,"autoGiftState","autoGiftError","autoGiftOperation","autoGiftResult","giftsOpened","giftsSent","giftRequests","giftsSkipped","giftWorkNs","maxGiftWorkNs","giftsConverted","giftStardust"
+        ,"scenesSupported","sceneErrors","sceneRetries","sceneTimeouts"
+        ,"weeklyClaims","weeklyError","goPassState","goPassError","goPassOperation","goPassResult","goPassScans","goPassRequests","goPassClaims","goPassRewardsFound","goPassCatches","goPassTransferred","goPassXP","goPassStardust","goPassWorkNs","goPassMaxNs"
 #endif
     };
     _Static_assert(sizeof(keys)/sizeof(keys[0])==SILPH_PILOT_WORDS,"Pilot status fields disagree");

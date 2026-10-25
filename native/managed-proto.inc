@@ -10,7 +10,7 @@ static bool encounter_token(const char *text){
     return bits&&(bits>>61)<=5;
 }
 int silph_proto_validate(uint32_t operation,const SilphRequestInput *input){
-    if(!input||input->abi!=1||input->reserved||operation<1||operation>SILPH_RPC_COUNT)return SILPH_MANAGED_ARGUMENT;
+    if(!input||input->abi!=1||input->reserved||operation<1||operation>=SILPH_RPC_GIFT_OPEN)return SILPH_MANAGED_ARGUMENT;
     if(operation==SILPH_RPC_BUDDY_CHECK||operation==SILPH_RPC_BUDDY_REMOVE)return input->encounter||input->item||input->count||input->fort[0]||input->location[0]?SILPH_MANAGED_ARGUMENT:0;
     if(operation==SILPH_RPC_KECLEON_GET)return plain_id(input->fort,160)&&coordinate(input->latitude,input->longitude)?0:SILPH_MANAGED_ARGUMENT;
     if(operation==SILPH_RPC_SPIN)return plain_id(input->fort,160)&&coordinate(input->latitude,input->longitude)
