@@ -5,11 +5,11 @@
 **English · [Español](spanish.md)**
 
 Local automation for the original Pokémon GO app on **rooted Android**, both on UGPhone and on physical ARM64 phones. Catches nearby Pokémon, spins PokéStops, collects field research, Research Breakthrough, special research, and event research rewards, claims GO Pass rewards, transfers new catches according to your filters, and keeps the item bag within the limits you choose.
-Kecleon mode (BETA) is implemented in this version, *but is not yet final*
+The **Kecleon (BETA)** and **AutoRocket (BETA)** modes have their own settings, notification, and statistics.
 
 Configure the features, press **Start service**, and follow progress from the notification. **Stop** and **Export logs** let you stop the session and review its results. The interface, notifications, and visual resources are in English.
 
-**Edition:** `2.1.4` · [MIT](LICENSE)
+**Edition:** `2.2.12` · [MIT](LICENSE)
 
 **Platform:** Android 10 or later, ARM64, and root. The same APK for UGPhone and physical phones.
 
@@ -20,6 +20,7 @@ Configure the features, press **Start service**, and follow progress from the no
 - [Compatibility](#compatibility)
 - [Features](#features)
   - [Kecleon (BETA)](#kecleon-beta)
+  - [AutoRocket (BETA)](#autorocket-beta)
   - [Only catch: choose which Pokémon to catch](#only-catch-choose-which-pokémon-to-catch)
   - [Transfer without touching the existing collection](#transfer-without-touching-the-existing-collection)
   - [Item bag: per-type limits, not indiscriminate deletion](#item-bag-per-type-limits-not-indiscriminate-deletion)
@@ -31,6 +32,7 @@ Configure the features, press **Start service**, and follow progress from the no
   - [Automatic map recovery](#automatic-map-recovery)
   - [Catches and game calls](#catches-and-game-calls)
   - [Catch range and priority](#catch-range-and-priority)
+  - [Incense and event actions](#incense-and-event-actions)
   - [Throw quality](#throw-quality)
   - [Berries](#berries-confirm-the-effect-before-throwing)
   - [Interruptions and map continuity](#interruptions-and-map-continuity)
@@ -68,13 +70,15 @@ Configure the features, press **Start service**, and follow progress from the no
 | Connection | Adaptive selection between four startup routes and reuse of the one that worked for the environment |
 | Installed identity | `dev.rootcatch.ugphonetest`, retained to update existing installations |
 
-The app brings together **Farmer** and **Kecleon (BETA)**, with independent execution and separate statistics. Startup adapts to the **Android version of the device or instance**.
+The app brings together **Farmer**, **Kecleon (BETA)**, and **AutoRocket (BETA)**, with independent execution and separate statistics. Startup adapts to the **Android version of the device or instance**.
 
 ## Features
 
 | Feature | Current behavior |
 | --- | --- |
 | Autocatch | Selects the nearest eligible target within **50 m**, and checks its existence and distance again before throwing. Retries while the encounter remains valid; if it disappears or goes out of range, moves on to the next target. |
+| Incense | Catches spawns from regular Incense and Daily Adventure Incense, including when their durations stack. Retains Farmer’s species filters, berries, and transfer protections. |
+| Automatic event actions | Interacts with Halloween boxes within **50 m**, collects their rewards, and catches the Pokémon they provide. Enabled by default in Farmer. |
 | Only catch | Select one or more species using thumbnails, search, and Pokédex order. With nothing selected, catches all eligible species. Field research, Research Breakthrough, special research, event research, and GO Pass encounters are caught regardless of this filter. |
 | Throw quality | Choose **Normal**, **Nice**, **Great**, or **Excellent**. Throws retain the curveball spin. |
 | Berries | Uses the first available berry according to the configured selection and priority, confirms its application, and proceeds with the throw. Respects Item limits. |
@@ -97,21 +101,24 @@ The app brings together **Farmer** and **Kecleon (BETA)**, with independent exec
 | Auto-open gifts / Auto-send gifts | Opens and sends gifts to available friends throughout the session without stopping Farmer. When the item bag is full, opening requests conversion to Stardust. Both options are disabled by default. |
 | Hide trainer name | Temporarily displays **SilphMod** in the HUD, your own profile, and the friends header as soon as their components connect during engine startup. The account name does not change. Enabled by default in **Game tools**. |
 | Clean item bag | Deletes excess quantities of selected types **from the start**, and maintains those limits throughout the session. Does not need to wait for the bag to fill up. |
-| Kecleon (BETA) | Automatic candidate search and capture, with filters and per-account history. |
+| Kecleon (BETA) | Automatically searches for and catches candidates, with filters and history per account. This is still in development. |
+| AutoRocket (BETA) | Visits only normal Grunt candidates (for now), validates the incident, battles, catches according to the filters, and heals the team between battles. Includes a recommended team, two shields, and a return location for catches (Alan method). |
 | Fix error 12 | Location treatment within the game process, optional and tied to the session. |
 | Statistics | Accumulated catches, flees, spins, transfers, items deleted, XP, Stardust, and active time. Preserved when stopping, restarting, and recovering the map. |
-| Clear statistics | Resets only the counters of the open mode, with the service stopped. In Kecleon, also clears its candidate history. Located below the statistics. |
+| Clear statistics | Resets only the counters for the open mode, with the service stopped. In Kecleon, it also clears its candidate history; in AutoRocket, it clears the history and return location. Located below the statistics. |
 | Map recovery | After five minutes of valid readings with no spawns in the map directory, restarts the game and reconnects the engine. Up to **10 startup attempts per recovery**, cancelable with Stop. Disabled when species are selected in **Only catch**. |
-| Notification shade | Catches and spins continue when it is pulled down if Pokémon GO remains the underlying app and the screen is unlocked. Farmer also continues in the item bag, Pokémon inventory, an individual Pokémon's details, your own profile, the shop, and the Pokédex. |
+| Notification shade | Catches and spins continue when it is pulled down if Pokémon GO remains the underlying app and the screen is unlocked. Farmer also continues in the item bag, Pokémon inventory, an individual Pokémon’s details, your own profile, the shop, and the Pokédex. Informational quest progress and reward notices allow it to continue while the map remains visible. |
 | Integrity and control | Component verification before startup and a local channel bound to the process and session, with credentials excluded from arguments and new logs. |
 | Connection recovery | Retries recoverable native channel disconnections, preserves statistics, and revalidates the process and account. Retries respect Stop and session limits. |
 | Logs | Manual export of up to three recent sessions to a local ZIP. |
 
-Farmer uses the route you configure in your joystick. Kecleon requires the public integration of **GPS JoyStick by The App Ninjas** for its automatic jumps.
+Farmer uses the route you configure in your joystick. Kecleon and AutoRocket require the public integration of **GPS JoyStick by The App Ninjas** for their automatic jumps.
 
 ### Kecleon (BETA)
 
 This mode visits candidates from **Moonani**, moves with GPS JoyStick, looks for the corresponding PokéStop, and checks its active incident. It resolves `fort_id`, incident, and `encounter_id` from the game before opening the encounter.
+
+HTML is processed row by row, and candidates are stored in a temporary queue in the app’s private storage, without loading the entire page into memory. The list can grow beyond the previous size, row, or candidate limits. Entries are offered to the engine one at a time, with the same history per account to avoid repeats. Stopping the session deletes the temporary queue.
 
 Map loading is accompanied by bounded **eight-meter** movements and spaced readings. A timeout is recorded as **unverified**, not as proof that there was no Kecleon there. History separates accounts and avoids reprocessing candidates that have already been resolved.
 
@@ -120,6 +127,26 @@ The **Only catch 15/15/15**, **Only catch 0/0/0**, **Only catch shiny**, and **O
 **Maximum encounters** limits accumulated encounters. When the maximum is reached or pending candidates run out, the game closes and the reason is displayed. **Clear statistics** clears its counters and candidate history. Farmer retains its own results.
 
 Kecleon shares throw quality, berries, item bag limits, and inventory and presentation tools. Its statistics show **Encounters**, **Catches**, **Shinies**, **Items deleted**, **XP**, and **Stardust**. It does not spin PokéStops or transfer its collection.
+
+### AutoRocket (BETA)
+
+This mode visits normal Grunt candidates from **NYCPokeMap**, checks their appearance and disappearance times, and validates the PokéStop and its active incident in the game. The feed refreshes every **30 seconds**. If it finds a PokéStop without the expected Grunt or with Kecleon, it moves on to the next candidate. This edition works with normal Grunts for now.
+
+You can donate to thank the creator of this free map for their great work: https://www.paypal.com/paypalme/SGPokeMap/10USD
+
+Map loading uses bounded **eight-meter** movements and spaced readings. Entering the battle, attacking, shielding, and catching are handled through the game’s services. Entry and result dialogues, the matchup presentation, and the acquisition of Purified Gems are skipped.
+
+**Use recommended team**, enabled by default, prepares the recommended team for each battle. When disabled, it uses the user’s selection. It checks the team’s health before starting, uses both shields at the first opportunities, and uses available Charged Attacks, including the second Charged Attack. If it loses, it closes the defeat screens and continues with team recovery.
+
+Between battles, it heals and revives only the three Pokémon used. It prioritizes **Max Revive** over **Revive** and chooses an available potion that covers the missing HP; if none is enough in a single use, it continues with the available ones. If items run out, it checks whether it can prepare a suitable team before starting another battle.
+
+**Catch all**, enabled by default, catches all valid Shadow encounters. When disabled, it allows combining **Only catch 15/15/15**, **Only catch 0/0/0**, **Only catch shiny**, **Only catch shiny + 15/15/15**, and **Only catch 13/13/13 or above**. The filters combine with “OR”; shiny + 15/15/15 requires both conditions, and 13/13/13 or above requires every IV to be at least 13.
+
+In **Engine settings**, **Last cooldown location** lets you enter return coordinates for catching from the first accepted encounter. If the field is empty, it uses the location of that session’s first confirmed Rocket catch. After each battle, it returns to that point before catching encounters that match the filters. An encounter skipped by the filters does not set that location.
+
+**Maximum Rockets** limits the accumulated number of completed battles and defaults to **700**. Statistics show **Rockets**, **Catches**, **Shinies**, **Items deleted**, **XP**, and **Stardust**. **Clear statistics** resets these counters, candidate history, and the return location. Throw quality, berries, and item bag limits remain in the shared settings.
+
+Encounters are caught without opening the camera. If the game displays the newly caught Pokémon’s details or a size record, only the screen associated with that catch is closed. **Stop** cancels pending actions, and switching to another app pauses the mode; scrcpy, screenshots, and screen recording follow the same focus handling as Farmer. AutoRocket keeps its catches and does not transfer the collection.
 
 ### Only catch: choose which Pokémon to catch
 
@@ -181,7 +208,7 @@ First, remember that you need a correctly configured GPS joystick app.
 
 1. Install the APK from the releases section, open it, and grant root and notification permissions (if requested). Keep your joystick configured and working. Do not run other automation tools or injectors at the same time. Set SilphMod's battery mode to unrestricted.
 
-2. Select **Catches**, **Only catch**, **Throw quality**, **Use berries**, **Berry priority**, **Remove buddy**, **Spin PokéStops**, transfer filters, and **Items to keep**, according to what you want to use. In **Inventory tools**, you can enable IV names and extended manual transfer. In **Game tools**, you can choose **Fast gift opening**, **Auto-open gifts**, **Auto-send gifts**, and **Hide trainer name**. The **Keep field research encounters** and **Keep GO Pass encounters** filters let you retain catches from those rewards. Adjust catch and spin maximums in **Engine settings**. Transfers and discards have no separate total maximum per session: they delete an unlimited number of the items you configured for discarding while the session remains active.
+2. Select **Catches**, **Only catch**, **Throw quality**, **Use berries**, **Berry priority**, **Remove buddy**, **Spin PokéStops**, transfer filters, and **Items to keep**, according to what you want to use. In Farmer, **Automatic event actions** controls interactions with event boxes. In AutoRocket, choose **Catch all** or its filters, **Use recommended team**, **Maximum Rockets**, and, optionally, **Last cooldown location**. In **Inventory tools**, you can enable IV names and extended manual transfer. In **Game tools**, you can choose **Fast gift opening**, **Auto-open gifts**, **Auto-send gifts**, and **Hide trainer name**. The **Keep field research encounters** and **Keep GO Pass encounters** filters let you keep catches from those rewards. Adjust the catch and spin maximums in **Engine settings**. Transfers and discards have no total maximum of their own per session; that is, they remove an unlimited quantity of the items you have configured for discarding while the session remains active.
 
 3. Set a **walking route** in your GPS joystick app, or simply use that app's joystick to move around the map. Remember that a **walking route** is recommended for greater effectiveness over longer periods.
 
@@ -208,7 +235,7 @@ SilphMod has two parts that cooperate through a local control channel:
 - **Android / Java:** interface, settings, foreground service, root permission, process identity, focus, notification, Kecleon candidates, and export.
 - **Engine / C:** IL2CPP service resolution, action scheduling on the Unity thread, response reading, inventory policies, and reference lifecycles.
 
-The engine uses objects and methods from the original process; the game client continues serializing its requests and communicating with its server. Kecleon mode also queries its candidate source over HTTPS. Account and Pokémon identifiers are not sent to that source.
+The engine uses objects and methods from the original process; the game client continues serializing its requests and communicating with its server. Kecleon and AutoRocket also query their candidate sources over HTTPS. Account and Pokémon identifiers are not sent to that source.
 
 ### Startup and continuity
 
@@ -270,6 +297,8 @@ Reverse engineering was used to identify contracts, structures, and signatures f
 | Automatic gifts | Friend services, gift inventory, and the game's opening or sending responses |
 | Manual gifts | `OpenGiftGuiController.OnOpenClick()`, gift animators, and local presentation sequences |
 | Temporary name | Text in `PlayerHudGuiController`, `PlayerProfilePage`, and `FriendsListHeaderCellView` |
+| Event boxes | `DynamicTappablesSession`, `TAPPABLE_TYPE_BOX` controllers, and the `ProcessTappableOutProto` response |
+| Rocket battles | Incident services, team preparation, and synchronized battle state |
 
 The engine maintains **50 m for wild catches** and **80 m for spins**. It checks ID, existence, and distance again before acting, which matters when the joystick follows a route.
 
@@ -297,6 +326,20 @@ Scanning, catch responses, research, cleaning, and transfers share a scheduler. 
 Field and method resolution uses bounded caches of validated metadata. Inventory values and game responses are read again when appropriate; the cache does not retain Pokémon or authorizations from another session. Research, spins, and cleaning retain their turn before the next target is selected.
 
 Coordination is in [farmer-session.c](native/farmer-session.c); target selection and reading are in [game-read.c](native/game-read.c).
+
+A temporary failure when requesting an encounter, or a target that briefly moves out of range, can be checked again after **15 seconds**. Uncertain catch or transfer responses retain their separate handling and do not trigger automatic resubmission of that operation.
+
+### Incense and event actions
+
+Farmer includes spawns from regular Incense and Daily Adventure Incense in its target selection. It reads the spawn type and uses the corresponding encounter, with the same **Only catch** filters, berries, and throw quality. The cycle checks the game’s active spawns without depending on a fixed incense duration.
+
+**Automatic event actions**, enabled by default, adds automatic interaction with Halloween boxes. It selects visible, unexpired boxes within **50 m**, identifies each one by its map data, and avoids repeating the interaction. It collects item or Candy rewards and hands Pokémon encounters to Farmer’s catcher, independently of **Only catch**.
+
+Box encounters retain catch verification and global transfer protections. Their identification is retained for a bounded interval after a confirmed catch to prevent a delayed camera opening from leaving Farmer stopped. Encounters opened manually by the user follow their normal flow.
+
+Boxes are scanned every **two seconds**, when Farmer is available on the map. It skips repeated readings of boxes already processed, releases temporary references, and maintains coordination with catches, berries, spins, research, and transfers. The specific action of this option adapts to the active event appearing in the game.
+
+Implementation: [event-actions.c](native/event-actions.c), [event-view.c](native/event-view.c), and [farmer-actions.c](native/farmer-actions.c).
 
 ### Throw quality
 
@@ -355,6 +398,8 @@ Medals are recognized both when their progress increases and when a new tier is 
 
 Egg hatches also have an adapter in `MapExploreState`: it identifies the signature that receives `HatchedPokemonsData` and skips presentation before the scene opens. Obtaining the Pokémon and reward responses remain the game's responsibility. If an egg hatch screen is already open, it is handled through its compatible controller. The hatch result view closes when that flow ends; a view you open manually from the inventory remains open until you close it.
 
+Farmer continues during informational quest progress notices and reward lists when the map remains active and visible. Manual multiselection, manual encounters, and windows requiring interaction retain their pauses.
+
 Actions execute on the Unity thread, with the same session and focus control as Farmer. There is no continuous polling of all windows: only a bounded queue is retained when a recognized screen appears. Screens outside that list are not closed automatically.
 
 The presentation queue is bounded, and components are retained through controlled references. When the engine closes, hooks are removed and those references are released. Implementation: [presentation-tools.c](native/presentation-tools.c).
@@ -363,7 +408,7 @@ The presentation queue is bounded, and components are retained through controlle
 
 Field research is **always** managed during Farmer, including tasks received when spinning PokéStops. The engine queries `IQuestService`, claims tasks that the game allows to be redeemed, and processes the item, berry, XP, Stardust, or encounter rewards it receives.
 
-The scope is identified by **QuestContext = 2** and its encounters by **EncounterType = 6**. Discarding is limited to this scope; special and event research follow their own reward-claiming flow. Incompatible field tasks—such as raids, trades, walking kilometers, and earning candy with your buddy—and tasks with unknown types or conditions are removed to make room for others; the AR scanning slot is retained. A completed task is claimed before considering whether to discard it.
+The scope is identified by **QuestContext = 2** and its encounters by **EncounterType = 6**. Discarding is limited to this scope; special research and event research follow their own reward-claiming flow. Incompatible field tasks, such as raids, trades, exploring kilometers, and earning Candy with your buddy, and those with unknown types or conditions are removed to make room for others; the AR Mapping slot is preserved. An already completed task is claimed before considering whether to discard it.
 
 ```c
 if (context != 2 || redeemable > 1 || count > 32 ||
@@ -501,7 +546,7 @@ $env:ANDROID_HOME = "C:\Users\usuario\AppData\Local\Android\Sdk"
 
 Gradle compiles the C components from [native](native) through [build_native.ps1](tools/build_native.ps1). The hooking backend is obtained from a pinned ShadowHook revision and kept outside the publishable code, in `.dependencies/`. You can specify existing installations with `SILPH_NDK` and `SILPH_SHADOWHOOK`.
 
-The build generates the **eight native `.so` components** and their SHA-256 hashes. The service verifies them again before loading the engine. These files are built from C and the hooking dependency. Gradle includes them in the APK from `app/src/main/jniLibs/arm64-v8a/`.
+The build generates the **ten native `.so` components** and their SHA-256 hashes. The service verifies them again before loading the engine. These files are built from C and the hook dependency. Gradle includes them in the APK from `app/src/main/jniLibs/arm64-v8a/`.
 
 Without signing configuration, the release output is **unsigned**. To sign it, provide `SILPH_KEYSTORE`, `SILPH_STORE_PASSWORD`, `SILPH_KEY_ALIAS`, and `SILPH_KEY_PASSWORD`. Keys remain outside the repository; updating an existing installation uses the same certificate.
 
@@ -553,13 +598,20 @@ Farmer adds continuity in compatible game menus, more frequent catch-phase check
 
 This edition also improves recovery from native channel disconnections and handling of capture responses without confirmation. It preserves statistics, startup routes, and individual transfer authorization.
 
-The next phase is to continue optimizing continuity in both modes and expand compatibility across devices.
+**2.2.11 introduces AutoRocket (BETA)**, with normal Grunt candidates, a recommended team, automatic attacks and shields, filtered catches, return to the configured location, and team healing between battles. It adds **Only catch 13/13/13 or above**, **Maximum Rockets**, and history per account.
+Farmer adds spawns from regular Incense and Daily Adventure Incense and **Automatic event actions** to collect Halloween boxes and catch their encounters. It improves continuity during informational quest and reward notices, prevents delayed camera openings from boxes, and shortens the wait after temporary encounter failures.
+
+The next phase is to keep optimizing continuity across all three modes and expand compatibility between devices.
 
 Configuration of the priority order for Poké Ball use is planned, rather than the default: 1. Poké Ball; 2. Great Ball; 3. Ultra Ball.
 
-New modes are coming to SilphMod, stay tuned..
+New improvements and modes are coming to SilphMod, stay tuned..
 
 Another pending improvement is to keep expanding the catalog of Pokémon that can be configured not to transfer, for example nundos (0/0/0) or rank 1 Pokémon (PvP).
+
+Another relevant addition is a feature to keep caught Pokémon from being transferred through specific filters.
+
+Additional options will be added for “feed your buddy” and “Mega Evolve your buddy”.
 
 [MIT](LICENSE) license. Dependencies retain their notices in [NOTICE](NOTICE) and their licenses within the assets. An independent, personal project, with no affiliation to the game's rights holders or other parties.
 
