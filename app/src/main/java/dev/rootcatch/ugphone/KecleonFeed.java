@@ -1,15 +1,19 @@
 package dev.rootcatch.ugphone;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.io.Reader;
+import java.util.function.BooleanSupplier;
 
 public final class KecleonFeed {
     public static final String URL = "https://moonani.com/PokeList/quest.php";
-    private static final Pattern ROW = Pattern.compile("<tr\\b[^>]*>.*?</tr>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+    private static final int MAX_ROW_CHARS=65536,MAX_TAG_CHARS=4096;
+    private static final Pattern TAG=Pattern.compile("^<\\s*(/?)\\s*([a-zA-Z0-9]+)(?=[\\s/>])");
     private static final Pattern CELL = Pattern.compile("<td\\b[^>]*>(.*?)</td>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
     private static final Pattern HIDDEN = Pattern.compile("<!--\\s*<td>\\d+</td>\\s*<td>([a-fA-F0-9]{32})</td>\\s*-->", Pattern.CASE_INSENSITIVE);
     private static final Pattern COPY = Pattern.compile("data-clipboard-text\\s*=\\s*[\"']([^\"']+)[\"']", Pattern.CASE_INSENSITIVE);
@@ -49,24 +53,65 @@ public final class KecleonFeed {
         return value.replaceAll("(?s)<[^>]*>", " ").replace("&nbsp;", " ").replace("&#160;", " ")
                 .replace("&amp;", "&").replace("&quot;", "\"").replace("&#39;", "'").replaceAll("\\s+", " ").trim();
     }
-    public static List<Candidate> parse(String html) {
-        if (html == null || html.length() > 1_048_576) throw new IllegalArgumentException("Candidate page too large");
-        List<Candidate> result = new ArrayList<>(); LinkedHashSet<String> seen = new LinkedHashSet<>();
-        Matcher rows = ROW.matcher(html); int visited = 0;
-        while (rows.find() && visited++ < 1500 && result.size() < 500) {
-            String row = rows.group(); Matcher hidden = HIDDEN.matcher(row);
+    public interface Sink {void accept(Candidate candidate) throws IOException;}
+    public static final class Scan {
+        public long characters,rows,candidates,oversizedRows;
+    }
+    private static void row(String row,Sink sink,Scan scan) throws IOException {
+            Matcher hidden = HIDDEN.matcher(row);
             String id = hidden.find() ? hidden.group(1).toLowerCase(Locale.ROOT) : "";
             String clean = row.replaceAll("(?s)<!--.*?-->", "");
             Matcher cells = CELL.matcher(clean); List<String> columns = new ArrayList<>();
             while (cells.find() && columns.size() < 8) columns.add(cells.group(1));
             if (columns.size() != 7 || !text(columns.get(0)).equalsIgnoreCase("Kecleon")
-                    || !text(columns.get(1)).equals("352") || !text(columns.get(2)).equalsIgnoreCase("Kecleon")) continue;
+                    || !text(columns.get(1)).equals("352") || !text(columns.get(2)).equalsIgnoreCase("Kecleon")) return;
             Matcher copy = COPY.matcher(columns.get(3)); String coords = copy.find() ? copy.group(1) : text(columns.get(3));
+            Candidate candidate;
             try {
-                Candidate candidate = new Candidate(id, coords, text(columns.get(4)), text(columns.get(5)), text(columns.get(6)));
-                if (seen.add(id + ":" + candidate.coordinates)) result.add(candidate);
-            } catch (IllegalArgumentException ignored) { }
+                candidate = new Candidate(id, coords, text(columns.get(4)), text(columns.get(5)), text(columns.get(6)));
+            } catch (IllegalArgumentException ignored) {return;}
+            if(candidate.start.length()>128||candidate.end.length()>128||candidate.country.length()>128)return;
+            sink.accept(candidate);scan.candidates++;
+    }
+    public static Scan read(Reader input,Sink sink,BooleanSupplier cancelled) throws IOException {
+        if(input==null||sink==null||cancelled==null)throw new IllegalArgumentException("Invalid candidate reader");
+        Scan scan=new Scan();StringBuilder tag=new StringBuilder(),row=null;char[] buffer=new char[8192];
+        boolean inTag=false,comment=false,tableSeen=false,largeTag=false;int quote=0,dashes=0,tables=0,raw=0,count;
+        while(true){
+            if(cancelled.getAsBoolean()||Thread.currentThread().isInterrupted())throw new InterruptedIOException("Stopped");
+            count=input.read(buffer);if(count==-1)break;
+            if(cancelled.getAsBoolean()||Thread.currentThread().isInterrupted())throw new InterruptedIOException("Stopped");
+            scan.characters+=count;
+            for(int i=0;i<count;i++){
+                char c=buffer[i];
+                if(row!=null){if(row.length()<MAX_ROW_CHARS)row.append(c);else{row=null;scan.oversizedRows++;}}
+                if(raw!=0){
+                    if(c=='<'){tag.setLength(0);tag.append(c);inTag=true;largeTag=false;}
+                    else if(inTag){
+                        if(tag.length()<MAX_TAG_CHARS)tag.append(c);else largeTag=true;
+                        if(c=='>'){inTag=false;Matcher match=TAG.matcher(tag);if(!largeTag&&match.find()&&!match.group(1).isEmpty()&&match.group(2).equalsIgnoreCase(raw==1?"script":"style"))raw=0;}
+                    }
+                    continue;
+                }
+                if(comment){if(c=='>'&&dashes>=2){comment=false;dashes=0;}else dashes=c=='-'?Math.min(2,dashes+1):0;continue;}
+                if(!inTag){if(c=='<'){inTag=true;tag.setLength(0);tag.append(c);largeTag=false;quote=0;}continue;}
+                if(tag.length()<MAX_TAG_CHARS)tag.append(c);else largeTag=true;
+                if(tag.length()==4&&tag.toString().equals("<!--")){comment=true;dashes=0;inTag=false;continue;}
+                if(quote!=0){if(c==quote)quote=0;continue;}
+                if(c=='\''||c=='"'){quote=c;continue;}
+                if(c!='>')continue;
+                inTag=false;if(largeTag)continue;
+                Matcher match=TAG.matcher(tag);if(!match.find())continue;boolean end=!match.group(1).isEmpty();String name=match.group(2);
+                if(!end&&(name.equalsIgnoreCase("script")||name.equalsIgnoreCase("style"))){raw=name.equalsIgnoreCase("script")?1:2;continue;}
+                if(name.equalsIgnoreCase("table")){if(end){tables=Math.max(0,tables-1);if(tables==0)row=null;}else{tables++;tableSeen=true;}}
+                else if(name.equalsIgnoreCase("tr")&&tables>0){
+                    if(end){if(row!=null){scan.rows++;row(row.toString(),sink,scan);row=null;}}
+                    else row=new StringBuilder(tag);
+                }
+            }
         }
-        return result;
+        if(cancelled.getAsBoolean()||Thread.currentThread().isInterrupted())throw new InterruptedIOException("Stopped");
+        if(!tableSeen)throw new IOException("Moonani returned an unexpected page");
+        return scan;
     }
 }

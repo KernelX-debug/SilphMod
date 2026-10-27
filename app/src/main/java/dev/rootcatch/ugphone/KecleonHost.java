@@ -2,13 +2,12 @@ package dev.rootcatch.ugphone;
 
 import android.content.Context;
 import dev.rootcatch.root.RootShell;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.File;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.ArrayList;
 import java.util.Locale;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -25,20 +24,21 @@ public final class KecleonHost implements AutoCloseable {
     private final Sender sender;
     private final Consumer<JSONObject> logger;
     private final BooleanSupplier active;
+    private final File cache;
     private final RootShell joystick=new RootShell();
     private final ThreadPoolExecutor worker=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8),
             task->{Thread thread=new Thread(task,"silph-kecleon-io");thread.setDaemon(true);return thread;}){
-        @Override protected void terminated(){history.close();}
+        @Override protected void terminated(){if(candidates!=null)candidates.close();history.close();}
     };
     private volatile HttpURLConnection connection;
     private volatile boolean closed;
     private String account="",token="",key="";
     private KecleonFeed.Candidate current;
-    private List<KecleonFeed.Candidate> candidates;
-    private int index;
+    private KecleonQueue candidates;
     private final Map<String,KecleonFeed.Candidate> deferred=new LinkedHashMap<>();
     public KecleonHost(Context context,Sender sender,Consumer<JSONObject> logger,BooleanSupplier active){
         history=new KecleonHistory(context);this.sender=sender;this.logger=logger;this.active=active;
+        cache=context.getCacheDir();
     }
     public synchronized void bindAccount(String player){
         String next=KecleonHistory.hash(player);
@@ -64,8 +64,9 @@ public final class KecleonHost implements AutoCloseable {
             long request=event.getLong("requestId");if(request<1)throw new IllegalArgumentException("Invalid candidate request");
             if(current!=null)throw new IllegalStateException("Previous candidate not finalized");
             if(candidates==null){candidates=fetch();log("kecleon_feed_loaded","candidates="+candidates.size());}
-            while(index<candidates.size()){
-                KecleonFeed.Candidate value=candidates.get(index++);String candidate=KecleonHistory.key(value);
+            KecleonFeed.Candidate value;
+            while((value=candidates.next())!=null){
+                String candidate=KecleonHistory.key(value);
                 if(!history.claim(account,candidate)){
                     if(history.retryAt(account,candidate)!=Long.MAX_VALUE)deferred.put(candidate,value);
                     continue;
@@ -124,20 +125,19 @@ public final class KecleonHost implements AutoCloseable {
             if(!closed)sender.send(new JSONObject().put("type","kecleon_result_saved").put("requestId",event.getLong("requestId")));
         }
     }
-    private List<KecleonFeed.Candidate> fetch() throws Exception {
+    private KecleonQueue fetch() throws Exception {
         HttpURLConnection request=(HttpURLConnection)new URL(KecleonFeed.URL).openConnection();connection=request;
         request.setConnectTimeout(15000);request.setReadTimeout(15000);request.setInstanceFollowRedirects(false);
         request.setRequestProperty("User-Agent","SilphMod/1.9.5");
         try{
             int code=request.getResponseCode();if(code!=200)throw new IllegalStateException("Moonani HTTP "+code);
-            try(InputStream input=request.getInputStream();ByteArrayOutputStream bytes=new ByteArrayOutputStream()){
-                byte[] buffer=new byte[8192];int count;
-                while(!closed&&(count=input.read(buffer))!=-1){if(bytes.size()+count>1_048_576)throw new IllegalStateException("Candidate page too large");bytes.write(buffer,0,count);}
-                if(closed)throw new InterruptedException("Stopped");
-                String html=new String(bytes.toByteArray(),StandardCharsets.UTF_8);
-                if(!html.toLowerCase(Locale.ROOT).contains("<table"))throw new IllegalStateException("Moonani returned an unexpected page");
-                return new ArrayList<>(KecleonFeed.parse(html));
-            }
+            KecleonQueue queue=new KecleonQueue(cache);boolean complete=false;
+            try(InputStream input=request.getInputStream();InputStreamReader reader=new InputStreamReader(input,StandardCharsets.UTF_8)){
+                KecleonFeed.Scan scan=KecleonFeed.read(reader,queue::add,()->closed);
+                queue.ready();if(closed)throw new InterruptedException("Stopped");
+                log("kecleon_feed_scan","characters="+scan.characters+" rows="+scan.rows+" candidates="+scan.candidates+" oversizedRows="+scan.oversizedRows);
+                complete=true;return queue;
+            }finally{if(!complete)queue.close();}
         }finally{request.disconnect();connection=null;}
     }
     private void log(String event,String detail){try{logger.accept(new JSONObject().put("event",event).put("detail",detail));}catch(Exception ignored){}}
