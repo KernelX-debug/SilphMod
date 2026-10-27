@@ -8,7 +8,7 @@ typedef struct {
     uint32_t pokemon_count,max_pokemon,item_count,max_items,map_pokemon,map_stops,candidates_read,first_species;
     uint32_t items[8];
 } SilphGameSnapshot;
-typedef struct { SilphManagedRef object;uint64_t encounter;uint32_t species,reserved;double meters; } SilphGameTarget;
+typedef struct { SilphManagedRef object;uint64_t encounter;uint32_t species,spawn_kind;double meters; } SilphGameTarget;
 typedef struct {
     double latitude,longitude,player_latitude,player_longitude,meters;
     uint64_t expires_ms;
@@ -30,6 +30,7 @@ int silph_game_read_nearest(void *,double,SilphGameTarget *);
 int silph_game_read_select(void *,double,SilphPokemonPredicate,void *,SilphGameTarget *);
 int silph_game_read_distance(void *,SilphManagedRef,double *);
 int silph_game_read_position(void *,double *,double *);
+int silph_game_read_rocket_position(void *,double *,double *);
 int silph_game_read_stop(void *,double,uint32_t,SilphStopPredicate,void *,SilphGameStop *);
 int silph_game_read_stop_at(void *,double,double,double,double,SilphGameStop *);
 int silph_game_read_item_bag(void *,SilphManagedRef *);
@@ -40,5 +41,7 @@ int silph_game_read_service(void *,uint32_t,SilphManagedRef *);
 int silph_game_read_gift_service(void *,uint32_t,SilphManagedRef *);
 int silph_game_read_map_count(void *,uint32_t *);
 int silph_game_read_research_service(void *,uint32_t,SilphManagedRef *);
+int silph_game_read_rocket_service(void *,uint32_t,SilphManagedRef *);
+int silph_game_read_place(void *,const char *,SilphManagedRef *);
 int silph_game_read_transfer_data(void *,uint64_t,SilphTransferInput *,SilphManagedRef *,SilphManagedRef *);
 #endif

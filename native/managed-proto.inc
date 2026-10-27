@@ -10,6 +10,8 @@ static bool encounter_token(const char *text){
     return bits&&(bits>>61)<=5;
 }
 int silph_proto_validate(uint32_t operation,const SilphRequestInput *input){
+    if(input&&input->abi==1&&!input->reserved&&operation==SILPH_RPC_ROCKET_CAPTURE)
+        return input->encounter&&encounter_token(input->location)&&input->item==5&&input->quality>=1&&input->quality<=4&&input->curve<=1?0:SILPH_MANAGED_ARGUMENT;
     if(!input||input->abi!=1||input->reserved||operation<1||operation>=SILPH_RPC_GIFT_OPEN)return SILPH_MANAGED_ARGUMENT;
     if(operation==SILPH_RPC_BUDDY_CHECK||operation==SILPH_RPC_BUDDY_REMOVE)return input->encounter||input->item||input->count||input->fort[0]||input->location[0]?SILPH_MANAGED_ARGUMENT:0;
     if(operation==SILPH_RPC_KECLEON_GET)return plain_id(input->fort,160)&&coordinate(input->latitude,input->longitude)?0:SILPH_MANAGED_ARGUMENT;
@@ -95,15 +97,15 @@ int silph_proto_request(void *memory,uint32_t operation,const SilphRequestInput 
     if(!status&&(operation==SILPH_RPC_KECLEON_GET||operation==SILPH_RPC_SPIN))status=fresh_text(s,*output,operation==SILPH_RPC_SPIN?"Id":"FortId",input->fort);
     if(!status&&operation==SILPH_RPC_KECLEON_GET)status=fresh_text(s,*output,"IncidentId","");
     if(!status&&operation==SILPH_RPC_KECLEON_GET)status=fresh_text(s,*output,"EncounterLocation",token);
-    if(!status&&(operation==SILPH_RPC_KECLEON_OPEN||operation==SILPH_RPC_KECLEON_BERRY||operation==SILPH_RPC_KECLEON_CAPTURE))status=fresh_scalar(s,*output,"EncounterId",SILPH_READ_U64,input->encounter);
-    if(!status&&(operation==SILPH_RPC_KECLEON_OPEN||operation==SILPH_RPC_KECLEON_BERRY||operation==SILPH_RPC_KECLEON_CAPTURE))status=fresh_text(s,*output,operation==SILPH_RPC_KECLEON_OPEN?"EncounterLocation":"SpawnPointGuid",input->location);
+    if(!status&&(operation==SILPH_RPC_KECLEON_OPEN||operation==SILPH_RPC_KECLEON_BERRY||operation==SILPH_RPC_KECLEON_CAPTURE||operation==SILPH_RPC_ROCKET_CAPTURE))status=fresh_scalar(s,*output,"EncounterId",SILPH_READ_U64,input->encounter);
+    if(!status&&(operation==SILPH_RPC_KECLEON_OPEN||operation==SILPH_RPC_KECLEON_BERRY||operation==SILPH_RPC_KECLEON_CAPTURE||operation==SILPH_RPC_ROCKET_CAPTURE))status=fresh_text(s,*output,operation==SILPH_RPC_KECLEON_OPEN?"EncounterLocation":"SpawnPointGuid",input->location);
     if(!status&&(operation==SILPH_RPC_KECLEON_BERRY||operation==SILPH_RPC_DISCARD))status=fresh_scalar(s,*output,"Item",SILPH_READ_ENUM32,(uint32_t)input->item);
     if(!status&&operation==SILPH_RPC_DISCARD)status=fresh_scalar(s,*output,"Count",SILPH_READ_I32,(uint32_t)input->count);
     if(!status&&operation==SILPH_RPC_SPIN){
         const char *names[]={"PlayerLatDegrees","PlayerLngDegrees","FortLatDegrees","FortLngDegrees"};double values[]={input->player_latitude,input->player_longitude,input->latitude,input->longitude};
         for(unsigned i=0;!status&&i<4;i++)status=fresh_double(s,*output,names[i],values[i]);
     }
-    if(!status&&operation==SILPH_RPC_KECLEON_CAPTURE){
+    if(!status&&(operation==SILPH_RPC_KECLEON_CAPTURE||operation==SILPH_RPC_ROCKET_CAPTURE)){
         const double profiles[]={0,1.1,.85,.5,.05};status=fresh_scalar(s,*output,"Pokeball",SILPH_READ_I32,(uint32_t)input->item);
         if(!status)status=fresh_double(s,*output,"NormalizedReticleSize",2-profiles[input->quality]);
         if(!status)status=fresh_scalar(s,*output,"HitPokemon",SILPH_READ_BOOL,1);

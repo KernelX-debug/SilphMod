@@ -11,7 +11,7 @@ public final class NativeKecleonWire {
         public int pid,phase,move,reason,verified;
         public double latitude,longitude;
         public String source,fort,incident;
-        public void bind(NativeSessionWire.Config c){require(c.mode==2&&pid==c.pid&&ticks==c.ticks&&hi==c.sessionHi&&lo==c.sessionLo&&(accountHi!=0||accountLo!=0));}
+        public void bind(NativeSessionWire.Config c){require((c.mode==2||c.mode==3)&&pid==c.pid&&ticks==c.ticks&&hi==c.sessionHi&&lo==c.sessionLo&&(accountHi!=0||accountLo!=0));}
     }
     public static Event decode(byte[] bytes){
         require(bytes!=null&&bytes.length==640);ByteBuffer b=ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);

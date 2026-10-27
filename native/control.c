@@ -116,9 +116,10 @@ static int receive(Control *state) {
         if (!status) state->metrics.pulses++;
     } else if (request.command == SILPH_CONTROL_STOP) status = silph_schedule_stop(state->config.scheduler, state->config.lease);
     else if(request.command==SILPH_CONTROL_ENGINE)status=state->config.message(state->config.extension,packet+sizeof(request),(size_t)bytes-sizeof(request));
+    bool committed=request.command==SILPH_CONTROL_ENGINE&&!status;
     SilphScheduleMetrics metrics = {0};
     int snapshot = silph_schedule_metrics(state->config.scheduler, state->config.lease, &metrics);
-    if (!status && snapshot) status = snapshot;
+    if (!status && snapshot&&!committed) status = snapshot;
     SilphControlReply reply = {.magic=SILPH_CONTROL_MAGIC,.sequence=request.sequence,.executed=metrics.executed,
         .canceled=metrics.canceled,.pulses=state->metrics.pulses,.abi=request.abi,.size=sizeof(reply),
         .pid=state->config.identity.pid,.status=(uint32_t)status,.state=metrics.state,.reason=metrics.reason,
@@ -126,7 +127,7 @@ static int receive(Control *state) {
     uint8_t response[sizeof(reply)+SILPH_CONTROL_SNAPSHOT_CAPACITY]={0};size_t extra=0;
     if(request.abi==SILPH_CONTROL_EXTENDED_ABI){
         int sampled=state->config.snapshot(state->config.extension,response+sizeof(reply),SILPH_CONTROL_SNAPSHOT_CAPACITY,&extra);
-        if(sampled||extra>SILPH_CONTROL_SNAPSHOT_CAPACITY){extra=0;if(!reply.status)reply.status=sampled?sampled:SILPH_CONTROL_ARGUMENT;}
+        if(sampled||extra>SILPH_CONTROL_SNAPSHOT_CAPACITY){extra=0;if(!reply.status&&!committed)reply.status=sampled?sampled:SILPH_CONTROL_ARGUMENT;}
     }
     reply.size=(uint32_t)(sizeof(reply)+extra);memcpy(response,&reply,sizeof(reply));
     if (send(state->peer,response,reply.size,MSG_DONTWAIT|MSG_NOSIGNAL)!=reply.size)drop(state);

@@ -35,34 +35,42 @@ public final class MainActivity extends Activity {
     @Override protected void onPause(){handler.removeCallbacks(refresh);super.onPause();}
     private void show(){
         edits.clear();inputError="";ui=new ModeUi(this);status=null;start=null;
-        if(mode!=1&&mode!=2){
+        if(mode!=1&&mode!=2&&mode!=3){
             ui.title("SilphMod",BuildConfig.VERSION_NAME);
             LinearLayout farmer=ui.card("FARMER");farmer.addView(ui.text("Autocatch & autospin",23,ModeUi.TEXT));
             farmer.addView(ui.text("Wild catches · PokéStops · Inventory",14,ModeUi.MUTED));
             ui.button(farmer,"Open Farmer",true).setOnClickListener(v->open(1));
             LinearLayout kec=ui.card("KECLEON (BETA)");kec.addView(ui.text("Automatic Kecleon search & catch",23,ModeUi.TEXT));
             kec.addView(ui.text("Candidate queue · Automatic jumps · IV & shiny filters",14,ModeUi.MUTED));
-            ui.button(kec,"Open Kecleon (BETA)",false).setOnClickListener(v->open(2));ui.show();return;
+            ui.button(kec,"Open Kecleon (BETA)",false).setOnClickListener(v->open(2));
+            LinearLayout rocket=ui.card("AUTOROCKET (BETA)");rocket.addView(ui.text("Automatic grunt battles & shadow catches",23,ModeUi.TEXT));
+            rocket.addView(ui.text("Rocket queue · Team healing · IV & shiny filters",14,ModeUi.MUTED));ui.button(rocket,"Open AutoRocket (BETA)",false).setOnClickListener(v->open(3));ui.show();return;
         }
         ui.button(ui.page,"‹  Modes",false).setOnClickListener(v->{mode=0;show();});
-        ui.title(mode==1?"Farmer":"Kecleon (BETA)","SilphMod");
+        ui.title(mode==1?"Farmer":mode==2?"Kecleon (BETA)":"AutoRocket (BETA)","SilphMod");
         status=ui.text(CheckService.view.status,17,ModeUi.ACCENT);ui.page.addView(status);
         elapsed=ui.text("00:00:00",16,ModeUi.MUTED);ui.page.addView(elapsed);
         details=ui.text("",13,ModeUi.MUTED);ui.page.addView(details);
-        String[] labels=mode==1?new String[]{"Catches","PokéStops","Transferred","Items deleted","XP","Stardust"}:new String[]{"Encounters","Catches","Shinies","Items deleted","XP","Stardust"};
+        String[] labels=mode==1?new String[]{"Catches","PokéStops","Transferred","Items deleted","XP","Stardust"}:new String[]{mode==3?"Rockets":"Encounters","Catches","Shinies","Items deleted","XP","Stardust"};
         for(int row=0;row<3;row++){LinearLayout line=ui.row();ui.page.addView(line);for(int col=0;col<2;col++)metrics[row*2+col]=ui.metric(line,labels[row*2+col]);}
         clear=ui.button(ui.page,"Clear statistics",false);clear.setOnClickListener(v->{if(CheckService.view.running)return;
-            inputError="";settings.save(mode,new NativeSessionState.Totals());settings.prefs.edit().putLong("stats"+mode+".elapsed",0).apply();if(mode==2)dev.rootcatch.ugphone.KecleonHost.clearHistory(this);render();});ui.space(ui.page,16);
+            inputError="";settings.save(mode,new NativeSessionState.Totals());settings.prefs.edit().putLong("stats"+mode+".elapsed",0).apply();if(mode==2)dev.rootcatch.ugphone.KecleonHost.clearHistory(this);if(mode==3)NativeRocketHost.clear(this);render();});ui.space(ui.page,16);
         SettingsDialogs dialogs=new SettingsDialogs(this);
         LinearLayout features=ui.card("Features");
         check(features,"Fix error 12","fixLocation",false);
         if(mode==1){
             toggle(features,"Catches","catches",true);
+            toggle(features,"Automatic event actions","automaticEventActions",true);
             setting(features,"Only catch",speciesSummary()).setOnClickListener(v->new PokemonPickerDialog(this,settings.prefs.getString("species","")).show(value->{settings.prefs.edit().putString("species",value).apply();show();}));
         }else{
-            String[] names={"Only catch 15/15/15","Only catch 0/0/0","Only catch shiny","Only catch shiny + 15/15/15"};
-            for(int i=0;i<names.length;i++)bit(features,names[i],"filters",1<<i,0);
+            LinearLayout filters=ui.column();
+            if(mode==3){CompoundButton all=toggle(features,"Catch all","rocketCatchAll",true);features.addView(filters);filters.setVisibility(all.isChecked()?View.GONE:View.VISIBLE);
+                all.setOnCheckedChangeListener((v,on)->{settings.prefs.edit().putBoolean("rocketCatchAll",on).apply();filters.setVisibility(on?View.GONE:View.VISIBLE);});
+            }else features.addView(filters);
+            String[] names=mode==3?new String[]{"Only catch 15/15/15","Only catch 0/0/0","Only catch shiny","Only catch shiny + 15/15/15","Only catch 13/13/13 or above"}:new String[]{"Only catch 15/15/15","Only catch 0/0/0","Only catch shiny","Only catch shiny + 15/15/15"};
+            for(int i=0;i<names.length;i++)bit(filters,names[i],mode==3?"rocketFilters":"filters",1<<i,0);
         }
+        if(mode==3)check(features,"Use recommended team","rocketRecommendedTeam",true);
         int q=Math.max(1,Math.min(4,settings.prefs.getInt("quality",4)));
         setting(features,"Throw quality",ThrowQuality.values()[q-1].label).setOnClickListener(v->dialogs.throwsDialog(ThrowQuality.values()[q-1],value->{settings.prefs.edit().putInt("quality",value.ordinal()+1).apply();show();}));
         toggle(features,"Curve ball","curve",true);
@@ -89,8 +97,7 @@ public final class MainActivity extends Activity {
         toggle(inventory,"Extended manual transfer","extendedManualTransfer",false);
         LinearLayout game=ui.card("Game tools");
         toggle(game,"Fast gift opening","fastGiftOpening",true);
-        toggle(game,"Auto-open gifts","autoOpenGifts",false);
-        toggle(game,"Auto-send gifts","autoSendGifts",false);
+        if(mode!=3){toggle(game,"Auto-open gifts","autoOpenGifts",false);toggle(game,"Auto-send gifts","autoSendGifts",false);}
         toggle(game,"Hide trainer name","hideTrainerName",true);
         Button engine=ui.button(ui.page,"Engine settings",false);edits.add(engine);engine.setOnClickListener(v->engineDialog());
         start=ui.button(ui.controls,"Start service",true);start.setOnClickListener(v->{if(CheckService.view.running){startService(new Intent(this,CheckService.class).setAction(CheckService.STOP));return;}
@@ -103,7 +110,7 @@ public final class MainActivity extends Activity {
     private void render(){
         if(status==null)return;CheckService.View value=CheckService.view;var t=settings.totals(mode);
         set(status,value.running||inputError.isEmpty()?value.status:inputError);set(details,value.running?value.details:"");
-        long[] values=mode==1?new long[]{t.caught,t.spun,t.transferred,t.discarded,t.xp,t.stardust}:new long[]{t.encounters,t.caught,t.shinies,t.discarded,t.xp,t.stardust};
+        long[] values=mode==1?new long[]{t.caught,t.spun,t.transferred,t.discarded,t.xp,t.stardust}:new long[]{mode==3?t.spun:t.encounters,t.caught,t.shinies,t.discarded,t.xp,t.stardust};
         long seconds=settings.elapsed(mode)/1000;set(elapsed,String.format(Locale.US,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60));
         for(int i=0;i<6;i++)set(metrics[i],String.format(Locale.US,"%,d",values[i]));
         set(start,value.running?"Stop service":"Start service");clear.setEnabled(!value.running);for(View edit:edits)edit.setEnabled(!value.running);
@@ -122,8 +129,10 @@ public final class MainActivity extends Activity {
         Dialog dialog=new Dialog(this,R.style.SettingsDialogTheme);LinearLayout page=ui.column();page.setPadding(ui.dp(22),ui.dp(20),ui.dp(22),ui.dp(20));page.setBackgroundColor(ModeUi.BG);
         page.addView(ui.text("Engine settings",23,ModeUi.TEXT));
         LinkedHashMap<String,EditText> inputs=new LinkedHashMap<>();input(page,inputs,"delay","Action interval (ms)",100);
-        if(mode==1){input(page,inputs,"catchesMax","Maximum catches",4800);input(page,inputs,"spinsMax","Maximum spins",2400);}else input(page,inputs,"encountersMax","Maximum encounters",1000);
-        ui.button(page,"Save",true).setOnClickListener(v->{try{var editor=settings.prefs.edit();for(var pair:inputs.entrySet()){int n=Integer.parseInt(pair.getValue().getText().toString());if(pair.getKey().equals("delay")?(n<100||n>3000):(n<1||n>50000))throw new IllegalArgumentException("Invalid value");editor.putInt(pair.getKey(),n);}editor.apply();inputError="";dialog.dismiss();}catch(Exception error){Toast.makeText(this,"Invalid value",Toast.LENGTH_SHORT).show();}});
+        if(mode==1){input(page,inputs,"catchesMax","Maximum catches",4800);input(page,inputs,"spinsMax","Maximum spins",2400);}else if(mode==3)input(page,inputs,"rocketsMax","Maximum Rockets",700);else input(page,inputs,"encountersMax","Maximum encounters",1000);
+        EditText location=new EditText(this);if(mode==3){page.addView(ui.text("Last cooldown location",14,ModeUi.MUTED));location.setSingleLine(true);location.setTextColor(ModeUi.TEXT);location.setInputType(InputType.TYPE_CLASS_TEXT);
+            location.setHint("Latitude,longitude (optional)");location.setText(settings.prefs.getString("rocketCooldownLocation",""));page.addView(location);}
+        ui.button(page,"Save",true).setOnClickListener(v->{try{var editor=settings.prefs.edit();for(var pair:inputs.entrySet()){int n=Integer.parseInt(pair.getValue().getText().toString());if(pair.getKey().equals("delay")?(n<100||n>3000):(n<1||n>50000))throw new IllegalArgumentException("Invalid value");editor.putInt(pair.getKey(),n);}if(mode==3){String value=location.getText().toString().trim();if(!value.isEmpty())dev.rootcatch.ugphone.KecleonFeed.parseCoordinates(value);editor.putString("rocketCooldownLocation",value);}editor.apply();inputError="";dialog.dismiss();}catch(Exception error){Toast.makeText(this,"Invalid value",Toast.LENGTH_SHORT).show();}});
         ui.button(page,"Cancel",false).setOnClickListener(v->dialog.dismiss());dialog.setContentView(page);dialog.show();if(dialog.getWindow()!=null)dialog.getWindow().setLayout(Math.min(getResources().getDisplayMetrics().widthPixels-ui.dp(32),ui.dp(420)),-2);
     }
     private void input(LinearLayout page,Map<String,EditText> inputs,String key,String title,int fallback){page.addView(ui.text(title,14,ModeUi.MUTED));EditText edit=new EditText(this);edit.setSingleLine(true);edit.setInputType(InputType.TYPE_CLASS_NUMBER);edit.setTextColor(ModeUi.TEXT);edit.setText(Integer.toString(settings.prefs.getInt(key,fallback)));edit.setContentDescription(title);page.addView(edit);inputs.put(key,edit);}

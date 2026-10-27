@@ -6,8 +6,8 @@ import java.util.Arrays;
 import java.util.zip.CRC32;
 
 public final class NativeSessionWire {
-    public static final int CONFIG_BYTES=1024,SNAPSHOT_BYTES=256,FARMER=1,KECLEON=2;
-    public static final int CATCH=1,SPIN=2,CLEAN=4,TRANSFER=8,BERRIES=16,CURVE=32,READ_ONLY=64,TRAINER_NAME=128,IV_NAMES=256,FIX_LOCATION=512,SCENES=1024,MANUAL_TRANSFER=2048,FAST_GIFTS=4096,REMOVE_BUDDY=8192,AUTO_OPEN_GIFTS=16384,AUTO_SEND_GIFTS=32768;
+    public static final int CONFIG_BYTES=1024,SNAPSHOT_BYTES=256,FARMER=1,KECLEON=2,ROCKET=3;
+    public static final int CATCH=1,SPIN=2,CLEAN=4,TRANSFER=8,BERRIES=16,CURVE=32,READ_ONLY=64,TRAINER_NAME=128,IV_NAMES=256,FIX_LOCATION=512,SCENES=1024,MANUAL_TRANSFER=2048,FAST_GIFTS=4096,REMOVE_BUDDY=8192,AUTO_OPEN_GIFTS=16384,AUTO_SEND_GIFTS=32768,RECOMMENDED_TEAM=65536,EVENT_ACTIONS=131072;
     private static final long CONFIG_MAGIC=0x3147464348504c53L,SNAPSHOT_MAGIC=0x3154415348504c53L;
     private NativeSessionWire() { }
     public static final class Config {
@@ -28,9 +28,9 @@ public final class NativeSessionWire {
         public String command(){return "engine "+hex(encode());}
         public void select(int speciesId){if(speciesId<=0||speciesId>=2048)throw new IllegalArgumentException("Invalid species");species[speciesId/8]|=(byte)(1<<(speciesId%8));}
         private void validate() {
-            require(pid>1&&ticks>0&&(sessionHi!=0||sessionLo!=0)&&mode>=1&&mode<=2&&flags>=0&&flags<=65535);
+            require(pid>1&&ticks>0&&(sessionHi!=0||sessionLo!=0)&&mode>=1&&mode<=3&&flags>=0&&(flags&~(mode==ROCKET?131071:mode==FARMER?196607:65535))==0);
             require(quality>=1&&quality<=4&&delayMs>=100&&delayMs<=3000&&keep>=0&&keep<=255&&maxCatches>=0&&maxCatches<=50000
-                    &&maxSpins>=0&&maxSpins<=50000&&maxEncounters>=0&&maxEncounters<=50000&&filters>=0&&filters<=15
+                    &&maxSpins>=0&&maxSpins<=50000&&maxEncounters>=0&&maxEncounters<=50000&&filters>=0&&filters<=(mode==ROCKET?31:15)
                     &&durationMs>=0&&durationMs<=86400000&&(durationMs==0||durationMs>=1000));
             require(berries!=null&&berries.length<=5&&limits!=null&&limits.length<=64&&species!=null&&species.length==256&&(species[0]&1)==0);
             if((flags&READ_ONLY)!=0)require(flags==READ_ONLY&&maxCatches==0&&maxSpins==0&&maxEncounters==0&&filters==0);
@@ -66,7 +66,7 @@ public final class NativeSessionWire {
             visualAvailable=b.getInt(224);visualFailed=b.getInt(228);ivReads=b.getLong(232);nameUpdates=b.getLong(240);
             researchStatus=b.getInt(248)&65535;locationStatus=b.getInt(248)>>>16;
             require((visualAvailable&~7552)==0&&(visualFailed&~7552)==0&&(visualAvailable&visualFailed)==0&&ivReads>=0&&nameUpdates>=0);
-            require(mode>=1&&mode<=2&&state>=0&&state<=7&&flags>=0&&flags<=15&&pid>1&&ticks>0&&(sessionHi!=0||sessionLo!=0)
+            require(mode>=1&&mode<=3&&state>=0&&state<=7&&flags>=0&&flags<=15&&pid>1&&ticks>0&&(sessionHi!=0||sessionLo!=0)
                     &&rewardsAvailable>=0&&rewardsAvailable<=3&&Double.isFinite(latitude)&&Double.isFinite(longitude)&&Math.abs(latitude)<=90&&Math.abs(longitude)<=180);
         }
         public void bind(Config config){require(pid==config.pid&&ticks==config.ticks&&sessionHi==config.sessionHi&&sessionLo==config.sessionLo&&mode==config.mode);}

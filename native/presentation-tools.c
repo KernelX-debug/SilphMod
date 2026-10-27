@@ -9,7 +9,10 @@
 #include <unistd.h>
 #include <stdatomic.h>
 #include <time.h>
-enum {SCENE_BADGE_INCREMENT,SCENE_INCENSE,SCENE_LEVEL,SCENE_XP,SCENE_EGG,SCENE_EGG_CUTSCENE,SCENE_SPEED,SCENE_STAMP,SCENE_FRIENDSHIP,SCENE_POKEMON_RESULT,SCENE_BADGE_AWARD,SCENE_GYM_AWARD,SCENE_VIVILLON_AWARD,SCENE_AVATAR_AWARD,SCENE_QUEST_DIALOG,SCENE_COUNT};
+#if defined(SILPH_PILOT_ROCKET) || defined(SILPH_PRESENT_SCOPED) || defined(SILPH_PRESENT_UNWIND)
+#include <android/log.h>
+#endif
+enum {SCENE_BADGE_INCREMENT,SCENE_INCENSE,SCENE_LEVEL,SCENE_XP,SCENE_EGG,SCENE_EGG_CUTSCENE,SCENE_SPEED,SCENE_STAMP,SCENE_FRIENDSHIP,SCENE_POKEMON_RESULT,SCENE_BADGE_AWARD,SCENE_GYM_AWARD,SCENE_VIVILLON_AWARD,SCENE_AVATAR_AWARD,SCENE_QUEST_DIALOG,SCENE_AR_SAFETY,SCENE_WEEKLY_FITNESS,SCENE_COUNT};
 typedef struct {const char *space,*name,*action;} SceneSpec;
 static const SceneSpec scene_specs[SCENE_COUNT]={
     {"Niantic.Holoholo.UI","BadgeIncrementGuiController","Dismiss"},
@@ -26,7 +29,9 @@ static const SceneSpec scene_specs[SCENE_COUNT]={
     {"Niantic.Holoholo.GymBadges","GymBadgeAwardGuiController","Dismiss"},
     {"Niantic.Holoholo.Vivillon","VivillonSubBadgeAwardGuiController","DismissButtonHit"},
     {"Niantic.Holoholo.Map.UI","AvatarCustomizationAwardGuiController","Dismiss"},
-    {"Niantic.Holoholo.Quests","QuestDialogGuiController","ClickSkip"}
+    {"Niantic.Holoholo.Quests","QuestDialogGuiController","ClickSkip"},
+    {"Niantic.Holoholo.Encounter.ArPlus","ArPlusSafetyPromptGuiController","PressOk"},
+    {"Niantic.Holoholo.BgMode.UI","WeeklyFitnessDialog","ButtonPressed"}
 };
 typedef struct {
     const void **(*assemblies)(void *,size_t *);
@@ -65,6 +70,14 @@ typedef struct {
     uint64_t scenes_count,eggs,gifts,waits,selections,batches,open_drains;
     uint32_t last_scene,scene_supported,scene_errors;uint64_t scene_retries,scene_timeouts;
 } Presentation;
+#if defined(SILPH_PRESENT_SCOPED) || defined(SILPH_PRESENT_UNWIND)
+typedef struct {Presentation *owner;unsigned operations,depth;} PresentationScope;
+static void presentation_scope_leave(PresentationScope *scope){if(scope->owner){if(scope->owner->operations!=scope->operations||scope->owner->depth!=scope->depth)__android_log_print(ANDROID_LOG_INFO,"SilphFarmer","UI callback unwound; reentry guard released");scope->owner->operations=scope->operations;scope->owner->depth=scope->depth;}}
+static PresentationScope presentation_scope(Presentation *s){return (PresentationScope){s&&!s->closed?s:NULL,s?s->operations:0,s?s->depth:0};}
+#define SILPH_PRESENT_SCOPE(s) PresentationScope scope __attribute__((unused,cleanup(presentation_scope_leave)))=presentation_scope(s)
+#else
+#define SILPH_PRESENT_SCOPE(s) ((void)0)
+#endif
 static _Atomic(Presentation *) current;
 static atomic_uint owner_tid;
 static Presentation *owned(void){return atomic_load(&owner_tid)==(unsigned)syscall(__NR_gettid)?atomic_load(&current):NULL;}
@@ -113,7 +126,7 @@ void silph_presentation_map(void *memory,void *map,uint64_t now){
     if(exact(s,layer,s->layer_class)&&!invoke(s,s->layer_top,layer,NULL,&top)){enqueue(s,top);silph_presentation_drain(s,now);}
 }
 static void on_open(void *object,const void *m){
-    Presentation *s=owned();bool entered=operation(s);open_original(object,m);
+    Presentation *s=owned();SILPH_PRESENT_SCOPE(s);bool entered=operation(s);open_original(object,m);
     if(entered){
         enqueue(s,object);
         if(allowed(s,SILPH_PRESENT_SCENES)&&!s->busy){struct timespec at={0};if(!clock_gettime(CLOCK_MONOTONIC,&at)){
@@ -122,8 +135,9 @@ static void on_open(void *object,const void *m){
         s->operations--;
     }
 }
-static bool on_top(void *object,const void *m){Presentation *s=owned();bool entered=operation(s);bool result=top_original(object,m);if(result)enqueue(owned(),object);if(entered)s->operations--;return result;}
-static void on_egg(void *object,void *data,const void *m){Presentation *s=owned();if(allowed(s,SILPH_PRESENT_SCENES)&&!s->busy){s->eggs++;return;}egg_original(object,data,m);}
+static bool on_top(void *object,const void *m){Presentation *s=owned();SILPH_PRESENT_SCOPE(s);bool entered=operation(s);bool result=top_original(object,m);if(result)enqueue(owned(),object);if(entered)s->operations--;return result;}
+static void on_egg(void *object,void *data,const void *m){Presentation *s=owned();SILPH_PRESENT_SCOPE(s);if(allowed(s,SILPH_PRESENT_SCENES)&&!s->busy){s->eggs++;return;}egg_original(object,data,m);}
+static bool scene_closed(unsigned target,int32_t state){return state==0||(state==3&&target!=SCENE_AR_SAFETY&&target!=SCENE_WEEKLY_FITNESS);}
 static void scene_complete(Presentation *s,Queued *q){if(q->requested){s->scenes_count++;s->last_scene=q->target+1;s->scene_errors&=~(1u<<q->target);}drop(s,&q->object);}
 static void scene_retry(Presentation *s,Queued *q,uint64_t now,int error){
     if(error){s->scene_errors|=1u<<q->target;s->stage=110+q->target;}
@@ -133,16 +147,16 @@ void silph_presentation_drain(void *memory,uint64_t now){
     Presentation *s=memory;if(!allowed(s,SILPH_PRESENT_SCENES)||!now||s->busy)return;s->busy=1;unsigned actions=0;
     for(unsigned i=0;i<16;i++){Queued *q=&s->queue[i];if(!q->object.serial)continue;if(!q->until)q->until=now+UINT64_C(30000000000);
         void *object=NULL;if(silph_managed_target(s->managed,q->object,&object)||!live(s,object)){scene_complete(s,q);continue;}
-        int32_t state=0;s->api.get(object,s->state,&state);if(state==0||state==3){scene_complete(s,q);continue;}
+        int32_t state=0;s->api.get(object,s->state,&state);if(scene_closed(q->target,state)){scene_complete(s,q);continue;}
         if(now>=q->until){s->scene_timeouts++;s->scene_errors|=1u<<q->target;s->stage=130+q->target;drop(s,&q->object);continue;}
         if(actions>=2||now<q->next||q->attempts>=3||state!=2)continue;
         void *boxed=NULL;bool top=false;if(invoke(s,s->top,object,NULL,&boxed)||unbox(s,boxed,&top,1)){q->attempts++;actions++;scene_retry(s,q,now,1);continue;}if(!top)continue;
         Scene *scene=&s->scenes[q->target];int error=0;if(scene->asset){void *asset=NULL;s->api.get(object,scene->asset,&asset);if(exact(s,asset,scene->asset_class)){uintptr_t native=0;s->api.get(asset,scene->asset_alive,&native);if(native)error=invoke(s,scene->skip,asset,NULL,NULL);}}
-        if(!error)error=invoke(s,scene->action,object,NULL,NULL);
+        int32_t response=1;void *arguments[]={&response};if(!error)error=invoke(s,scene->action,object,q->target==SCENE_WEEKLY_FITNESS?arguments:NULL,NULL);
         if(!error&&scene->finish&&allowed(s,SILPH_PRESENT_SCENES)){void *fresh=NULL;uint32_t active=0;if(!silph_managed_target(s->managed,q->object,&fresh)&&live(s,fresh)){s->api.get(fresh,s->state,&active);if(active==2)error=invoke(s,scene->finish,fresh,NULL,NULL);}}
         actions++;q->attempts++;if(error){scene_retry(s,q,now,error);continue;}q->requested=1;
         void *fresh=NULL;if(silph_managed_target(s->managed,q->object,&fresh)||!live(s,fresh)){scene_complete(s,q);continue;}
-        s->api.get(fresh,s->state,&state);if(state==0||state==3)scene_complete(s,q);else scene_retry(s,q,now,0);
+        s->api.get(fresh,s->state,&state);if(scene_closed(q->target,state))scene_complete(s,q);else scene_retry(s,q,now,0);
     }s->busy=0;
 }
 static int floating(Presentation *s,void *object,bool animator,float *value,bool write){
@@ -162,12 +176,12 @@ static int restore(Presentation *s){
         if(r->object.serial&&!silph_managed_target(s->managed,r->object,&object)&&object){int read=floating(s,object,r->animator,&actual,false);if(read&&read!=2)error=1;else if(!read&&actual==replacement&&floating(s,object,r->animator,&r->before,true))error=1;}drop(s,&r->object);
     }s->record_count=0;return error;
 }
-static void gift_click(void *object,const void *m){Presentation *s=owned();bool entered=operation(s);if(allowed(s,SILPH_PRESENT_GIFTS)&&exact(s,object,s->gift)){void *animator=NULL;s->api.get(object,s->gift_animator,&animator);if(remember(s,object,false)||remember(s,animator,true))fail(s,SILPH_PRESENT_GIFTS,201);else s->gifts++;}click_original(object,m);if(entered)s->operations--;}
-static void gift_dismiss(void *object,const void *m){Presentation *s=owned();bool entered=operation(s);dismiss_original(object,m);if(entered){if(exact(s,object,s->gift)&&restore(s))fail(s,SILPH_PRESENT_GIFTS,202);s->operations--;}}
-static void gift_stage(void *object,const void *m){Presentation *s=owned();bool entered=operation(s);if(allowed(s,SILPH_PRESENT_GIFTS)&&exact(s,object,s->box_stage)){void *box=NULL,*animator=NULL;s->api.get(object,s->stage_box,&box);if(box&&exact(s,box,s->box)){s->api.get(box,s->box_animator,&animator);if(remember(s,animator,true))fail(s,SILPH_PRESENT_GIFTS,203);}}stage_original(object,m);if(entered)s->operations--;}
-static void gift_reward(void *object,void *data,const void *m){Presentation *s=owned();bool entered=operation(s);bool accelerate=allowed(s,SILPH_PRESENT_GIFTS)&&s->depth&&exact(s,object,s->reward);reward_original(object,data,m);if(accelerate){void *animator=NULL;s->api.get(object,s->reward_animator,&animator);if(remember(s,animator,true))fail(s,SILPH_PRESENT_GIFTS,204);}if(entered)s->operations--;}
+static void gift_click(void *object,const void *m){Presentation *s=owned();SILPH_PRESENT_SCOPE(s);bool entered=operation(s);if(allowed(s,SILPH_PRESENT_GIFTS)&&exact(s,object,s->gift)){void *animator=NULL;s->api.get(object,s->gift_animator,&animator);if(remember(s,object,false)||remember(s,animator,true))fail(s,SILPH_PRESENT_GIFTS,201);else s->gifts++;}click_original(object,m);if(entered)s->operations--;}
+static void gift_dismiss(void *object,const void *m){Presentation *s=owned();SILPH_PRESENT_SCOPE(s);bool entered=operation(s);dismiss_original(object,m);if(entered){if(exact(s,object,s->gift)&&restore(s))fail(s,SILPH_PRESENT_GIFTS,202);s->operations--;}}
+static void gift_stage(void *object,const void *m){Presentation *s=owned();SILPH_PRESENT_SCOPE(s);bool entered=operation(s);if(allowed(s,SILPH_PRESENT_GIFTS)&&exact(s,object,s->box_stage)){void *box=NULL,*animator=NULL;s->api.get(object,s->stage_box,&box);if(box&&exact(s,box,s->box)){s->api.get(box,s->box_animator,&animator);if(remember(s,animator,true))fail(s,SILPH_PRESENT_GIFTS,203);}}stage_original(object,m);if(entered)s->operations--;}
+static void gift_reward(void *object,void *data,const void *m){Presentation *s=owned();SILPH_PRESENT_SCOPE(s);bool entered=operation(s);bool accelerate=allowed(s,SILPH_PRESENT_GIFTS)&&s->depth&&exact(s,object,s->reward);reward_original(object,data,m);if(accelerate){void *animator=NULL;s->api.get(object,s->reward_animator,&animator);if(remember(s,animator,true))fail(s,SILPH_PRESENT_GIFTS,204);}if(entered)s->operations--;}
 static bool gift_next(void *object,const void *m,unsigned index){
-    Presentation *s=owned();bool active=allowed(s,SILPH_PRESENT_GIFTS)&&exact(s,object,s->iterators[index]);if(active)s->depth++;bool result=iterator_original[index](object,m);
+    Presentation *s=owned();SILPH_PRESENT_SCOPE(s);bool active=allowed(s,SILPH_PRESENT_GIFTS)&&exact(s,object,s->iterators[index]);if(active)s->depth++;bool result=iterator_original[index](object,m);
     if(active){if(result&&allowed(s,SILPH_PRESENT_GIFTS)){void *wait=NULL;s->api.get(object,s->iterator_current[index],&wait);if(exact(s,wait,s->wait)){float duration=0;s->api.get(wait,s->wait_seconds,&duration);if(isfinite(duration)&&duration>.051f&&duration<=5){float short_wait=.05f;s->api.set(wait,s->wait_seconds,&short_wait);s->waits++;}}}s->depth--;}return result;
 }
 static bool gift_next0(void *o,const void *m){return gift_next(o,m,0);}static bool gift_next1(void *o,const void *m){return gift_next(o,m,1);}
@@ -186,7 +200,7 @@ static int blocked(Presentation *s,void *pokemon,bool *out){
     if(!error){void *args[]={&id};error=invoke(s,s->is_buddy,buddy,args,&boxed);if(!error)error=unbox(s,boxed,out,1);}return error;
 }
 static bool manual_selection(void *object,void *pokemon,const void *m){
-    Presentation *s=owned();bool entered=operation(s),result=selection_original(object,pokemon,m);
+    Presentation *s=owned();SILPH_PRESENT_SCOPE(s);bool entered=operation(s),result=selection_original(object,pokemon,m);
     if(allowed(s,SILPH_PRESENT_MANUAL)&&exact(s,object,s->multi)&&s->primed){int32_t mode=1;s->api.get(object,s->mode,&mode);if(!mode){bool deny=true;if(blocked(s,pokemon,&deny))fail(s,SILPH_PRESENT_MANUAL,301);else{s->selections++;result=deny;}}}
     if(entered)s->operations--;return result;
 }
@@ -201,7 +215,7 @@ static int filtered(Presentation *s,void *object,void **output,SilphManagedRef *
     free(ids);if(!error){*output=replacement;s->batches++;}return error;
 }
 static void manual_batch(void *object,int32_t button,void *selection,void *buttons,void *other,const void *m){
-    Presentation *s=owned();bool entered=operation(s);void *replacement=selection;SilphManagedRef held={0};
+    Presentation *s=owned();SILPH_PRESENT_SCOPE(s);bool entered=operation(s);void *replacement=selection;SilphManagedRef held={0};
     if(allowed(s,SILPH_PRESENT_MANUAL)&&s->primed&&exact(s,object,s->list)){uint8_t remote=1;s->api.get(object,s->remote,&remote);if(!remote&&filtered(s,object,&replacement,&held)){fail(s,SILPH_PRESENT_MANUAL,302);drop(s,&held);if(entered)s->operations--;return;}}
     batch_original(object,button,replacement,buttons,other,m);if(entered){drop(s,&held);s->operations--;}
 }
@@ -211,8 +225,12 @@ static void setup_scenes(Presentation *s){
     if(!s->state||(s->api.field_flags(s->state)&0x50u)||!state_class||!s->api.is_enum(state_class)||!type(s,s->api.enum_base(state_class),"System.Int32"))s->state=NULL;
     s->top=method(s,s->gui,"get_IsTopGui","System.Boolean",0,NULL);const void *opened=method(s,s->gui,"<Open>b__84_2","System.Void",0,NULL);
     if(!s->gui||!s->alive||!s->state||!s->top||!opened){fail(s,SILPH_PRESENT_SCENES,100);return;}
-    for(unsigned i=0;i<SCENE_COUNT;i++){Scene *scene=&s->scenes[i];const SceneSpec *spec=&scene_specs[i];scene->klass=klass(s,"holo-game.dll",spec->space,spec->name);scene->action=method(s,scene->klass,spec->action,"System.Void",0,NULL);scene->failed=!scene->action||!scene->klass||!s->api.assignable(s->gui,scene->klass);}
-    s->scenes[SCENE_FRIENDSHIP].finish=method(s,s->scenes[SCENE_FRIENDSHIP].klass,"Dismiss","System.Void",0,NULL);if(!s->scenes[SCENE_FRIENDSHIP].finish)s->scenes[SCENE_FRIENDSHIP].failed=1;
+    const char *confirmation[]={"Niantic.Holoholo.UI.ModalEvent"};
+    for(unsigned i=0;i<SCENE_COUNT;i++){Scene *scene=&s->scenes[i];const SceneSpec *spec=&scene_specs[i];bool weekly=i==SCENE_WEEKLY_FITNESS;scene->klass=klass(s,"holo-game.dll",spec->space,spec->name);scene->action=method(s,scene->klass,spec->action,"System.Void",weekly?1:0,weekly?confirmation:NULL);scene->failed=!scene->action||!scene->klass||!s->api.assignable(s->gui,scene->klass);}
+    const unsigned finishing[]={SCENE_FRIENDSHIP,SCENE_AR_SAFETY};for(unsigned i=0;i<2;i++){Scene *scene=&s->scenes[finishing[i]];scene->finish=method(s,scene->klass,"Dismiss","System.Void",0,NULL);if(!scene->finish)scene->failed=1;}
+#ifdef SILPH_PILOT_ROCKET
+    Scene *ar=&s->scenes[SCENE_AR_SAFETY];ar->action=ar->finish;ar->finish=NULL;ar->failed=ar->failed||!ar->action;
+#endif
     s->result_data_class=klass(s,"holo-game.dll","Niantic.Holoholo.UI.Pokemon","PokemonInfoData");s->result_data=field(s,s->scenes[SCENE_POKEMON_RESULT].klass,"egbx","Niantic.Holoholo.UI.Pokemon.PokemonInfoData");s->result_confirm=field(s,s->result_data_class,"ShowConfirmButton","System.Boolean");if(!s->result_data||!s->result_confirm)s->scenes[SCENE_POKEMON_RESULT].failed=1;
     unsigned valid=0;for(unsigned i=0;i<SCENE_COUNT;i++){if(s->scenes[i].failed)s->scene_errors|=1u<<i;else{s->scene_supported|=1u<<i;valid++;}}
     Scene *egg=&s->scenes[SCENE_EGG_CUTSCENE];void *asset=klass(s,"holo-game.dll","","PokemonInfoEggHatch");egg->asset_class=asset;egg->asset_alive=field(s,asset,"m_CachedPtr","System.IntPtr");egg->asset=field(s,egg->klass,"eggHatchAsset","PokemonInfoEggHatch");egg->skip=method(s,asset,"SkipEggHatchAnimation","System.Void",0,NULL);if(!egg->asset||!egg->skip||!egg->asset_alive){egg->asset=NULL;egg->skip=NULL;}

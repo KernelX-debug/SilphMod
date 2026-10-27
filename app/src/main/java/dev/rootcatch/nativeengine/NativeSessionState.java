@@ -36,7 +36,7 @@ public final class NativeSessionState {
         for(long count:counters)if(count<0)throw new IllegalStateException("Native counter overflow");
         if(next.transferred>next.caught||next.caught>next.encounters||next.shinies>next.encounters)throw new IllegalStateException("Inconsistent native counts");
         if(config.mode==NativeSessionWire.FARMER&&config.maxCatches>0&&next.caught>config.maxCatches||config.maxSpins>0&&next.spun>config.maxSpins
-                ||config.mode==NativeSessionWire.KECLEON&&config.maxEncounters>0&&next.encounters>config.maxEncounters)throw new IllegalStateException("Native limit exceeded");
+                ||config.mode==NativeSessionWire.KECLEON&&config.maxEncounters>0&&next.encounters>config.maxEncounters||config.mode==NativeSessionWire.ROCKET&&config.maxEncounters>0&&next.spun>config.maxEncounters)throw new IllegalStateException("Native limit exceeded");
         if((config.flags&NativeSessionWire.READ_ONLY)!=0){
             if((next.flags&1)==0&&next.state!=0)throw new IllegalStateException("Native read-only state changed");
             for(long count:counters)if(count!=0)throw new IllegalStateException("Native read-only actions reported");

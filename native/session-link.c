@@ -8,7 +8,7 @@ size_t silph_session_link_size(void){return sizeof(Link);}
 static int lock(Link *s){if(!s||s->magic!=MAGIC)return SILPH_SCHEDULE_ARGUMENT;unsigned zero=0;return atomic_compare_exchange_strong_explicit(&s->gate,&zero,1,memory_order_acquire,memory_order_relaxed)?0:SILPH_SCHEDULE_BUSY;}
 static void unlock(Link *s){atomic_store_explicit(&s->gate,0,memory_order_release);}
 int silph_session_link_open(void *memory,size_t bytes,const SilphScheduleIdentity *id,uint32_t mode){
-    if(!memory||bytes!=sizeof(Link)||(uintptr_t)memory%_Alignof(Link)||!id||id->pid<=1||!id->process_ticks||(!id->session_hi&&!id->session_lo)||mode<1||mode>2)return SILPH_SCHEDULE_ARGUMENT;
+    if(!memory||bytes!=sizeof(Link)||(uintptr_t)memory%_Alignof(Link)||!id||id->pid<=1||!id->process_ticks||(!id->session_hi&&!id->session_lo)||mode<1||mode>3)return SILPH_SCHEDULE_ARGUMENT;
     Link *s=memory;if(s->magic==MAGIC)return SILPH_SCHEDULE_STATE;memset(s,0,bytes);atomic_init(&s->gate,0);s->magic=MAGIC;s->mode=mode;s->identity=*id;
     s->snapshot=(SilphSessionSnapshot){.mode=mode,.pid=id->pid,.ticks=id->process_ticks,.session_hi=id->session_hi,.session_lo=id->session_lo};return 0;
 }
@@ -23,7 +23,7 @@ int silph_session_link_message(void *memory,const void *bytes,size_t count){
         int status=lock(s);if(status)return status;
         SilphScheduleIdentity id={.pid=s->snapshot.pid,.process_ticks=s->snapshot.ticks,.session_hi=s->snapshot.session_hi,.session_lo=s->snapshot.session_lo,
             .account_hi=s->snapshot.account_hi,.account_lo=s->snapshot.account_lo};
-        if(!s->configured||s->mode!=SILPH_MODE_KECLEON||(s->config.flags&SILPH_CFG_READONLY)||(s->snapshot.flags&8))status=SILPH_SCHEDULE_DENIED;
+        if(!s->configured||(s->mode!=SILPH_MODE_KECLEON&&s->mode!=SILPH_MODE_ROCKET)||(s->config.flags&SILPH_CFG_READONLY)||(s->snapshot.flags&8))status=SILPH_SCHEDULE_DENIED;
         else if(memcmp(&id,&command.identity,sizeof(id)))status=SILPH_SCHEDULE_STALE;
         else if(command.sequence!=s->command_sequence+1)status=SILPH_SCHEDULE_ORDER;
         else if(s->count==8)status=SILPH_SCHEDULE_BUSY;
@@ -63,7 +63,7 @@ int silph_session_link_pop(void *memory,SilphKecleonCommand *out){
 int silph_session_link_event(void *memory,const SilphKecleonEvent *next){
     uint8_t bytes[SILPH_KEC_EVENT_BYTES];if(silph_kec_event_encode(next,bytes,sizeof(bytes)))return SILPH_SCHEDULE_ARGUMENT;
     Link *s=memory;int status=lock(s);if(status)return status;
-    if(s->mode!=SILPH_MODE_KECLEON||!s->configured||(s->config.flags&SILPH_CFG_READONLY))status=SILPH_SCHEDULE_DENIED;
+    if((s->mode!=SILPH_MODE_KECLEON&&s->mode!=SILPH_MODE_ROCKET)||!s->configured||(s->config.flags&SILPH_CFG_READONLY))status=SILPH_SCHEDULE_DENIED;
     else if(next->sequence<=s->event.sequence)status=SILPH_SCHEDULE_ORDER;
     else if(next->identity.pid!=s->identity.pid||next->identity.process_ticks!=s->identity.process_ticks||next->identity.session_hi!=s->identity.session_hi||next->identity.session_lo!=s->identity.session_lo
         ||next->identity.account_hi!=s->snapshot.account_hi||next->identity.account_lo!=s->snapshot.account_lo)status=SILPH_SCHEDULE_STALE;

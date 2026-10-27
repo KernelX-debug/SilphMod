@@ -41,17 +41,18 @@ final class NativeSettings {
     NativeSessionWire.Config config(int mode,boolean readonly){
         NativeSessionWire.Config c=new NativeSessionWire.Config();c.mode=mode;c.delayMs=prefs.getInt("delay",100);c.durationMs=readonly?300000:0;
         if(readonly){if(prefs.getBoolean("fixLocation",false))throw new IllegalArgumentException("Turn off Read-only check to use Fix error 12");c.flags=NativeSessionWire.READ_ONLY;return c;}
-        c.flags=mode==2?NativeSessionWire.CATCH:(prefs.getBoolean("catches",true)?1:0)|(prefs.getBoolean("spins",true)?2:0);
+        c.flags=mode!=1?NativeSessionWire.CATCH:(prefs.getBoolean("catches",true)?1:0)|(prefs.getBoolean("spins",true)?2:0);
         if((c.flags&1)!=0&&prefs.getBoolean("berries",true)){c.flags|=16;c.berries=integers(prefs.getString("berriesOrder","701,705,703"));}
         if(prefs.getBoolean("curve",true))c.flags|=32;c.quality=prefs.getInt("quality",4);c.keep=prefs.getInt("keep",95)|(prefs.getBoolean("keepGoPass",true)?128:0);
         if(prefs.getBoolean("hideTrainerName",true))c.flags|=NativeSessionWire.TRAINER_NAME;
         if(prefs.getBoolean("showIvNames",true))c.flags|=NativeSessionWire.IV_NAMES;
         if(prefs.getBoolean("fixLocation",false))c.flags|=NativeSessionWire.FIX_LOCATION;
         c.flags|=NativeSessionWire.SCENES;
+        if(mode==1&&prefs.getBoolean("automaticEventActions",true))c.flags|=NativeSessionWire.EVENT_ACTIONS;
         if(prefs.getBoolean("extendedManualTransfer",false))c.flags|=NativeSessionWire.MANUAL_TRANSFER;
         if(prefs.getBoolean("fastGiftOpening",true))c.flags|=NativeSessionWire.FAST_GIFTS;
-        if(prefs.getBoolean("autoOpenGifts",false))c.flags|=NativeSessionWire.AUTO_OPEN_GIFTS;
-        if(prefs.getBoolean("autoSendGifts",false))c.flags|=NativeSessionWire.AUTO_SEND_GIFTS;
+        if(mode!=3&&prefs.getBoolean("autoOpenGifts",false))c.flags|=NativeSessionWire.AUTO_OPEN_GIFTS;
+        if(mode!=3&&prefs.getBoolean("autoSendGifts",false))c.flags|=NativeSessionWire.AUTO_SEND_GIFTS;
         if(prefs.getBoolean("removeBuddy",false))c.flags|=NativeSessionWire.REMOVE_BUDDY;
         if(mode==1&&(c.flags&1)!=0&&prefs.getBoolean("transfer",false))c.flags|=8;
         if(prefs.getBoolean("clean",false)){String text=prefs.getString("limits","").trim();ArrayList<int[]> limits=new ArrayList<>();
@@ -61,6 +62,9 @@ final class NativeSettings {
         NativeSessionState.Totals t=totals(mode);
         if(mode==1){c.maxCatches=(c.flags&1)!=0?remaining(prefs.getInt("catchesMax",4800),t.caught,"Catch"):0;c.maxSpins=(c.flags&2)!=0?remaining(prefs.getInt("spinsMax",2400),t.spun,"Spin"):0;
             for(int id:integers(prefs.getString("species","")))c.select(id);
+        }else if(mode==3){if(prefs.getBoolean("rocketRecommendedTeam",true))c.flags|=NativeSessionWire.RECOMMENDED_TEAM;c.maxEncounters=remaining(prefs.getInt("rocketsMax",700),t.spun,"Rocket");c.filters=prefs.getBoolean("rocketCatchAll",true)?0:prefs.getInt("rocketFilters",0);
+            if(!prefs.getBoolean("rocketCatchAll",true)&&c.filters==0)throw new IllegalArgumentException("Select a catch filter");
+            String location=prefs.getString("rocketCooldownLocation","").trim();if(!location.isEmpty())dev.rootcatch.ugphone.KecleonFeed.parseCoordinates(location);
         }else{c.maxEncounters=remaining(prefs.getInt("encountersMax",1000),t.encounters,"Encounter");c.filters=prefs.getInt("filters",0);}
         return c;
     }

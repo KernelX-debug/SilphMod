@@ -13,6 +13,8 @@ int silph_farmer_view_open(void *,size_t,const SilphManagedApi *,SilphManagedRes
 bool silph_farmer_view_ready(void *);
 void silph_farmer_view_interval(void *,uint32_t);
 void silph_farmer_view_continuation(void *,bool);
+void silph_farmer_view_rocket(void *,bool);
+void silph_farmer_view_kecleon(void *,bool);
 int silph_farmer_view_metrics(void *,SilphFarmerViewMetrics *);
 int silph_farmer_view_close(void *,SilphFarmerViewMetrics *);
 #endif

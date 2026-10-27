@@ -35,6 +35,7 @@ final class NativeCheckRunner {
     private final boolean readonly;
     private final BlockingQueue<NativeKecleonWire.Event> candidates=new ArrayBlockingQueue<>(16);
     private NativeKecleonHost kecleon;
+    private NativeRocketHost rocket;
     private final CheckLog log;
     private final BiConsumer<String,String> display;
     private final RootShell shell=new RootShell();
@@ -67,6 +68,7 @@ final class NativeCheckRunner {
     private volatile boolean startupWorkStarted;
     private int recoveries,observedPid;
     private int progressRecoveries;
+    private int rocketScreenRecoveries;
     private int transportFailures;
     private long connectedAt;
     private volatile long lastGameActiveAt;
@@ -81,13 +83,13 @@ final class NativeCheckRunner {
     private boolean farmerMenuBlocked;
     private final java.util.LinkedHashMap<File,String> gameStageFiles=new java.util.LinkedHashMap<>();
     private File gameStageDirectory;
-    NativeCheckRunner(Context context,int mode,CheckLog log,BiConsumer<String,String> display){this.context=context;this.mode=mode;this.log=log;this.display=display;settings=new NativeSettings(context);readonly=false;}
+    NativeCheckRunner(Context context,int mode,CheckLog log,BiConsumer<String,String> display){this.context=context;this.mode=mode;this.log=log;this.display=display;settings=new NativeSettings(context);readonly=false;if(mode==3)NativeRocketHost.beginSession(context);}
     void stop(){stopping=true;NativeSessionController current=controller;if(current!=null)current.requestStop("Stopped by user");}
     String details(){
         NativeSessionController c=controller;NativeSessionState.Totals t=c==null?settings.totals(mode):c.totals();
         String counts=mode==1?"Catches "+t.caught+" · Spins "+t.spun+" · Transferred "+t.transferred:
-            "Encounters "+t.encounters+" · Catches "+t.caught+" · Shinies "+t.shinies;
-        return(mode==1?"Farmer":"Kecleon (BETA)")+"\n"+counts+"\nItems deleted "+t.discarded+
+            (mode==3?"Rockets "+t.spun:"Encounters "+t.encounters)+" · Catches "+t.caught+" · Shinies "+t.shinies;
+        return(mode==1?"Farmer":mode==2?"Kecleon (BETA)":"AutoRocket (BETA)")+"\n"+counts+"\nItems deleted "+t.discarded+
             "\nXP "+((rewardsAvailable&1)!=0?t.xp:"—")+" · Stardust "+((rewardsAvailable&2)!=0?t.stardust:"—")+"\nTime "+String.format(java.util.Locale.US,"%02d:%02d:%02d",settings.elapsed(mode)/3600000,settings.elapsed(mode)/60000%60,settings.elapsed(mode)/1000%60);
     }
     private void status(String text){status=text;display.accept(text,details());log.write("status",text);}
@@ -122,6 +124,9 @@ final class NativeCheckRunner {
                     transportFailures=NativeRecoveryPlan.transportFailures(transportFailures,SystemClock.elapsedRealtime()-connectedAt,confirmedWork);
                     boolean recent=failedWhileActive&&(!failedProcessAlive||focusActive&&SystemClock.elapsedRealtime()-focusAt<=2500);
                     boolean recoverable=failedProcessAlive||exitReport!=null&&exitReport.recoverable;
+                    if(mode==3&&exitReport!=null&&NativeRecoveryPlan.unreportedStartupExit(failedProcessAlive,exitReport.intentional,exitReport.crash.isEmpty()&&exitReport.history.isEmpty(),confirmedWork,SystemClock.elapsedRealtime()-connectedAt)){
+                        recoverable=true;log.write("unreported_startup_exit","No Android exit report; bounded Rocket startup recovery eligible");
+                    }
                     if(NativeRecoveryPlan.transportRetry(readonly,stopping,nativeError,nativeReason,transportFailures,recoverable,recent)){
                         log.write("transport_recovery","completedAttempts="+transportFailures+" maximum=10 processAlive="+failedProcessAlive+" statisticsPreserved=true pendingActionsReplayed=false");
                         releaseAttempt(false);checkStop();resetAttempt();startupAttempts=0;status("Reconnecting game ("+(transportFailures+1)+"/10)…");continue;
@@ -139,6 +144,10 @@ final class NativeCheckRunner {
                 if(!stopping)finishReason="Startup failed after "+startupAttempts+" attempts · Native connection lost before farming";
             }
             if(finishReason.isEmpty())finishReason=stopping?"Stopped by user":"Native connection ended";
+            if(mode==3&&!stopping&&cleanup&&nativeError==0&&nativeReason==7){
+                if(++rocketScreenRecoveries>3)return new Result("Battle screen recovery failed; export logs",true);
+                log.write("rocket_screen_recovery","attempt="+rocketScreenRecoveries+" maximum=3 statisticsPreserved=true candidateSkipped=true");releaseAttempt(false);checkStop();resetAttempt();startupAttempts=0;status("Continuing Rocket search…");continue;
+            }
             if(NativeRecoveryPlan.restart(readonly,stopping,cleanup,nativeError,nativeReason,buddyHandled)){
                 if(nativeReason==11)buddyHandled=true;
                 settings.config(mode,readonly);
@@ -149,6 +158,10 @@ final class NativeCheckRunner {
           }
         }catch(Exception error){
             log.write("error",errorText(error));
+            if(mode==1&&stopping&&"Native cleanup acknowledgement timed out".equals(error.getMessage())){
+                try{closeBoundGame();cleanup=readTicks(gamePid)!=ticks;log.write("stop_process_cleanup","originalProcessGone="+cleanup+" nativeAcknowledgement=false");if(cleanup)return new Result("Stopped by user",true);}
+                catch(Exception closing){log.write("stop_process_cleanup_failed",closing.toString());}
+            }
             try{stopAndDrain("Session error");}catch(Exception closing){log.write("stop_diagnostic_error",closing.toString());}
             if(controller==null&&injected&&gamePid>1&&ticks>0)try{
                 closeBoundGame();
@@ -209,7 +222,10 @@ final class NativeCheckRunner {
     }
     private void releaseAttempt(boolean returnToApp) throws Exception {
             settings.elapsedPulse(mode,false);
-            if(kecleon!=null)kecleon.close();
+            if(mode==3&&gamePid>1)try{log.write("rocket_native_details",command("logcat -d -v brief --pid="+gamePid+" -s SilphRocket:V SilphRuntime:I | tail -c 18000",3000));}catch(Exception error){log.write("rocket_diagnostic_error",error.toString());}
+            if(mode==1&&gamePid>1)try{log.write("farmer_native_details",command("logcat -b all -d -v brief --pid="+gamePid+" -s SilphFarmer:I SilphEvent:I SilphRuntime:I | tail -c 16000",3000));}catch(Exception error){log.write("farmer_diagnostic_error",error.toString());}
+            if(mode==2&&gamePid>1)try{log.write("kecleon_native_details",command("logcat -b all -d -v brief --pid="+gamePid+" -s SilphRuntime:I SilphFarmer:I | tail -c 12000",3000));}catch(Exception error){log.write("kecleon_diagnostic_error",error.toString());}
+            if(kecleon!=null)kecleon.close();if(rocket!=null)rocket.close();
             pulseQuit=true;if(pulseThread!=null)pulseThread.interrupt();focusQuit=true;if(focusThread!=null)focusThread.interrupt();
             if(client!=null){try{client.getOutputStream().close();client.waitFor(1500,TimeUnit.MILLISECONDS);}catch(Exception ignored){ }if(client.isAlive())client.destroyForcibly();}
                 closeBoundGame();
@@ -230,7 +246,7 @@ final class NativeCheckRunner {
         log.write("game_closed","pid="+gamePid+" ticks="+ticks+" confirmed=true");
     }
     private void resetAttempt(){
-        kecleon=null;controller=null;client=null;pulseThread=readerThread=focusThread=null;lines.clear();candidates.clear();
+        kecleon=null;rocket=null;controller=null;client=null;pulseThread=readerThread=focusThread=null;lines.clear();candidates.clear();
         focusActive=focusQuit=streamFailed=streamEnded=pulseQuit=stopAcknowledged=cleanupForeground=false;focusAt=0;pulseFailure=null;
         frames=sequence=0;gamePid=0;ticks=0;snapshotKey="";snapshotLoggedAt=0;injected=cleanup=false;finishReason="";statusAddress=nonceText=null;
         startupWorkStarted=false;nativeReason=nativeError=0;progressWatch=null;controlKey=null;
@@ -266,7 +282,7 @@ final class NativeCheckRunner {
         File directory=new File(context.getApplicationInfo().nativeLibraryDir).getCanonicalFile();
         log.write("native_library_directory",directory.getAbsolutePath());
         if(!directory.getAbsolutePath().matches("/data/app/[A-Za-z0-9_./+=~-]+/lib/arm64"))throw new IOException("Invalid native library directory");
-        for(String name:new String[]{"libsilph-native-probe.so","libsilph-control.so","libsilph-farmer-check.so","libsilph-kecleon-check.so","libsilph-farmer-status.so","libsilph-kecleon-status.so","libshadowhook.so","libshadowhook_nothing.so"}){
+        for(String name:new String[]{"libsilph-native-probe.so","libsilph-control.so","libsilph-farmer-check.so","libsilph-kecleon-check.so","libsilph-farmer-status.so","libsilph-kecleon-status.so","libsilph-rocket-check.so","libsilph-rocket-status.so","libshadowhook.so","libshadowhook_nothing.so"}){
             File file=new File(directory,name);if(!file.isFile()||!file.getCanonicalFile().getParentFile().equals(directory))throw new IOException("Native component missing: "+name);
             String actual=hash(file);if(!actual.equals(NativeArtifacts.hash(name)))throw new IOException("Native component integrity mismatch");log.write("component",name+" sha256="+actual);
         }
@@ -313,10 +329,11 @@ final class NativeCheckRunner {
                 if(mode==1)key+=" researchState="+snapshot.candidateState+" researchClaims="+(snapshot.candidateRequest&0xffffffffL)+" researchRemoved="+(snapshot.candidateRequest>>>32)+" researchStatus="+snapshot.researchStatus;
                 long now=SystemClock.elapsedRealtime();if(!key.equals(snapshotKey)||now-snapshotLoggedAt>=5000){snapshotKey=key;snapshotLoggedAt=now;event("native_snapshot","sequence="+sequence+" "+key);}
             }
-            public void candidate(NativeKecleonWire.Event value){startupWorkStarted=true;event("kecleon_native_event","request="+value.request+" phase="+value.phase+" reason="+value.reason+" verified="+value.verified+" source="+value.source+" fort="+value.fort+" incident="+value.incident);if(!candidates.offer(value)){streamFailed=true;event("kecleon_queue","overflow");}}
+            public void candidate(NativeKecleonWire.Event value){startupWorkStarted=true;event(mode==3?"rocket_native_event":"kecleon_native_event","request="+value.request+" phase="+value.phase+" reason="+value.reason+" verified="+value.verified+" source="+value.source+" fort="+value.fort+" incident="+value.incident);if(!candidates.offer(value)){streamFailed=true;event(mode==3?"rocket_queue":"kecleon_queue","overflow");}}
             public void reply(long executed){progressWatch.reply(SystemClock.elapsedRealtime(),executed);}
             public void finished(String reason,boolean confirmed){finishReason=reason;cleanup=confirmed;event("native_finished",reason+" cleanup="+confirmed);}
         });
+        if(mode==3&&!readonly)rocket=new NativeRocketHost(context,controller,log,()->!stopping&&!controller.finished()&&focusActive&&SystemClock.elapsedRealtime()-focusAt<=2500);
         if(mode==2&&!readonly)kecleon=new NativeKecleonHost(context,controller,log,()->!stopping&&!controller.finished()&&focusActive&&SystemClock.elapsedRealtime()-focusAt<=2500);
         startReader();
     }
@@ -328,7 +345,7 @@ final class NativeCheckRunner {
         if(launch==null||launch.getComponent()==null)throw new IOException("Game launch activity missing");
         String component=launch.getComponent().flattenToString();if(!component.matches("com\\.nianticlabs\\.pokemongo/[A-Za-z0-9_.$]+"))throw new IOException("Invalid game launch activity");
         gameComponent=component;
-        File probe=new File(directory,"libsilph-native-probe.so"),source=new File(directory,mode==1?"libsilph-farmer-check.so":"libsilph-kecleon-check.so");
+        File probe=new File(directory,"libsilph-native-probe.so"),source=new File(directory,mode==1?"libsilph-farmer-check.so":mode==2?"libsilph-kecleon-check.so":"libsilph-rocket-check.so");
         File payload=null;int bootstrapPid=0;long bootstrapTicks=0;
         if(settings.prefs.getBoolean("fixLocation",false))payload=gameNamespace?stageForGame(source):stage(directory,source);
         launchWallTime=System.currentTimeMillis();
@@ -408,9 +425,9 @@ final class NativeCheckRunner {
             if(attempt==0||attempt==4)logStartupMaps();
             int connection=NativeStagePolicy.bootstrapRoute(route,attempt);
             RootShell.Result result=shell.execute(quote(probe.getAbsolutePath())+" --pid "+gamePid+" --start "+ticks+" --library "+quote(payload.getAbsolutePath())+" --trace "+traces[connection]+" --route "+routes[connection]+" --level bootstrap",15000);
-            log.write("location_bootstrap_exit","exit="+result.code+" retry="+(attempt+1)+" route="+connection+" gameStage="+gameStage);log.write("location_bootstrap_loader",result.output);JSONObject report=null;
-            for(String line:result.output.split("\\R"))try{JSONObject value=new JSONObject(line);if("native_loader_result".equals(value.optString("event")))report=value;}catch(Exception ignored){ }
-            if(report==null)throw new IOException("Location bootstrap response missing");
+            log.write("location_bootstrap_exit","exit="+result.code+" retry="+(attempt+1)+" route="+connection+" gameStage="+gameStage);log.write("location_bootstrap_loader",result.output);JSONObject report=null,lastStage=null;
+            for(String line:result.output.split("\\R"))try{JSONObject value=new JSONObject(line);if("native_loader_result".equals(value.optString("event")))report=value;else if("native_loader_stage".equals(value.optString("event")))lastStage=value;}catch(Exception ignored){ }
+            if(report==null)throw new IOException(NativeStagePolicy.bootstrapFailure(result.code,lastStage==null?"":lastStage.optString("stage"),lastStage==null?0:lastStage.optInt("errno")));
             assertStartupTarget(report);
             if("SYMBOL_RESOLUTION".equals(report.optString("failure")))throw new SymbolResolutionFailure(report.optInt("errno"));
             if(result.code==0&&report.optBoolean("passed")&&report.optBoolean("restored")&&report.optBoolean("detached")&&!report.optBoolean("restartRequired")){
@@ -498,17 +515,18 @@ final class NativeCheckRunner {
             if(kind.equals("native_snapshot"))settings.save(mode,controller.totals());
             if(kind.equals("status")||kind.equals("native_snapshot"))display.accept(status,details());
         }
-        NativeKecleonWire.Event candidate;while((candidate=candidates.poll())!=null)if(kecleon!=null)kecleon.accept(candidate);
-        if(kecleon!=null)kecleon.tick();
+        NativeKecleonWire.Event candidate;while((candidate=candidates.poll())!=null){if(kecleon!=null)kecleon.accept(candidate);if(rocket!=null)rocket.accept(candidate);}
+        if(kecleon!=null)kecleon.tick();if(rocket!=null)rocket.tick();
         if(streamFailed)throw new IOException("Native control output invalid or overflowed");
     }
     private void event(String kind,String message){if(!lines.offer(kind+"\t"+message))droppedLogs++;}
     private void monitor() throws Exception {
-        long begin=SystemClock.elapsedRealtime(),lastPid=0,stopAt=0,lastFarmerStatus=begin;
+        long begin=SystemClock.elapsedRealtime(),lastPid=0,stopAt=0,lastFarmerStatus=begin,lastDisplay=begin;
         while(!controller.finished()){
             consume();if(controller.finished())break;
-            long now=SystemClock.elapsedRealtime();settings.elapsedPulse(mode,focusActive&&now-focusAt<=2500&&status.equals("Active")&&!stopping);
+            long now=SystemClock.elapsedRealtime();settings.elapsedPulse(mode,focusActive&&now-focusAt<=2500&&(mode==3?controller.active():status.equals("Active"))&&!stopping);
             if(stopping){controller.requestStop("Stopped by user");if(stopAt==0)stopAt=now;}
+            if(now-lastDisplay>=1000){lastDisplay=now;display.accept(status,details());}
             wakeOwnerForCleanup();
             if(readonly&&now-begin>360_000&&stopAt==0){controller.requestStop("Session time limit reached");stopAt=now;}
             if(now-lastPid>=1000){if(readTicks(gamePid)!=ticks)throw new IOException("Game process changed");lastPid=now;}
@@ -523,7 +541,7 @@ final class NativeCheckRunner {
                 if(controller.finished())break;
                 if(stopping||frames!=before||!focusActive||SystemClock.elapsedRealtime()-focusAt>2500)continue;
                 nativeError=value.optInt("error");
-                if(nativeError!=0)throw new IOException("Native engine error "+nativeError);
+                if(nativeError!=0)throw new IOException(nativeErrorText(nativeError));
                 if(!NativeRecoveryPlan.progressLive(value.getInt("state"),value.getInt("stopped"),value.getInt("hookRemoved"),value.getInt("stopReason"),value.optInt("sessionReason")))
                     throw new IOException("Native session stopped before final snapshot");
                 if(progress==NativeProgressWatch.PROGRESS_STALLED)throw new ProgressStalled(startupWorkStarted);
@@ -534,7 +552,7 @@ final class NativeCheckRunner {
         consume();log.write("telemetry","dropped="+droppedLogs);
     }
     private JSONObject readNativeStatus(String event) throws Exception {
-        File reader=new File(context.getApplicationInfo().nativeLibraryDir,mode==1?"libsilph-farmer-status.so":"libsilph-kecleon-status.so");
+        File reader=new File(context.getApplicationInfo().nativeLibraryDir,mode==1?"libsilph-farmer-status.so":mode==2?"libsilph-kecleon-status.so":"libsilph-rocket-status.so");
         JSONObject value=new JSONObject(command(quote(reader.getAbsolutePath())+" "+gamePid+" "+ticks+" "+statusAddress+" "+nonceText,4000));
         log.write(event,value.toString());return value;
     }
@@ -544,22 +562,23 @@ final class NativeCheckRunner {
         cleanupForeground=true;log.write("cleanup_owner_resume","Stop acknowledged; write authorization revoked before resuming Unity");
         command("am start -n com.nianticlabs.pokemongo/com.nianticproject.holoholo.libholoholo.unity.UnityMainActivity",5000);
     }
+    private String nativeErrorText(int error){return mode==3&&error==113?"Rocket battle action timed out":"Native engine error "+error;}
     private void verifyCleanup() throws Exception {
         if(!cleanup){
             if(injected&&statusAddress!=null&&readTicks(gamePid)==ticks){
-                File diagnostic=new File(context.getApplicationInfo().nativeLibraryDir,mode==1?"libsilph-farmer-status.so":"libsilph-kecleon-status.so");
+                File diagnostic=new File(context.getApplicationInfo().nativeLibraryDir,mode==1?"libsilph-farmer-status.so":mode==2?"libsilph-kecleon-status.so":"libsilph-rocket-status.so");
                 JSONObject value=new JSONObject(command(quote(diagnostic.getAbsolutePath())+" "+gamePid+" "+ticks+" "+statusAddress+" "+nonceText,4000));log.write("native_failure_status",value.toString());
                 if(mode==1&&value.optInt("sessionReason")!=0){nativeReason=value.optInt("sessionReason");if(nativeReason==1)finishReason="Session catch limit reached";else if(nativeReason==2)finishReason="Session spin limit reached";}
                 cleanup=value.optInt("stopped")==1&&value.optInt("hookRemoved")==1&&value.optInt("remaining")==0&&value.getString("created").equals(value.getString("released"))&&value.optInt("locationRemaining")==0&&value.optInt("locationRefs")==0&&value.optInt("presentationHooks",-1)==0&&value.optInt("presentationRefs",-1)==0;
                 if(value.optInt("error")!=0){
-                    nativeError=value.optInt("error");finishReason="Native engine error "+nativeError;
+                    nativeError=value.optInt("error");finishReason=nativeErrorText(nativeError);
                     if(value.optInt("locationError")!=0)finishReason+=" · Location stage "+value.optInt("locationStage")+", error "+value.optInt("locationError");
-                    else if(value.optInt("actionError")!=0)finishReason+=" · Action "+value.optInt("farmerState");
+                    else if(mode!=3&&value.optInt("actionError")!=0)finishReason+=" · Action "+value.optInt("farmerState");
                 }
             }
             return;
         }cleanup=false;
-        File reader=new File(context.getApplicationInfo().nativeLibraryDir,mode==1?"libsilph-farmer-status.so":"libsilph-kecleon-status.so");
+        File reader=new File(context.getApplicationInfo().nativeLibraryDir,mode==1?"libsilph-farmer-status.so":mode==2?"libsilph-kecleon-status.so":"libsilph-rocket-status.so");
         long end=SystemClock.elapsedRealtime()+8000;
         while(SystemClock.elapsedRealtime()<end){
             JSONObject value=new JSONObject(command(quote(reader.getAbsolutePath())+" "+gamePid+" "+ticks+" "+statusAddress+" "+nonceText,4000));

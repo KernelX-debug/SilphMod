@@ -59,9 +59,9 @@ public final class NativeSessionController {
             if(state.accept(NativeSessionWire.unhex(match.group(1))))listener.update(state.snapshot(),state.totals());
             if(state.stopped()){
                 finished=true;NativeSessionWire.Snapshot value=state.snapshot();
-                String reason=value.reason==10?"No spawns for 5 minutes":value.reason==11?"Buddy removed":value.mode==1?(value.reason==1?"Session catch limit reached":value.reason==2?"Session spin limit reached":"Session finished"):(value.reason==5?"Maximum encounters reached":value.reason==6?"No pending Kecleon candidates":"Session finished");
-                listener.finished(!stopReason.isEmpty()?stopReason:value.error!=0?"Native engine error: "+value.error:reason,state.cleanupConfirmed());
-            }else if(state.ready())status(!stopReason.isEmpty()?"Stopping…":!foreground?"Paused":state.snapshot().reason==12?"Checking buddy…":state.snapshot().reason==13?"Removing buddy…":"Active");
+                String reason=value.reason==10?"No spawns for 5 minutes":value.reason==11?"Buddy removed":value.mode==1?(value.reason==1?"Session catch limit reached":value.reason==2?"Session spin limit reached":"Session finished"):value.mode==3?(value.reason==5?"Maximum Rockets reached":value.reason==8?"Pokémon storage full":value.reason==9?"Not enough healing items":"Rocket session finished"):(value.reason==5?"Maximum encounters reached":value.reason==6?"No pending Kecleon candidates":"Session finished");
+                listener.finished(!stopReason.isEmpty()?stopReason:value.error!=0?(value.mode==3?rocketError(value.error):"Native engine error: "+value.error):reason,state.cleanupConfirmed());
+            }else if(state.ready())status(!stopReason.isEmpty()?"Stopping…":!foreground?"Paused":activityStatus());
             return;
         }
         String prefix="{\"event\":\"native_kecleon_event\",\"bytes\":\"";
@@ -79,13 +79,20 @@ public final class NativeSessionController {
         String command=state.command(foreground);if(command==null)return;
         if(stopReason.isEmpty()&&foreground&&!commands.isEmpty()){inflight=commands.removeFirst();send(inflight,4);return;}
         send(command,command.equals("stop")?2:command.equals("status")?3:1);
-        if(!stopReason.isEmpty())status("Stopping…");else if(state.ready())status(!foreground?"Paused":state.snapshot().reason==12?"Checking buddy…":state.snapshot().reason==13?"Removing buddy…":"Active");
+        if(!stopReason.isEmpty())status("Stopping…");else if(state.ready())status(!foreground?"Paused":activityStatus());
     }
     public synchronized void requestStop(String reason){if(!finished){if(stopReason.isEmpty())stopReason=reason==null||reason.isEmpty()?"Stopped by user":reason;state.requestStop();}}
     public synchronized void disconnected(){if(!finished){finished=true;listener.finished(!stopReason.isEmpty()?stopReason:"Native control disconnected",false);}}
     public synchronized boolean finished(){return finished;}
+    public synchronized boolean active(){return !finished&&state.ready()&&foreground&&stopReason.isEmpty();}
     public synchronized NativeSessionState.Totals totals(){return state.totals();}
     public synchronized void enqueue(String command){if(finished||!stopReason.isEmpty())return;if(command==null||!command.matches("engine [a-f0-9]{1024}")||commands.size()>=8)throw new IllegalStateException("Native command queue full or invalid");commands.addLast(command);}
     private void send(String text,int command){if(pending!=0)throw new IllegalStateException("Native request still pending");pending=command;sender.accept(text);}
+    private String activityStatus(){NativeSessionWire.Snapshot s=state.snapshot();if(s.reason==12)return "Checking buddy…";if(s.reason==13)return "Removing buddy…";
+        if(s.mode!=3)return "Active";int phase=s.candidateState%100,stage=s.candidateState/100;
+        return switch(phase){case 1->"Finding Rockets…";case 2->"Traveling…";case 3->"Loading map…";case 4->"Checking Rocket…";
+            case 5->switch(stage){case 1->"Opening Rocket…";case 2->"Preparing team…";case 3->"Battling…";case 4->"Opening encounter…";case 5->"Catching…";case 6->"Healing team…";case 8->"Closing battle…";default->"Active";};
+            case 6->stage==5?"Returning to catch location…":"Loading map…";case 7->"Next candidate…";default->"Active";};}
     private void status(String value){if(!lastStatus.equals(value)){lastStatus=value;listener.status(value);}}
+    private static String rocketError(int error){return switch(error){case 113->"Battle action timed out";case 116->"Team healing failed";case 117->"Team not ready; heal or change team";case 118->"Capture location not confirmed";case 119->"Team health update timed out";case 120->"Capture screen did not close";case 121->"Recommended team unavailable";default->"Rocket engine error: "+error;};}
 }

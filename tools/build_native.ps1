@@ -32,13 +32,13 @@ Compile ($flags+@('-fPIE','-pie',(Join-Path $source 'standalone/probe.c'),(Join-
 $control=@('control-client.c','control.c','scheduler.c','session-wire.c','kecleon-wire.c') | ForEach-Object {Join-Path $source $_}
 Compile ($flags+@('-fPIE','-pie')+$control+@('-lm','-o',(Join-Path $output 'libsilph-control.so')))
 $common=@('unity-pilot.c','managed.c','managed-read.c','game-read.c','scheduler.c','control.c','promise.c','managed-promise.c','farmer-actions.c','transfer-policy.c','rpc-actions.c','kecleon-actions.c','maintenance-actions.c','farmer-session.c','session-wire.c','session-link.c','kecleon-wire.c','kecleon-plan.c','kecleon-session.c','visual-tools.c','research-policy.c','research-actions.c','location-tools.c','code-memory.c','presentation-tools.c','buddy-actions.c','recovery-policy.c','readback.c','core.c') | ForEach-Object {Join-Path $source $_}
-$defines=@('-DSILPH_PILOT_GAME_READ=1','-DSILPH_PILOT_EXTERNAL=1','-DSILPH_PILOT_ACTIONS=1','-DSILPH_ENABLE_ACTIONS=1','-DSILPH_PILOT_CONFIGURED=1','-DSILPH_PILOT_SERVICE=1')
+$defines=@('-DSILPH_PILOT_FRAME=1','-DSILPH_PRESENT_UNWIND=1','-fexceptions','-DSILPH_PILOT_GAME_READ=1','-DSILPH_PILOT_EXTERNAL=1','-DSILPH_PILOT_ACTIONS=1','-DSILPH_ENABLE_ACTIONS=1','-DSILPH_PILOT_CONFIGURED=1','-DSILPH_PILOT_SERVICE=1')
 $common+=Join-Path $source 'startup-thread.c'
 $common+=Join-Path $source 'gift-actions.c'
 $common+=Join-Path $source 'pass-actions.c'
-foreach($mode in @('farmer','kecleon')){
-    $modeFlags=if($mode -eq 'farmer'){@('-DSILPH_PILOT_TRANSFER=1','-DSILPH_PILOT_CONTINUOUS=1','-DSILPH_PILOT_COMBINED=1')}else{@('-DSILPH_PILOT_KECLEON=1')}
-    $modeSources=if($mode -eq 'farmer'){@((Join-Path $source 'farmer-view.c'))}else{@()}
+foreach($mode in @('farmer','kecleon','rocket')){
+    $modeFlags=if($mode -eq 'rocket'){@('-DSILPH_PILOT_ROCKET=1','-DSILPH_PILOT_COMBINED=1')}elseif($mode -eq 'farmer'){@('-DSILPH_PILOT_TRANSFER=1','-DSILPH_PILOT_CONTINUOUS=1','-DSILPH_PILOT_COMBINED=1','-DSILPH_PRESENT_SCOPED=1','-fexceptions')}else{@('-DSILPH_PILOT_KECLEON=1')}
+    $modeSources=if($mode -eq 'rocket'){@((Join-Path $source 'farmer-view.c'),(Join-Path $source 'rocket-policy.c'),(Join-Path $source 'rocket-session.c'))}elseif($mode -eq 'farmer'){@((Join-Path $source 'farmer-view.c'),(Join-Path $source 'event-actions.c'),(Join-Path $source 'event-view.c'))}else{@((Join-Path $source 'farmer-view.c'))}
     Compile ($flags+$defines+$modeFlags+@('-fPIC','-shared','-Wl,-soname,libsilph-native-observer.so','-pthread',('-I'+(Join-Path $hook 'include')))+$common+$modeSources+@(('-L'+$output),'-lshadowhook','-ldl','-lm','-llog','-Wl,-rpath,$ORIGIN','-o',(Join-Path $output ('libsilph-'+$mode+'-check.so'))))
     Compile ($flags+$defines+$modeFlags+@('-fPIE','-pie',(Join-Path $source 'pilot-reader.c'),(Join-Path $source 'standalone/remote.c'),(Join-Path $source 'standalone/elf-symbol.c'),'-ldl','-o',(Join-Path $output ('libsilph-'+$mode+'-status.so'))))
 }

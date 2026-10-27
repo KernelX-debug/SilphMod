@@ -28,4 +28,7 @@ final class NativeRecoveryPlan {
     static boolean transportRetry(boolean readonly,boolean stopped,int error,int reason,int attempts,boolean recoverable,boolean recentlyActive){
         return !readonly&&!stopped&&error==0&&reason==0&&attempts>0&&attempts<10&&recoverable&&recentlyActive;
     }
+    static boolean unreportedStartupExit(boolean alive,boolean intentional,boolean emptyReport,boolean confirmedWork,long lifetime){
+        return !alive&&!intentional&&emptyReport&&!confirmedWork&&lifetime>=0&&lifetime<=30000;
+    }
 }

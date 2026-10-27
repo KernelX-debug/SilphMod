@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include "protocol.h"
+#include "../observer-identity.h"
 #include "remote.h"
 #include <android/dlext.h>
 #include <dlfcn.h>
@@ -65,14 +66,7 @@ static int call(SilphTrace *trace, const char *stage, uint64_t function,
 static int library_valid(const char *path) {
     const char *base = strrchr(path, '/');
     if (!base || strstr(path, "/../") || strlen(path) >= PATH_MAX) return 0;
-    const char *name = base + 1, *prefix = "libsilph-native-observer-";
-    if (strcmp(name, "libsilph-native-observer.so")) {
-        size_t prefix_size = strlen(prefix);
-        if (strncmp(name, prefix, prefix_size)) return 0;
-        const char *id = name + prefix_size;
-        if (strlen(id) != 21 || (id[0] != '1' && id[0] != '2') || id[1] != '-'
-            || strspn(id + 2, "0123456789abcdef") != 16 || strcmp(id + 18, ".so")) return 0;
-    }
+    if (!silph_observer_name_valid(base + 1)) return 0;
     if (strncmp(path, "/data/app/", 10)) return 0;
     int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) return 0;

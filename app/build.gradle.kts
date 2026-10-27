@@ -15,7 +15,7 @@ val nativeArtifacts = tasks.register("generateNativeArtifacts") {
     inputs.dir(nativeLibraries)
     outputs.dir(generatedNative)
     doLast {
-        val names = listOf("libsilph-native-probe.so", "libsilph-control.so", "libsilph-farmer-check.so", "libsilph-kecleon-check.so", "libsilph-farmer-status.so", "libsilph-kecleon-status.so", "libshadowhook.so", "libshadowhook_nothing.so")
+        val names = listOf("libsilph-native-probe.so", "libsilph-control.so", "libsilph-farmer-check.so", "libsilph-kecleon-check.so", "libsilph-farmer-status.so", "libsilph-kecleon-status.so", "libsilph-rocket-check.so", "libsilph-rocket-status.so", "libshadowhook.so", "libshadowhook_nothing.so")
         val cases = names.joinToString("\n") { name ->
             val bytes = nativeLibraries.resolve(name).readBytes()
             check(bytes.size > 20 && bytes[0] == 127.toByte() && bytes[1] == 69.toByte() && bytes[4] == 2.toByte() && bytes[18] == 183.toByte()) { "Invalid ARM64 component: $name" }
@@ -35,8 +35,8 @@ android {
         applicationId = "dev.rootcatch.ugphonetest"
         minSdk = 29
         targetSdk = 36
-        versionCode = 121
-        versionName = "2.1.4"
+        versionCode = 134
+        versionName = "2.2.12"
         ndk { abiFilters += "arm64-v8a" }
     }
     buildFeatures { buildConfig = true }

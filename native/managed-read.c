@@ -8,6 +8,9 @@
 #include "managed-action.h"
 #include "core.h"
 #include <math.h>
+#ifdef SILPH_PRESENT_SCOPED
+#include <android/log.h>
+#endif
 #include "managed-proto.h"
 #include "research-bridge.h"
 #include "gift-actions.h"
@@ -257,7 +260,16 @@ static int invoke_checked(Read *state,const void *found,void *object,uint32_t ki
 #endif
         if(!status) {
             void *exception=NULL,*result=state->base.runtime_invoke(found,instance,count?parameters:NULL,&exception);
-            if(exception)status=SILPH_MANAGED_EXCEPTION;
+            if(exception){status=SILPH_MANAGED_EXCEPTION;
+#ifdef SILPH_PRESENT_SCOPED
+                const char *called=state->base.method_get_name(found);if(called&&!strcmp(called,"TapTappable")){
+                    void *klass=state->base.object_get_class(exception),*message=NULL;int field_status=0;const void *field=find_field(state,klass,"_message",NULL,NULL,&field_status);char text[257]={0};
+                    if(!field_status&&field)state->api.field_get_value(exception,field,&message);
+                    if(message){int32_t length=state->base.string_length(message);const uint16_t *chars=state->api.string_chars(message);if(chars&&length>=0&&length<4096)for(int32_t i=0;i<length&&i<256;i++)text[i]=chars[i]>=32&&chars[i]<127?(char)chars[i]:'?';}
+                    __android_log_print(ANDROID_LOG_INFO,"SilphEvent","interaction exception type=%s message=%s",state->api.class_get_name(klass),text);
+                }
+#endif
+            }
             else if(kind==SILPH_READ_VOID){if(result)status=SILPH_MANAGED_CONTRACT;}
             else if(kind==SILPH_READ_REFERENCE||kind==SILPH_READ_BOXED)status=accept_reference(state,state->base.method_get_return_type(found),result,output);
             else if(!result)status=SILPH_MANAGED_CONTRACT;
@@ -377,8 +389,19 @@ int silph_read_close(void *memory) {
 #include "managed-rpc.inc"
 #include "managed-proto.inc"
 #include "research-bridge.inc"
+#ifdef SILPH_PRESENT_SCOPED
+#include "event-actions.h"
+int silph_event_tap(void *memory,const SilphSchedulePermit *permit,SilphManagedRef service,SilphManagedRef tappable){
+    if(!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;Read *s=memory;int r=enter_read(s);if(r)return r;void *a=NULL,*b=NULL;
+    r=silph_managed_target(s->managed,service,&a);if(!r)r=silph_managed_target(s->managed,tappable,&b);
+    if(!r&&(!research_type(s,a,"Niantic.Holoholo.Services.DynamicTappables","DynamicTappablesSession")||!research_type(s,b,"","DynamicTappableController")))r=SILPH_MANAGED_CONTRACT;
+    SilphReadArgument arg={.kind=SILPH_READ_REFERENCE,.value.reference=tappable};SilphReadValue out={0};
+    if(!r)r=call_internal(s,service,NULL,"TapTappable",SILPH_READ_VOID,&arg,1,&out,permit);int d=release_rpc_ref(s,&out.reference);return leave_read(s,r?r:d);
+}
+#endif
 #include "gift-bridge.inc"
 #include "pass-bridge.inc"
+#include "rocket-bridge.inc"
 int silph_action_enable(void *memory,SilphManagedResolver resolve,void *context) {
     if(!resolve)return SILPH_MANAGED_ARGUMENT;
     Read *state=memory;int status=enter_read(state);if(status)return status;

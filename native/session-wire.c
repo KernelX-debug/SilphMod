@@ -11,9 +11,9 @@ uint32_t silph_wire_crc(const void *memory,size_t bytes){
 }
 static int berry(uint32_t v){return v==701||v==703||v==705||v==706||v==708;}
 int silph_config_validate(const SilphSessionConfig *c){
-    if(!c||c->pid<=1||c->pid>INT32_MAX||!c->ticks||c->ticks>INT64_MAX||(!c->session_hi&&!c->session_lo)||c->mode<1||c->mode>2||c->flags>65535
+    if(!c||c->pid<=1||c->pid>INT32_MAX||!c->ticks||c->ticks>INT64_MAX||(!c->session_hi&&!c->session_lo)||c->mode<1||c->mode>3||(c->flags&~(c->mode==SILPH_MODE_ROCKET?131071u:c->mode==SILPH_MODE_FARMER?196607u:65535u))
         ||c->quality<1||c->quality>4||c->delay_ms<100||c->delay_ms>3000||c->keep>255||c->max_catches>50000||c->max_spins>50000
-        ||c->max_encounters>50000||c->berry_count>5||c->limit_count>64||c->filters>15||c->duration_ms>86400000
+        ||c->max_encounters>50000||c->berry_count>5||c->limit_count>64||c->filters>(c->mode==SILPH_MODE_ROCKET?31u:15u)||c->duration_ms>86400000
         ||(c->duration_ms&&c->duration_ms<1000))return SILPH_WIRE_ARGUMENT;
     if(c->flags&SILPH_CFG_READONLY){if(c->flags!=SILPH_CFG_READONLY||c->max_catches||c->max_spins||c->max_encounters||c->filters)return SILPH_WIRE_ARGUMENT;}
     else if(c->mode==SILPH_MODE_FARMER){
@@ -55,7 +55,7 @@ int silph_config_decode(const void *memory,size_t bytes,SilphSessionConfig *out)
     if(silph_config_validate(&c))return SILPH_WIRE_ARGUMENT;*out=c;return 0;
 }
 static int snapshot_valid(const SilphSessionSnapshot *s){
-    return s&&s->pid>1&&s->pid<=INT32_MAX&&s->ticks&&s->ticks<=INT64_MAX&&(s->session_hi||s->session_lo)&&s->mode>=1&&s->mode<=2&&s->state<=7&&s->flags<=15
+    return s&&s->pid>1&&s->pid<=INT32_MAX&&s->ticks&&s->ticks<=INT64_MAX&&(s->session_hi||s->session_lo)&&s->mode>=1&&s->mode<=3&&s->state<=7&&s->flags<=15
         &&s->rewards_available<=3&&s->research_status<=65535&&s->location_status<=65535&&!(s->visual_available&~7552u)&&!(s->visual_failed&~7552u)&&!(s->visual_available&s->visual_failed)
         &&isfinite(s->latitude)&&isfinite(s->longitude)&&fabs(s->latitude)<=90&&fabs(s->longitude)<=180;
 }

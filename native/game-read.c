@@ -267,7 +267,10 @@ int silph_game_read_select(void *memory,double maximum,SilphPokemonPredicate acc
     for(unsigned i=0;!status&&i<128;i++) {
         status=silph_read_call(s->read,iterator.reference,"MoveNext",SILPH_READ_BOOL,NULL,0,&value);if(status||!value.bits)break;
         status=silph_read_call(s->read,iterator.reference,"get_Current",SILPH_READ_REFERENCE,NULL,0,&current);
-        if(!status&&silph_read_is_type(s->read,current.reference,"Niantic.Holoholo.Map","WildMapPokemon")) {status=release(s,&current.reference);continue;}
+        uint32_t incense=0;
+        if(!status&&silph_read_is_type(s->read,current.reference,"Niantic.Holoholo.Map","WildMapPokemon")) {
+            if(silph_read_is_type(s->read,current.reference,"Niantic.Holoholo.Map","IncenseMapPokemon")){status=release(s,&current.reference);continue;}incense=1;
+        }
         if(!status)status=silph_read_call(s->read,current.reference,"get_Destroyed",SILPH_READ_BOOL,NULL,0,&value);
         if(!status&&value.bits){status=release(s,&current.reference);continue;}
         double a=0,b=0;if(!status)status=location(s,current.reference,&a,&b);double meters=distance_meters(lat,lon,a,b);
@@ -277,7 +280,7 @@ int silph_game_read_select(void *memory,double maximum,SilphPokemonPredicate acc
             if(!status&&(!id||!species))status=SILPH_MANAGED_CONTRACT;
             if(!status&&accept&&!accept(context,id,species)){status=release(s,&current.reference);continue;}
             if(!status)status=release(s,&output->object);
-            if(!status){output->object=current.reference;memset(&current.reference,0,sizeof(current.reference));output->encounter=id;output->species=species;output->meters=meters;}
+            if(!status){output->object=current.reference;memset(&current.reference,0,sizeof(current.reference));output->encounter=id;output->species=species;output->spawn_kind=incense;output->meters=meters;}
         }
         int freed=release(s,&current.reference);if(!status)status=freed;
     }
@@ -302,6 +305,12 @@ static int service(GameRead *s,const char *assembly,const char *space,const char
     if(!status){*output=value.reference;memset(&value.reference,0,sizeof(value.reference));}
     int a=release(s,&type),b=release(s,&value.reference);return status?status:a?a:b;
 }
+#ifdef SILPH_PRESENT_SCOPED
+int silph_game_read_event_service(void *memory,SilphManagedRef *output){
+    GameRead *s=memory;if(!s||!s->opened||!output)return SILPH_MANAGED_ARGUMENT;*output=(SilphManagedRef){0};
+    return service(s,"holo-game.dll","Niantic.Holoholo.Services.DynamicTappables","IDynamicTappablesService",output);
+}
+#endif
 int silph_game_read_rpc_handler(void *memory,SilphManagedRef *output){
     GameRead *s=memory;if(!s||!s->opened||!output)return SILPH_MANAGED_ARGUMENT;memset(output,0,sizeof(*output));
     return service(s,"holo-game.dll","Niantic.Holoholo.Rpc","IRpcHandler",output);
@@ -309,6 +318,38 @@ int silph_game_read_rpc_handler(void *memory,SilphManagedRef *output){
 int silph_game_read_service(void *memory,uint32_t kind,SilphManagedRef *output){
     GameRead *s=memory;if(!s||!s->opened||!output||kind>1)return SILPH_MANAGED_ARGUMENT;memset(output,0,sizeof(*output));
     return kind?service(s,"holo-game.dll","Niantic.Holoholo.Buddy","IBuddyPokemonService",output):service(s,"holo-protos.dll","","IGameMasterData",output);
+}
+int silph_game_read_rocket_service(void *memory,uint32_t kind,SilphManagedRef *out){
+    GameRead *s=memory;if(!s||!s->opened||!out||kind>7)return SILPH_MANAGED_ARGUMENT;memset(out,0,sizeof(*out));
+    if(kind==7)return silph_read_field_type(s->read,s->map,"Niantic.Holoholo","IPokemonBag",out);
+    if(kind==5)return silph_read_field_type(s->read,s->map,"Niantic.Holoholo.Map","MapContentHandler",out);
+    if(kind==6)return service(s,"holo-game.dll","Niantic.Holoholo","ILocationProvider",out);
+    const char *spaces[]={"Niantic.Holoholo.Incident","Niantic.Holoholo.NUI","Niantic.Holoholo.Encounter","Niantic.Holoholo.UI","Niantic.Holoholo.Incident"};
+    const char *names[]={"IIncidentService","IGuiLayerService","IEncounterState","IItemFragmentAssemblyService","IIncidentRpcService"};
+    return service(s,kind==3?"holo-game-interfaces.dll":"holo-game.dll",spaces[kind],names[kind],out);
+}
+int silph_game_read_rocket_position(void *memory,double *lat,double *lon){
+    GameRead *s=memory;if(!s||!s->opened||!lat||!lon)return SILPH_MANAGED_ARGUMENT;SilphManagedRef provider={0};SilphReadValue valid={0};
+    int r=silph_game_read_rocket_service(s,6,&provider);if(!r)r=silph_read_call(s->read,provider,"get_HasValidLocation",SILPH_READ_BOOL,NULL,0,&valid);
+    if(!r&&!valid.bits)r=SILPH_MANAGED_NOT_READY;if(!r)r=location(s,provider,lat,lon);int d=release(s,&provider);return r?r:d;
+}
+int silph_game_read_place(void *memory,const char *fort,SilphManagedRef *out){
+    GameRead *s=memory;if(!s||!s->opened||!fort||!fort[0]||strnlen(fort,161)>160||!out)return SILPH_MANAGED_ARGUMENT;memset(out,0,sizeof(*out));
+    SilphReadValue dictionary={0},values={0},iterator={0},current={0},v={0};
+    int status=silph_read_field(s->read,s->directory,"emdp",SILPH_READ_REFERENCE,&dictionary);
+    if(!status)status=silph_read_call(s->read,dictionary.reference,"get_Values",SILPH_READ_REFERENCE,NULL,0,&values);
+    if(!status)status=silph_read_call(s->read,values.reference,"GetEnumerator",SILPH_READ_BOXED,NULL,0,&iterator);
+    for(unsigned i=0;!status&&i<512;i++){
+        status=silph_read_call(s->read,iterator.reference,"MoveNext",SILPH_READ_BOOL,NULL,0,&v);if(status||!v.bits)break;
+        status=silph_read_call(s->read,iterator.reference,"get_Current",SILPH_READ_REFERENCE,NULL,0,&current);
+        char id[161]={0};if(!status)status=read_text(s,current.reference,"get_Id",id,sizeof(id));
+        if(!status&&!strcmp(id,fort)){*out=current.reference;memset(&current.reference,0,sizeof(current.reference));break;}
+        int freed=release(s,&current.reference);if(!status)status=freed;
+    }
+    int disposed=iterator.reference.serial?silph_read_call(s->read,iterator.reference,"Dispose",SILPH_READ_VOID,NULL,0,&v):0;
+    SilphManagedRef *refs[]={&current.reference,&iterator.reference,&values.reference,&dictionary.reference};
+    for(unsigned i=0;i<4;i++){int freed=release(s,refs[i]);if(!status)status=freed;}
+    if(!status)status=disposed;return status?status:out->serial?0:SILPH_MANAGED_NOT_READY;
 }
 int silph_game_read_gift_service(void *memory,uint32_t kind,SilphManagedRef *output){
     GameRead *s=memory;if(!s||!s->opened||!output||kind>2)return SILPH_MANAGED_ARGUMENT;memset(output,0,sizeof(*output));

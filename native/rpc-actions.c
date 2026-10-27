@@ -9,7 +9,7 @@ typedef struct {
     uint64_t sequence;
     uint32_t opened,operation;
 } RpcAction;
-static const char *responses[]={"GetPokestopEncounterOutProto","EncounterPokestopEncounterOutProto","UseItemEncounterOutProto","CatchPokemonOutProto","FortSearchOutProto","RecycleItemOutProto","BuddyMapOutProto","SetBuddyPokemonOutProto"};
+static const char *responses[]={"GetPokestopEncounterOutProto","EncounterPokestopEncounterOutProto","UseItemEncounterOutProto","CatchPokemonOutProto","FortSearchOutProto","RecycleItemOutProto","BuddyMapOutProto","SetBuddyPokemonOutProto","OpenGiftOutProto","ClaimEventPassRewardsResponseProto","ClaimEventPassRewardsResponseProto","CatchPokemonOutProto"};
 size_t silph_rpc_action_size(void){return sizeof(RpcAction);}
 static int drop(RpcAction *s,SilphManagedRef *ref){if(!ref->serial)return 0;int r=silph_managed_release(s->managed,*ref);if(!r)memset(ref,0,sizeof(*ref));return r;}
 int silph_rpc_action_open(void *memory,size_t bytes,void *read,void *managed,void *game,const SilphScheduleIdentity *identity){
