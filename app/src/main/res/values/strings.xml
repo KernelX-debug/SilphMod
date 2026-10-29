@@ -33,4 +33,5 @@
         <item quantity="one">%1$d Pokémon selected</item>
         <item quantity="other">%1$d Pokémon selected</item>
     </plurals>
+    <string name="automatic_medicine_priority">Use automatic priority</string>
 </resources>

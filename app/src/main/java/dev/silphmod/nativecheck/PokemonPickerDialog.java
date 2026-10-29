@@ -47,6 +47,7 @@ final class PokemonPickerDialog {
             TEXT = Color.rgb(242, 247, 251), MUTED = Color.rgb(153, 170, 189),
             ACCENT = Color.rgb(97, 233, 182), BORDER = Color.rgb(49, 65, 82), SELECTED = Color.rgb(28, 53, 48);
     private final Activity activity;
+    private final boolean keep;
     private final TreeSet<Integer> selected;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final ThreadPoolExecutor images = new ThreadPoolExecutor(1, 1, 10, TimeUnit.SECONDS,
@@ -64,7 +65,10 @@ final class PokemonPickerDialog {
     private String query = "";
 
     PokemonPickerDialog(Activity activity, String current) {
-        this.activity = activity; selected = new TreeSet<>(PokemonSelection.parse(current));
+        this(activity, current, false);
+    }
+    PokemonPickerDialog(Activity activity, String current, boolean keep) {
+        this.activity = activity; this.keep = keep; selected = new TreeSet<>(PokemonSelection.parse(current));
     }
     void show(Consumer<String> save) {
         final List<PokemonCatalog.Entry> catalog;
@@ -73,7 +77,7 @@ final class PokemonPickerDialog {
         dialog = new Dialog(activity); dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         LinearLayout page = column(); page.setPadding(dp(18), dp(20), dp(18), dp(16));
         page.setBackground(shape(BACKGROUND, BORDER, 22));
-        TextView title = text(activity.getString(R.string.only_catch), 22, TEXT); title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        TextView title = text(keep ? "Select Pokémon to keep" : activity.getString(R.string.only_catch), 22, TEXT); title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         page.addView(title);
         summary = text("", 13, MUTED); summary.setPadding(0, dp(7), 0, dp(16)); page.addView(summary);
         EditText search = new EditText(activity); search.setSingleLine(true);
@@ -124,7 +128,7 @@ final class PokemonPickerDialog {
         adapter.filter();
     }
     private void updateSummary() {
-        summary.setText(selected.isEmpty() ? activity.getString(R.string.only_catch_all_caption)
+        summary.setText(selected.isEmpty() ? (keep ? "No additional Pokémon selected" : activity.getString(R.string.only_catch_all_caption))
                 : activity.getResources().getQuantityString(R.plurals.pokemon_selected, selected.size(), selected.size()));
         selectedTab.setText(activity.getString(R.string.selected_pokemon, selected.size()));
         allTab.setTextColor(selectedOnly ? MUTED : ACCENT); selectedTab.setTextColor(selectedOnly ? ACCENT : MUTED);
@@ -151,7 +155,7 @@ final class PokemonPickerDialog {
             holder.view.setBackground(new RippleDrawable(ColorStateList.valueOf(Color.argb(32, 97, 233, 182)),
                     shape(enabled ? SELECTED : PANEL, enabled ? ACCENT : BORDER, 14), null));
             holder.check.setChecked(enabled); holder.check.setContentDescription(entry.name());
-            holder.label.setText(activity.getString(R.string.pokemon_catalog_entry, entry.id(), entry.name())); holder.image.setTag(entry.id());
+            holder.label.setText(activity.getString(R.string.pokemon_catalog_entry, entry.dex(), entry.name())); holder.image.setTag(entry.id());
             showArtwork(holder.image, entry);
             holder.view.setOnClickListener(view -> {
                 if (!selected.remove(entry.id())) selected.add(entry.id());
@@ -182,7 +186,7 @@ final class PokemonPickerDialog {
         images.execute(() -> {
             Bitmap loaded = artwork.get(entry.id());
             if (loaded == null) try (InputStream input = activity.getAssets().open(entry.artwork())) {
-                BitmapFactory.Options options = new BitmapFactory.Options(); options.inSampleSize = 2;
+                BitmapFactory.Options options = new BitmapFactory.Options(); options.inSampleSize = entry.form() == 0 ? 2 : 1;
                 loaded = BitmapFactory.decodeStream(input, null, options);
                 if (loaded != null && !images.isShutdown()) artwork.put(entry.id(), loaded);
             } catch (java.io.IOException ignored) { }

@@ -15,12 +15,17 @@ import java.util.Locale;
 public final class PokemonCatalog {
     private static List<Entry> cached;
     public static final class Entry {
-        private final int id;
+        private final int id, dex, form;
         private final String name, searchName, searchNumber;
         public Entry(int id, String name) {
-            this.id = id; this.name = name; searchName = normalize(name); searchNumber = String.format(Locale.ROOT, "%04d", id);
+            this(id, id, 0, name);
+        }
+        public Entry(int id, int dex, int form, String name) {
+            this.id = id; this.dex = dex; this.form = form; this.name = name; searchName = normalize(name); searchNumber = String.format(Locale.ROOT, "%04d", dex);
         }
         public int id() { return id; }
+        public int dex() { return dex; }
+        public int form() { return form; }
         public String name() { return name; }
         public boolean matches(String query) {
             return matchesKey(normalize(query));
@@ -31,7 +36,19 @@ public final class PokemonCatalog {
     private PokemonCatalog() { }
     public static synchronized List<Entry> load(Context context) throws IOException {
         if (cached == null) try (Reader reader = new InputStreamReader(context.getAssets().open("pokemon/catalog.tsv"), StandardCharsets.UTF_8)) {
-            cached = read(reader);
+            List<Entry> entries = new ArrayList<>(read(reader));
+            try (BufferedReader forms = new BufferedReader(new InputStreamReader(context.getAssets().open("pokemon/forms.tsv"), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = forms.readLine()) != null) {
+                    String[] fields = line.split("\t", -1);
+                    if (fields.length != 4) throw new IOException("Invalid Pokémon forms");
+                    int key = Integer.parseInt(fields[0]), dex = Integer.parseInt(fields[1]), form = Integer.parseInt(fields[2]);
+                    if (key <= PokemonSelection.MAX_DEX || key > PokemonSelection.MAX_KEY || dex < 1 || dex > PokemonSelection.MAX_DEX || form <= 0) throw new IOException("Invalid Pokémon form");
+                    entries.add(new Entry(key, dex, form, fields[3]));
+                }
+            }
+            entries.sort(java.util.Comparator.comparingInt(Entry::dex).thenComparingInt(Entry::form));
+            cached = Collections.unmodifiableList(entries);
         }
         return cached;
     }

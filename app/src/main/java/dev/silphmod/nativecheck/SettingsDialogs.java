@@ -47,6 +47,49 @@ final class SettingsDialogs {
 
     SettingsDialogs(Activity activity) { this.activity = activity; }
 
+    void medicineDialog(String title, String current, boolean revives, Consumer<String> save) {
+        Dialog dialog = dialog();
+        int[] stored = dev.rootcatch.nativeengine.RocketCareOrder.parse(current, revives);
+        List<Integer> priority = new ArrayList<>();
+        for (int id : stored) priority.add(id);
+        if (priority.isEmpty()) for (int id : revives ? new int[]{202,201} : new int[]{104,103,102,101}) priority.add(id);
+        LinearLayout page = page();
+        page.addView(text(title, 23, TEXT));
+        TextView caption = text("Uses the first available item in this order. Missing items are skipped.", 13, MUTED);
+        caption.setPadding(0, dp(10), 0, dp(14)); page.addView(caption);
+        LinearLayout body = column();
+        Runnable[] render = new Runnable[1];
+        render[0] = () -> {
+            body.removeAllViews();
+            for (int i = 0; i < priority.size(); i++) {
+                int id = priority.get(i), index = i;
+                ItemCatalog.Entry entry = ItemCatalog.ENTRIES.stream().filter(item -> item.id() == id).findFirst().orElseThrow();
+                LinearLayout line = row(); line.setPadding(dp(10), dp(10), dp(6), dp(10));
+                line.setBackground(shape(PANEL, BORDER, 14));
+                ImageView image = new ImageView(activity); image.setImageResource(ItemArtwork.resource(id));
+                image.setScaleType(ImageView.ScaleType.FIT_CENTER); line.addView(image, new LinearLayout.LayoutParams(dp(34), dp(44)));
+                TextView label = text((i + 1) + ". " + entry.label(), 14, TEXT); label.setPadding(dp(10), 0, dp(4), 0);
+                line.addView(label, new LinearLayout.LayoutParams(0, -2, 1));
+                Button up = button(R.string.move_up_symbol, false), down = button(R.string.move_down_symbol, false);
+                up.setContentDescription("Move " + entry.label() + " up"); down.setContentDescription("Move " + entry.label() + " down");
+                up.setEnabled(i > 0); down.setEnabled(i + 1 < priority.size());
+                up.setAlpha(up.isEnabled() ? 1 : .3f); down.setAlpha(down.isEnabled() ? 1 : .3f);
+                line.addView(up, new LinearLayout.LayoutParams(dp(48), dp(48))); line.addView(down, new LinearLayout.LayoutParams(dp(48), dp(48)));
+                up.setOnClickListener(v -> { Collections.swap(priority, index, index - 1); render[0].run(); });
+                down.setOnClickListener(v -> { Collections.swap(priority, index, index + 1); render[0].run(); });
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(-1, -2); params.bottomMargin = dp(8); body.addView(line, params);
+            }
+        };
+        render[0].run(); scroll(page, body);
+        Button automatic = button(R.string.automatic_medicine_priority, false);
+        automatic.setOnClickListener(v -> { save.accept(""); dialog.dismiss(); }); page.addView(automatic);
+        footer(page, dialog, R.string.apply, () -> {
+            int[] ids = priority.stream().mapToInt(Integer::intValue).toArray();
+            save.accept(dev.rootcatch.nativeengine.RocketCareOrder.encode(ids)); dialog.dismiss();
+        });
+        show(dialog, page, revives ? 450 : 620);
+    }
+
     void berriesDialog(String current, Consumer<String> save) {
         Dialog dialog = dialog();
         List<String> priority = new ArrayList<>(BerryOptions.parse(current));

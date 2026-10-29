@@ -29,11 +29,13 @@ typedef struct {uint64_t generation,serial,turn,next_fast_turn;bool issued,pendi
 typedef struct {uint64_t generation,serial,turn,active;uint32_t ui_mode;bool input_blocked;} RocketBattleClock;
 typedef struct {uint64_t generation,turn,active,incoming,until;uint32_t type,ui_mode;int32_t energy;} RocketActionWatch;
 typedef struct {int32_t potion,super_potion,hyper_potion,max_potion,revive,max_revive;} RocketCareItems;
+typedef struct {uint32_t potions[4],revives[2];} RocketCareOrder;
 bool rocket_battle_observe(RocketBattleClock *,RocketBattleView *);
 bool rocket_action_observed(const RocketActionWatch *,const RocketBattleView *,uint64_t);
 uint32_t rocket_battle_decide(const RocketBattleView *,RocketDecisionGate *,RocketDecision *);
 bool rocket_battle_settled(RocketDecisionGate *,const RocketBattleView *);
 uint32_t rocket_care_decide(const uint64_t[3],const RocketHealth[3],const RocketCareItems *,bool,RocketDecision *);
+uint32_t rocket_care_ordered(const uint64_t[3],const RocketHealth[3],const RocketCareItems *,const RocketCareOrder *,bool,RocketDecision *);
 bool rocket_catch_accept(uint32_t,uint32_t,uint32_t,uint32_t,bool);
 enum {ROCKET_RESULT_WAIT=0,ROCKET_RESULT_DISMISS=1,ROCKET_RESULT_EXPIRED=2};
 typedef struct {uint64_t captured,until,next;uint32_t attempts;} RocketCaptureGate;

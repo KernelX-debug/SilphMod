@@ -1,0 +1,149 @@
+warning: in the working copy of '.gitignore', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'LICENSE', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'NOTICE', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/src/main/AndroidManifest.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/src/main/assets/licenses/PokeAPI-sprites.txt', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/src/main/java/dev/rootcatch/nativeengine/FocusReader.java', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'app/src/main/java/dev/rootcatch/nativeengine/ForegroundFocus.java', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'app/src/main/res/drawable/ic_launcher.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/src/main/res/values/strings.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'app/src/main/res/values/styles.xml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'gradle.properties', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'gradle/wrapper/gradle-wrapper.properties', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/buddy-actions.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/buddy-actions.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/callback-lane.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/code-memory.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/code-memory.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/control-client.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/control.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/control.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/core.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/core.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/event-actions.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/event-actions.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/farmer-actions.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/farmer-actions.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/farmer-session.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/farmer-session.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/farmer-view.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/farmer-view.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/game-read.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/game-read.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/gift-actions.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/gift-actions.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/gift-bridge.inc', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/kecleon-actions.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/kecleon-actions.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/kecleon-plan.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/kecleon-plan.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/kecleon-session.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/kecleon-session.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/kecleon-wire.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/kecleon-wire.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/location-tools.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/location-tools.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/maintenance-actions.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/maintenance-actions.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/managed-action.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/managed-promise.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/managed-promise.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/managed-proto.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/managed-proto.inc', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/managed-read.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/managed-read.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/managed-rpc.inc', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/managed.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/managed.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/map-observer.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/observer-identity.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/pass-actions.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/pass-actions.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/pass-bridge.inc', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/pilot-reader.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/pilot-status.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/presentation-tools.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/promise.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/promise.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/readback.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/readback.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/recovery-policy.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/recovery-policy.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/research-actions.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/research-actions.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/research-bridge.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/research-bridge.inc', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/research-extra.inc', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/research-policy.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/research-policy.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/response-rewards.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/rocket-bridge.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/rocket-bridge.inc', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/rocket-policy.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/rocket-policy.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/rocket-session.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/rpc-actions.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/rpc-actions.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/scheduler.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/scheduler.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/session-link.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/session-link.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/session-wire.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/session-wire.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/standalone/elf-symbol.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/standalone/elf-symbol.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/standalone/observer.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/standalone/protocol.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/standalone/remote.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/standalone/remote.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/startup-thread.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/startup-thread.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/transfer-policy.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/transfer-policy.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/unity-pilot.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/visual-tools.c', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/visual-tools.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'native/work-refill.h', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/build_native.ps1', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'tools/pokemon-assets.json', CRLF will be replaced by LF the next time Git touches it
+ README.md                                          | 508 [32m++++++++++[m[31m--------[m
+ app/build.gradle.kts                               |   6 [32m+[m[31m-[m
+ app/src/main/assets/pokemon/catalog.tsv            |  21 [32m+[m
+ .../dev/rootcatch/automation/PokemonCatalog.java   |  23 [32m+[m[31m-[m
+ .../dev/rootcatch/automation/PokemonSelection.java |   9 [32m+[m[31m-[m
+ .../rootcatch/nativeengine/NativeSessionState.java |   3 [32m+[m[31m-[m
+ .../rootcatch/nativeengine/NativeSessionWire.java  |  35 [32m+[m[31m-[m
+ .../dev/silphmod/nativecheck/CheckService.java     |   2 [32m+[m[31m-[m
+ .../dev/silphmod/nativecheck/MainActivity.java     |  41 [32m+[m[31m-[m
+ .../silphmod/nativecheck/NativeCheckRunner.java    |  72 [32m++[m[31m-[m
+ .../dev/silphmod/nativecheck/NativeSettings.java   |  21 [32m+[m[31m-[m
+ .../silphmod/nativecheck/NativeStagePolicy.java    |   7 [32m+[m[31m-[m
+ .../silphmod/nativecheck/PokemonPickerDialog.java  |  14 [32m+[m[31m-[m
+ .../dev/silphmod/nativecheck/SettingsDialogs.java  |  43 [32m++[m
+ app/src/main/res/values/strings.xml                |   1 [32m+[m
+ native/event-view.c                                |  52 [32m+[m[31m-[m
+ native/farmer-actions.c                            |  23 [32m+[m[31m-[m
+ native/farmer-actions.h                            |   3 [32m+[m
+ native/farmer-session.c                            |  26 [32m+[m[31m-[m
+ native/farmer-session.h                            |   6 [32m+[m
+ native/game-read.c                                 |  46 [32m+[m[31m-[m
+ native/game-read.h                                 |   6 [32m+[m
+ native/managed-read.c                              |  12 [32m+[m
+ native/observer-identity.h                         |   2 [32m+[m[31m-[m
+ native/presentation-tools.c                        |   5 [32m+[m[31m-[m
+ native/rocket-bridge.h                             |   1 [32m+[m
+ native/rocket-bridge.inc                           |  11 [32m+[m
+ native/rocket-policy.c                             |  10 [32m+[m
+ native/rocket-policy.h                             |   2 [32m+[m
+ native/rocket-session.c                            |  18 [32m+[m[31m-[m
+ native/session-link.c                              |   2 [32m+[m[31m-[m
+ native/session-wire.c                              |  63 [32m++[m[31m-[m
+ native/session-wire.h                              |  14 [32m+[m[31m-[m
+ native/standalone/probe.c                          |  20 [32m+[m[31m-[m
+ native/unity-pilot.c                               | 130 [32m++++[m[31m-[m
+ native/visual-tools.c                              | 196 [32m+++++[m[31m--[m
+ native/visual-tools.h                              |   6 [32m+[m
+ spanish.md                                         |  64 [32m++[m[31m-[m
+ tools/build_native.ps1                             |  10 [32m+[m[31m-[m
+ tools/pokemon-assets.json                          | 597 [32m+++++++++++++++++++++[m
+ 40 files changed, 1723 insertions(+), 408 deletions(-)

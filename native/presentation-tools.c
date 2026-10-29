@@ -82,7 +82,7 @@ static _Atomic(Presentation *) current;
 static atomic_uint owner_tid;
 static Presentation *owned(void){return atomic_load(&owner_tid)==(unsigned)syscall(__NR_gettid)?atomic_load(&current):NULL;}
 static void (*open_original)(void *,const void *),(*egg_original)(void *,void *,const void *);
-static bool (*top_original)(void *,const void *),(*selection_original)(void *,void *,const void *);
+static bool (*selection_original)(void *,void *,const void *);
 static void (*click_original)(void *,const void *),(*dismiss_original)(void *,const void *),(*stage_original)(void *,const void *),(*reward_original)(void *,void *,const void *);
 static bool (*iterator_original[2])(void *,const void *);
 static void (*batch_original)(void *,int32_t,void *,void *,void *,const void *);
@@ -135,7 +135,6 @@ static void on_open(void *object,const void *m){
         s->operations--;
     }
 }
-static bool on_top(void *object,const void *m){Presentation *s=owned();SILPH_PRESENT_SCOPE(s);bool entered=operation(s);bool result=top_original(object,m);if(result)enqueue(owned(),object);if(entered)s->operations--;return result;}
 static void on_egg(void *object,void *data,const void *m){Presentation *s=owned();SILPH_PRESENT_SCOPE(s);if(allowed(s,SILPH_PRESENT_SCENES)&&!s->busy){s->eggs++;return;}egg_original(object,data,m);}
 static bool scene_closed(unsigned target,int32_t state){return state==0||(state==3&&target!=SCENE_AR_SAFETY&&target!=SCENE_WEEKLY_FITNESS);}
 static void scene_complete(Presentation *s,Queued *q){if(q->requested){s->scenes_count++;s->last_scene=q->target+1;s->scene_errors&=~(1u<<q->target);}drop(s,&q->object);}
@@ -234,7 +233,7 @@ static void setup_scenes(Presentation *s){
     s->result_data_class=klass(s,"holo-game.dll","Niantic.Holoholo.UI.Pokemon","PokemonInfoData");s->result_data=field(s,s->scenes[SCENE_POKEMON_RESULT].klass,"egbx","Niantic.Holoholo.UI.Pokemon.PokemonInfoData");s->result_confirm=field(s,s->result_data_class,"ShowConfirmButton","System.Boolean");if(!s->result_data||!s->result_confirm)s->scenes[SCENE_POKEMON_RESULT].failed=1;
     unsigned valid=0;for(unsigned i=0;i<SCENE_COUNT;i++){if(s->scenes[i].failed)s->scene_errors|=1u<<i;else{s->scene_supported|=1u<<i;valid++;}}
     Scene *egg=&s->scenes[SCENE_EGG_CUTSCENE];void *asset=klass(s,"holo-game.dll","","PokemonInfoEggHatch");egg->asset_class=asset;egg->asset_alive=field(s,asset,"m_CachedPtr","System.IntPtr");egg->asset=field(s,egg->klass,"eggHatchAsset","PokemonInfoEggHatch");egg->skip=method(s,asset,"SkipEggHatchAnimation","System.Void",0,NULL);if(!egg->asset||!egg->skip||!egg->asset_alive){egg->asset=NULL;egg->skip=NULL;}
-    if(!valid||hook(s,opened,(void *)on_open,(void **)&open_original)||hook(s,s->top,(void *)on_top,(void **)&top_original)){fail(s,SILPH_PRESENT_SCENES,101);return;}s->available|=SILPH_PRESENT_SCENES;
+    if(!valid||hook(s,opened,(void *)on_open,(void **)&open_original)){fail(s,SILPH_PRESENT_SCENES,101);return;}s->available|=SILPH_PRESENT_SCENES;
     void *map=klass(s,"holo-game.dll","Niantic.Holoholo.Map","MapExploreState"),*iterator=NULL;const void *unique=NULL;const char *parameter[]={"Niantic.Holoholo.EggHatch.HatchedPokemonsData"};unsigned matches=0;
     s->map_class=map;s->layer_class=klass(s,"holo-game.dll","Niantic.Holoholo.NUI","GuiLayerService");
     s->map_layer=field(s,map,"ellz","Niantic.Holoholo.NUI.IGuiLayerService");s->layer_top=method(s,s->layer_class,"TopGui","Niantic.Holoholo.NUI.IGuiController",0,NULL);

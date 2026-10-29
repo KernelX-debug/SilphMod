@@ -1,6 +1,7 @@
 #include "rocket-session.h"
 #include "rocket-bridge.h"
 #include "rocket-policy.h"
+#include "rocket-flow.h"
 #include "rpc-actions.h"
 #include "kecleon-actions.h"
 #include "maintenance-actions.h"
@@ -14,6 +15,7 @@
 
 enum {RS_OPEN=1,RS_UI=2,RS_BATTLE=3,RS_ENCOUNTER=4,RS_CAPTURE=5,RS_HEAL=6,RS_DONE=7,RS_LOSS=8};
 typedef struct {
+    uint32_t grunt_character;
     void *read,*managed,*game,*link,*rpc,*maintenance,*medicine;SilphScheduleIdentity identity;SilphSessionConfig config;
     SilphRocketMetrics metrics;SilphKecleonEvent event;SilphGameStop stop;SilphManagedRef incident,gui,encounter_state,director,place,encounter,pokemon,attack,map_handler,map_settings,reward_gui;
     RocketDecisionGate gate;RocketBattleClock battle_clock;RocketActionWatch pending_action;uint64_t team[3],sequence,event_sequence,deadline,scan_at,nudge_at,next,attack_until,inventory_at,gui_at,clean_due;
@@ -21,6 +23,7 @@ typedef struct {
     uint32_t species,iv[3],shiny,preparing,team_ready,team_refreshed,map_disabled,lost,loss_recovery,loss_seen,available_shields,shield_clicked,shield_wait,shield_before;uint64_t map_at,map_requests,capture_finished_at,loss_until,loss_started,loss_clear_at,shield_at;float map_saved[3];char source[97],spawn[17],top_name[128];double latitude,longitude,anchor_latitude,anchor_longitude;
     uint32_t attack_type,last_action_result;uint64_t charge_retry_at,action_log_at,battle_started,accepted_actions,rejected_actions,last_active;
     uint32_t ui_taps,ui_seen,team_choice,team_choice_attempts,result_blocked,headless;uint64_t ui_started,ui_retry_at,result_scan_at,reward_before,transition_since;RocketCaptureGate capture_gate,record_gate;uintptr_t fast_gui;
+    SilphManagedRef visual_properties;float visual_saved[4];unsigned visual_attempted,visual_tuned,timing_stage;uint64_t timing_at,timing_request;
 } Rocket;
 size_t silph_rocket_session_size(void){return sizeof(Rocket);}
 static int drop(Rocket *s,SilphManagedRef *ref){return silph_reward_drop(s->managed,ref);}
@@ -33,6 +36,7 @@ static bool istype(Rocket *s,SilphManagedRef ref,const char *space,const char *n
 static int action(Rocket *s,const SilphSchedulePermit *p,uint32_t op,SilphManagedRef receiver,const SilphReadArgument *args,uint32_t count){SilphReadValue out={0};int r=silph_rocket_invoke(s->read,p,op,receiver,args,count,&out);int freed=drop(s,&out.reference);return r?r:freed;}
 static void phase(Rocket *s,uint32_t value,uint32_t stage,uint64_t deadline){s->metrics.phase=value;s->metrics.stage=stage;s->deadline=deadline;s->dirty=1;}
 static int release_candidate(Rocket *s){SilphManagedRef *refs[]={&s->attack,&s->director,&s->place,&s->encounter,&s->pokemon,&s->reward_gui};int result=0;
+    silph_rocket_flow_unbind();
     for(unsigned i=0;i<6;i++){int r=drop(s,refs[i]);if(!result)result=r;}memset(&s->gate,0,sizeof(s->gate));memset(&s->battle_clock,0,sizeof(s->battle_clock));memset(&s->pending_action,0,sizeof(s->pending_action));memset(s->team,0,sizeof(s->team));s->preparing=s->team_ready=s->team_refreshed=s->team_choice=s->team_choice_attempts=s->headless=0;return result;}
 static void result(Rocket *s,uint32_t reason,bool verified){s->metrics.reason=reason;s->metrics.verified=verified;phase(s,7,RS_DONE,0);}
 static int publish_event(Rocket *s){
@@ -60,7 +64,7 @@ static int command(Rocket *s,const SilphKecleonCommand *c,uint64_t now){
     }else if(c->kind==1&&s->metrics.phase==1){
         int r=release_candidate(s);if(r)return r;SilphManagedRef cached={0};s->reward_before=0;r=typed(s,s->incident,"Holoholo.Rpc","InvasionEncounterOutProto",&cached);
         if(!r&&cached.serial)r=scalar(s,cached,"EncounterId",SILPH_READ_U64,&s->reward_before,false);int freed=drop(s,&cached);if(r||freed)return r?r:freed;
-        s->latitude=c->latitude;s->longitude=c->longitude;memcpy(s->source,c->source,97);memset(&s->stop,0,sizeof(s->stop));
+        s->grunt_character=0;s->latitude=c->latitude;s->longitude=c->longitude;memcpy(s->source,c->source,97);memset(&s->stop,0,sizeof(s->stop));
         s->metrics.reason=s->metrics.verified=s->metrics.result=0;s->won=s->reward_read=s->nudged=s->returning=s->berry_attempted=s->active_item=s->balls=s->anchor_expected=s->healing_expected=s->lost=s->loss_recovery=s->loss_seen=s->shield_clicked=s->shield_wait=s->available_shields=0;s->last_gui=s->capture_finished_at=s->loss_clear_at=0;s->charge_slot=2;
         s->charge_retry_at=s->action_log_at=s->battle_started=s->accepted_actions=s->rejected_actions=s->last_active=0;s->last_action_result=0;
         phase(s,2,0,now+UINT64_C(15000000000));
@@ -68,7 +72,7 @@ static int command(Rocket *s,const SilphKecleonCommand *c,uint64_t now){
         if(!c->accepted){result(s,2,false);return 0;}
         if(s->returning){s->returning=0;s->next=now+UINT64_C(100000000);s->anchor_until=now+UINT64_C(10000000000);phase(s,5,RS_CAPTURE,now+UINT64_C(120000000000));}
         else{s->scan_at=now+UINT64_C(250000000);s->nudge_at=now+UINT64_C(4000000000);phase(s,3,0,now+UINT64_C(18000000000));}
-    }else if(c->kind==3&&s->metrics.phase==4){if(c->accepted){s->ui_taps=s->ui_seen=0;s->fast_gui=0;s->ui_started=now;s->ui_retry_at=now+UINT64_C(100000000);phase(s,5,RS_OPEN,now+UINT64_C(240000000000));}else result(s,4,true);
+    }else if(c->kind==3&&s->metrics.phase==4){if(c->accepted){int r=silph_rocket_flow_bind(s->managed,s->incident,s->stop.incident,s->metrics.request,s->grunt_character);if(r)return r;s->ui_taps=s->ui_seen=0;s->fast_gui=0;s->ui_started=now;s->ui_retry_at=now+UINT64_C(100000000);phase(s,5,RS_OPEN,now+UINT64_C(240000000000));}else result(s,4,true);
     }else if(c->kind==4&&s->metrics.phase==7){
         int r=release_candidate(s);if(r)return r;
         if(s->loss_recovery){s->metrics.reason=7;phase(s,8,0,0);}
@@ -93,7 +97,7 @@ static int stop_at(Rocket *s,uint64_t now,uint64_t wall){
     if(!r)r=scalar(s,display,"IncidentExpirationMs",SILPH_READ_I64,&found.expires_ms,false);
     drop(s,&display);if(r)return r;
     if(!found.incident[0]||found.expires_ms<=wall+10000){drop(s,&s->place);result(s,1,true);return 0;}
-    s->stop=found;phase(s,4,0,now+UINT64_C(10000000000));return 0;
+    s->grunt_character=(uint32_t)character;s->stop=found;phase(s,4,0,now+UINT64_C(10000000000));return 0;
 }
 static void refresh_map(Rocket *s,const SilphSchedulePermit *permit,uint64_t now){
     if(s->map_disabled||now<s->map_at)return;s->map_at=now+UINT64_C(8000000000);int r=0;
@@ -142,7 +146,7 @@ static int ui(Rocket *s,const SilphSchedulePermit *permit,uint64_t now){
     if(!r&&fast&&s->fast_gui!=(uintptr_t)object){int tuned=action(s,permit,RK_FAST_GUI,top.reference,NULL,0);s->fast_gui=(uintptr_t)object;__android_log_print(ANDROID_LOG_INFO,"SilphRocket","presentation shortened gui=%s result=%d",name,tuned);}
     uint32_t op=0;
     if(s->metrics.stage==RS_UI&&(istype(s,top.reference,"Niantic.Holoholo.Combat.NpcTrainers","NpcTrainerInterstitialGui")||istype(s,top.reference,"Niantic.Holoholo.Incident","IncidentInvasionDialogGui")||istype(s,top.reference,"Niantic.Holoholo.Combat.Preparation","CombatPreparationRootGuiController")||istype(s,top.reference,"Niantic.Holoholo.Combat.PokemonPartyState","CombatPokemonPartyWidget")))s->ui_seen=1;
-    if(istype(s,top.reference,"Niantic.Holoholo.Combat.NpcTrainers","NpcTrainerInterstitialGui"))op=s->lost?RK_CANCEL:RK_CHALLENGE;
+    if(istype(s,top.reference,"Niantic.Holoholo.Combat.NpcTrainers","NpcTrainerInterstitialGui"))op=s->lost?RK_CANCEL:silph_rocket_flow_challenged(s->managed,top.reference)?0:RK_CHALLENGE;
     else if(istype(s,top.reference,"Niantic.Holoholo.Incident","IncidentInvasionDialogGui"))op=RK_DIALOG;
     else if(s->metrics.stage==RS_UI&&istype(s,top.reference,"Niantic.Holoholo.Pokestop","PokestopSpinnerInteractionGuiController"))op=RK_STOP_EXIT;
     else if(s->lost&&istype(s,top.reference,"Niantic.Holoholo.Incident","IncidentCombatResolveGuiController"))op=RK_INCIDENT_CLOSE;
@@ -373,7 +377,7 @@ static int care(Rocket *s,const SilphSchedulePermit *permit,uint64_t now){
     RocketCareItems items={0};int32_t *counts[]={&items.potion,&items.super_potion,&items.hyper_potion,&items.max_potion,&items.revive,&items.max_revive};
     const int ids[]={101,102,103,104,201,202};
     for(unsigned i=0;!r&&i<6;i++){uint32_t count=0;r=silph_game_read_item(s->game,ids[i],&count);*counts[i]=(int32_t)count;}
-    if(r)return r;RocketDecision decision;uint32_t kind=rocket_care_decide(s->team,health,&items,true,&decision);
+    if(r)return r;RocketCareOrder order={0};memcpy(order.potions,s->config.potion_order,sizeof(order.potions));memcpy(order.revives,s->config.revive_order,sizeof(order.revives));RocketDecision decision;uint32_t kind=rocket_care_ordered(s->team,health,&items,&order,true,&decision);
     if(kind==ROCKET_HEALTHY){if(s->preparing){s->preparing=0;s->team_ready=1;__android_log_print(ANDROID_LOG_INFO,"SilphRocket","team ready hp=%d/%d,%d/%d,%d/%d",health[0].hp,health[0].max_hp,health[1].hp,health[1].max_hp,health[2].hp,health[2].max_hp);}else result(s,s->loss_recovery?7:0,true);return 0;}
     if(kind==ROCKET_NO_ITEMS){s->metrics.reason=9;phase(s,8,0,0);return 0;}
     if(kind!=ROCKET_HEAL&&kind!=ROCKET_REVIVE)return SILPH_MANAGED_CONTRACT;
@@ -478,6 +482,8 @@ static int ready_to_open(Rocket *s,bool require_range,bool *ready){
 int silph_rocket_session_tick(void *memory,const SilphSchedulePermit *permit,const SilphGameSnapshot *snapshot,uint64_t now,uint64_t wall,SilphRocketMetrics *out){
     Rocket *s=memory;if(!s||!s->opened||!out||!snapshot||!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;
     if(snapshot->account_hi!=s->identity.account_hi||snapshot->account_lo!=s->identity.account_lo)return SILPH_MANAGED_STALE;
+    silph_rocket_flow_permit(permit);
+    if(!s->visual_attempted){s->visual_attempted=1;int tuning=silph_game_read_rocket_service(s->game,8,&s->visual_properties);if(!tuning)tuning=silph_rocket_battle_visuals(s->read,permit,s->visual_properties,s->visual_saved,false);if(!tuning)s->visual_tuned=1;else drop(s,&s->visual_properties);__android_log_print(ANDROID_LOG_INFO,"SilphRocket","battle transition timing prepared result=%d",tuning);}
     int r=0;for(unsigned i=0;i<8;i++){SilphKecleonCommand c;int popped=silph_session_link_pop(s->link,&c);if(popped==SILPH_SCHEDULE_BUSY||popped==SILPH_SCHEDULE_STATE)break;if(popped){r=popped;break;}r=command(s,&c,now);if(r)break;}
     if(!r&&s->metrics.phase==1&&s->dirty)silph_game_read_position(s->game,&s->latitude,&s->longitude);
     bool busy=false;if(!r)r=clean(s,permit,snapshot,now,&busy);if(!r&&!busy)r=poll_rpc(s,permit,now);
@@ -514,9 +520,11 @@ int silph_rocket_session_tick(void *memory,const SilphSchedulePermit *permit,con
     }
     if(!r&&!closing&&s->deadline&&now>s->deadline&&s->metrics.phase!=7&&s->metrics.phase!=8){if(s->metrics.phase==5){s->metrics.error=100+s->metrics.stage;phase(s,8,0,0);}else result(s,3,false);}
     if(r){s->metrics.error=(uint32_t)r;__android_log_print(ANDROID_LOG_ERROR,"SilphRocket","native request=%llu phase=%u stage=%u error=%d",(unsigned long long)s->metrics.request,s->metrics.phase,s->metrics.stage,r);}
+    if(s->timing_stage!=s->metrics.stage||s->timing_request!=s->metrics.request){if(s->timing_at)__android_log_print(ANDROID_LOG_INFO,"SilphRocket","stage completed request=%llu stage=%u ms=%llu next=%u",(unsigned long long)s->timing_request,s->timing_stage,(unsigned long long)((now-s->timing_at)/1000000),s->metrics.stage);s->timing_stage=s->metrics.stage;s->timing_request=s->metrics.request;s->timing_at=now;}
     *out=s->metrics;return r;
 }
 int silph_rocket_session_close(void *memory){Rocket *s=memory;if(!s||!s->opened)return 0;int r=release_candidate(s);
+    if(s->visual_tuned){int restored=silph_rocket_battle_visuals(s->read,NULL,s->visual_properties,s->visual_saved,true);if(!r)r=restored;}int visual_drop=drop(s,&s->visual_properties);if(!r)r=visual_drop;
     if(s->map_settings.serial){int restored=silph_rocket_map_settings(s->read,NULL,s->map_settings,s->map_saved,true);if(!r)r=restored;}
     int ma=drop(s,&s->map_settings),mb=drop(s,&s->map_handler);if(!r)r=ma?ma:mb;
     SilphManagedRef *refs[]={&s->incident,&s->gui,&s->encounter_state};for(unsigned i=0;i<3;i++){int d=drop(s,refs[i]);if(!r)r=d;}

@@ -1,5 +1,16 @@
 #include "rocket-bridge.h"
 #include <android/log.h>
+#ifdef SILPH_PILOT_ROCKET
+int silph_rocket_battle_visuals(void *memory,const SilphSchedulePermit *permit,SilphManagedRef ref,float saved[4],bool restore){
+    if(!saved||(!restore&&!silph_schedule_permitted(permit,true)))return SILPH_MANAGED_ARGUMENT;
+    Read *s=memory;int status=enter_read(s);if(status)return status;void *object=NULL;status=silph_managed_target(s->managed,ref,&object);
+    if(!status&&!research_type(s,object,"Niantic.Holoholo.Combat.Util","CombatDirectorProperties"))status=SILPH_MANAGED_CONTRACT;
+    const char *names[]={"startCombatFadeTransitionSeconds","cameraMovementDurationSeconds","endCombatFadeOutSeconds","endCombatPreFadeOutSeconds"};const void *fields[4]={0};float before[4]={0};
+    for(unsigned i=0;!status&&i<4;i++){fields[i]=find_field(s,s->base.object_get_class(object),names[i],NULL,NULL,&status);if(!status&&!matches_kind(s,s->api.field_get_type(fields[i]),SILPH_READ_F32))status=SILPH_MANAGED_CONTRACT;if(!status){s->api.field_get_value(object,fields[i],&before[i]);if(!isfinite(before[i])||before[i]<0||before[i]>120||!isfinite(saved[i])||saved[i]<0||saved[i]>120)status=SILPH_MANAGED_CONTRACT;}}
+    if(!status)for(unsigned i=0;i<4;i++){if(restore){if(before[i]==0)s->field_set_value(object,fields[i],&saved[i]);}else{saved[i]=before[i];float zero=0;s->field_set_value(object,fields[i],&zero);}}
+    return leave_read(s,status);
+}
+#endif
 int silph_rocket_invoke(void *memory,const SilphSchedulePermit *permit,uint32_t operation,SilphManagedRef receiver,
     const SilphReadArgument *args,uint32_t count,SilphReadValue *out){
     if(!out)return SILPH_MANAGED_ARGUMENT;clear_value(out);

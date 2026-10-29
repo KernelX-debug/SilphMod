@@ -6,6 +6,9 @@
 
 typedef struct {
     void *read,*managed,*game,*farmer,*maintenance;
+#ifdef SILPH_PRESENT_SCOPED
+    void *buddy;
+#endif
 #ifdef SILPH_PILOT_SERVICE
     void *research,*go_pass;SilphManagedRef pass_reward;
 #endif
@@ -44,6 +47,10 @@ int silph_farmer_session_open(void *memory,size_t bytes,void *read,void *managed
         if(!status)status=silph_research_open(s->research,silph_research_size(),read,managed,game,identity,transfers,options->farmer.use_berries);
         if(!status){s->go_pass=calloc(1,silph_pass_size());if(!s->go_pass)status=SILPH_MANAGED_CAPACITY;else status=silph_pass_open(s->go_pass,silph_pass_size(),read,managed,game,identity);}}
 #endif
+    #ifdef SILPH_PRESENT_SCOPED
+    if(!status&&options->buddy.flags){s->buddy=calloc(1,silph_buddy_care_size());if(!s->buddy)status=SILPH_MANAGED_CAPACITY;
+        if(!status)status=silph_buddy_care_open(s->buddy,silph_buddy_care_size(),read,managed,game,identity,&options->buddy);}
+#endif
     if(status)silph_farmer_session_close(s);return status;
 }
 bool silph_farmer_session_inventory_due(void *memory){
@@ -60,6 +67,15 @@ static void remember_stop(Session *s,const SilphMaintenanceMetrics *m){
     }
     memcpy(s->stops[chosen].fort,m->fort,sizeof(s->stops[chosen].fort));
     s->stops[chosen].until=s->clock+(m->result==1||m->result==3?UINT64_C(300000000000):UINT64_C(5000000000));
+}
+static uint32_t item_floor(Session *s,const SilphGameSnapshot *snapshot,unsigned index){
+    uint32_t floor=s->options.limits[index].floor;
+#ifdef SILPH_PRESENT_SCOPED
+    uint32_t buddy=silph_buddy_care_floor(s->buddy,snapshot,(uint32_t)s->options.limits[index].item);if(buddy>floor)floor=buddy;
+#else
+    (void)snapshot;
+#endif
+    return floor;
 }
 static int maintenance_open(Session *s){
     int status=silph_maintenance_open(s->maintenance,silph_maintenance_size(),s->read,s->managed,s->game,&s->identity);
@@ -113,6 +129,9 @@ int silph_farmer_session_tick(void *memory,const SilphSchedulePermit *permit,con
     }
     if(!status&&s->research&&silph_research_pending(s->research)){research_stepped=true;status=research_tick(s,permit,snapshot,now,&maintaining);}
 #endif
+    #ifdef SILPH_PRESENT_SCOPED
+    if(!status&&!maintaining&&s->buddy){bool busy=false;status=silph_buddy_care_tick(s->buddy,permit,snapshot,now,silph_farmer_session_idle(s),&busy);maintaining=busy;}
+#endif
     if(!status&&!maintaining&&s->lane){maintaining=true;status=poll(s,now);}
     else if(!status&&!maintaining){
         bool boundary=!s->farmer_opened||s->metrics.farmer.state==0||s->metrics.farmer.state==SILPH_FARMER_SELECT,force_farmer=false;
@@ -120,7 +139,7 @@ int silph_farmer_session_tick(void *memory,const SilphSchedulePermit *permit,con
 #if defined(SILPH_PILOT_COMBINED) && defined(SILPH_PILOT_SERVICE)
             for(unsigned skipped=0;s->clean_index<s->options.limit_count&&skipped<4;skipped++){
                 uint32_t count=0;status=silph_game_read_item(s->game,s->options.limits[s->clean_index].item,&count);
-                if(status||count>s->options.limits[s->clean_index].floor)break;s->clean_index++;
+                if(status||count>item_floor(s,snapshot,s->clean_index))break;s->clean_index++;
                 if(clock_ns()-began>=UINT64_C(500000))break;
             }
             if(status){s->metrics.error=(uint32_t)status;*output=s->metrics;return status;}
@@ -130,7 +149,7 @@ int silph_farmer_session_tick(void *memory,const SilphSchedulePermit *permit,con
             else if(s->clean_round>=4&&s->farmer_opened){s->clean_round=0;maintaining=false;force_farmer=true;}
             else{
                 status=maintenance_open(s);s->lane=2;s->clean_round++;
-                if(!status)status=silph_maintenance_discard(s->maintenance,permit,snapshot,s->options.limits[s->clean_index].item,s->options.limits[s->clean_index].floor,50,now);
+                if(!status)status=silph_maintenance_discard(s->maintenance,permit,snapshot,s->options.limits[s->clean_index].item,item_floor(s,snapshot,s->clean_index),50,now);
                 if(!status)status=poll(s,now);
             }
         }
@@ -211,6 +230,9 @@ int silph_farmer_session_close(void *memory){
     if(s->pass_reward.serial){int freed=silph_managed_release(s->managed,s->pass_reward);if(freed)return freed;s->pass_reward=(SilphManagedRef){0};}
     int d=s->go_pass?silph_pass_close(s->go_pass):0;if(d)return d;free(s->go_pass);s->go_pass=NULL;
     int c=s->research?silph_research_close(s->research):0;if(c)return c;free(s->research);s->research=NULL;
+#endif
+    #ifdef SILPH_PRESENT_SCOPED
+    int care=s->buddy?silph_buddy_care_close(s->buddy):0;if(care)return care;free(s->buddy);s->buddy=NULL;
 #endif
     if(a||b)return a?a:b;free(s->farmer);free(s->maintenance);memset(s,0,sizeof(*s));return 0;
 }

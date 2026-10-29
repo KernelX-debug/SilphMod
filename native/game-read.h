@@ -16,7 +16,13 @@ typedef struct {
     char fort[161],incident[161];
 } SilphGameStop;
 typedef bool (*SilphStopPredicate)(void *,const char *);
+#ifdef SILPH_PRESENT_SCOPED
+typedef bool (*SilphPokemonPredicate)(void *,uint64_t,uint32_t,SilphManagedRef);
+int silph_game_read_pokemon_form(void *,SilphManagedRef,bool,uint32_t *);
+int silph_game_read_buddy_service(void *,uint32_t,SilphManagedRef *);
+#else
 typedef bool (*SilphPokemonPredicate)(void *,uint64_t,uint32_t);
+#endif
 size_t silph_game_read_size(void);
 int silph_game_read_open(void *,size_t,void *,const SilphManagedApi *,void *,void *);
 int silph_game_read_compact(void *);

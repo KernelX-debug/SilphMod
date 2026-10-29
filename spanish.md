@@ -5,11 +5,11 @@
 **[English](README.md) · Español**
 
 Automatización local para Pokémon GO original en **Android con root**, tanto en UGPhone como en teléfonos físicos ARM64. Captura de Pokémon cercanos, gira Poképaradas, recoge investigaciones de campo, semanales, especiales y de eventos, reclama recompensas del GO Pass, transfiere nuevas capturas según tus filtros y mantiene la mochila dentro de los límites que elijas.
-Los modos **Kecleon (BETA)** y **AutoRocket (BETA)** tienen su propia configuración, notificación y estadísticas.
+Los modos **Kecleon (BETA)**, **AutoRocket (BETA)** y **Event tricks** tienen su propia configuración, notificación y estadísticas.
 
 Configuras las funciones, pulsas **Start service** y sigues el progreso desde la notificación. **Stop** y **Export logs** permiten detener la sesión y revisar sus resultados. La interfaz, las notificaciones y los recursos visuales están en inglés.
 
-**Edición:** `2.2.12` · [MIT](LICENSE)
+**Edición:** `2.3.8` · [MIT](LICENSE)
 
 **Plataforma:** Android 10 o posterior, ARM64 y root. Una misma APK para UGPhone y teléfonos físicos.
 
@@ -21,7 +21,10 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 - [Funciones](#funciones)
   - [Kecleon (BETA)](#kecleon-beta)
   - [AutoRocket (BETA)](#autorocket-beta)
+  - [Event tricks](#event-tricks)
   - [Only catch: escoger qué Pokémon capturar](#only-catch-escoger-qué-pokémon-capturar)
+  - [Select Pokémon to keep](#select-pokémon-to-keep)
+  - [Compañero](#compañero)
   - [Transferir sin tocar la colección anterior](#transferir-sin-tocar-la-colección-anterior)
   - [Mochila: límites por tipo, no borrado indiscriminado](#mochila-límites-por-tipo-no-borrado-indiscriminado)
   - [Límites de captura y giros](#límites-de-captura-y-giros)
@@ -70,7 +73,7 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 | Conexión | Selección adaptativa entre cuatro rutas de arranque y reutilización de la que funcionó para el entorno |
 | Identidad instalada | `dev.rootcatch.ugphonetest`, conservada para actualizar instalaciones anteriores |
 
-La aplicación reúne **Farmer**, **Kecleon (BETA)** y **AutoRocket (BETA)**, con ejecución independiente y estadísticas separadas. El arranque se adapta al **Android del dispositivo o de la instancia**.
+La aplicación reúne **Farmer**, **Kecleon (BETA)**, **AutoRocket (BETA)** y **Event tricks**, con ejecución independiente y estadísticas separadas. El arranque se adapta al **Android del dispositivo o de la instancia**.
 
 ## Funciones
 
@@ -80,6 +83,8 @@ La aplicación reúne **Farmer**, **Kecleon (BETA)** y **AutoRocket (BETA)**, co
 | Inciensos | Captura las apariciones del incienso normal y del incienso diario, también cuando sus duraciones se acumulan. Mantiene los filtros de especie, bayas y protecciones de transferencia del Farmer. |
 | Automatic event actions | Interactúa con las cajas de Halloween dentro de **50 m**, recoge sus recompensas y captura los Pokémon que entregan. Activada inicialmente en Farmer. |
 | Only catch | Selección de una o varias especies con miniaturas, búsqueda y orden de Pokédex. Sin selección, captura todas las especies elegibles. Los encuentros de investigación de campo, logro semanal, especiales, de eventos y GO Pass se capturan independientemente de este filtro. |
+| Select Pokémon to keep | Conserva las especies y formas seleccionadas cuando el Farmer las capture, aunque no cumplan otros filtros de conservación. No cambia la selección de Only catch. |
+| Compañero | **Feed buddy** lo alimenta según la prioridad de bayas y **Mega Evolve buddy** utiliza la megaevolución disponible de menor coste. Detecta cambios de compañero durante la sesión. |
 | Throw quality | Selecciona **Normal**, **Nice**, **Great** o **Excellent**. Los lanzamientos mantienen el giro de bola curva. |
 | Bayas | Usa la primera baya disponible según la selección y prioridad configuradas, confirma su aplicación y continúa con el lanzamiento. Mantiene los límites de Item limits. |
 | Poképaradas | Envía giros para objetivos dentro del alcance configurado en el motor y contabiliza respuestas exitosas. |
@@ -95,7 +100,7 @@ La aplicación reúne **Farmer**, **Kecleon (BETA)** y **AutoRocket (BETA)**, co
 | Conservar shiny + fondo | Protege los Pokémon que cumplen ambas condiciones. Se combina con los demás filtros de conservación. |
 | Conservar encuentros de investigación | **Keep field research encounters** protege las capturas de campo, del logro semanal, de investigaciones especiales y de eventos. Si se desactiva, siguen aplicándose los filtros shiny, IV y demás protecciones globales. |
 | Conservar encuentros del GO Pass | **Keep GO Pass encounters**, activado inicialmente, protege las capturas del pase por su origen. Los legendarios permanecen protegidos incluso con esta casilla desactivada. |
-| Show IV names | Muestra temporalmente el porcentaje entero y los IV en la lista del inventario, sin renombrar los Pokémon de la cuenta. |
+| Show IV names | Muestra temporalmente el porcentaje entero y los IV en el inventario. Los **15/15/15** aparecen en rojo en la lista y en su ficha, sin renombrar los Pokémon de la cuenta. |
 | Extended manual transfer | Amplía la selección manual múltiple de Pokémon especiales desde el inventario del juego. Es independiente de las transferencias automáticas. |
 | Fast gift opening | Acelera la apertura manual de regalos, la presentación de sus objetos y las esperas locales de esa secuencia. Activado inicialmente en **Game tools**. |
 | Auto-open gifts / Auto-send gifts | Abre y envía regalos a los amigos disponibles durante la sesión, sin detener el Farmer. Con la mochila llena, la apertura solicita la conversión a polvo estelar. Ambas opciones vienen desactivadas inicialmente. |
@@ -103,6 +108,7 @@ La aplicación reúne **Farmer**, **Kecleon (BETA)** y **AutoRocket (BETA)**, co
 | Limpiar mochila | Elimina excedentes de los tipos seleccionados **desde el inicio**, y mantiene esos límites durante la sesión. No necesita esperar a que la mochila se llene. |
 | Kecleon (BETA) | Búsqueda y captura automática de candidatos, con filtros e historial por cuenta. Esto aún está en desarrollo. |
 | AutoRocket (BETA) | Recorre solo candidatos de reclutas normales (por ahora), valida la incidencia, combate, captura según los filtros y cura al equipo entre combates. Incluye equipo recomendado, dos escudos y ubicación de retorno para las capturas (Método Alan). |
+| Event tricks | Recoge las recompensas de las cajas del evento y repite las recogidas de caramelos confirmadas, dando prioridad a las cajas de Caramelos Raros. Tiene estadísticas independientes y no realiza capturas ni giros. |
 | Solucionar error 12 | Tratamiento de ubicación dentro del proceso del juego, opcional y vinculado a la sesión. |
 | Estadísticas | Capturas, huidas, giros, transferencias, objetos eliminados, XP, polvo estelar y tiempo activo acumulados. Se conservan al detener, volver a iniciar y recuperar el mapa. |
 | Clear statistics | Restablece únicamente los contadores del modo abierto, con el servicio detenido. En Kecleon también limpia su historial de candidatos; en AutoRocket elimina el historial y la ubicación de retorno. Se encuentra debajo de las estadísticas. |
@@ -138,7 +144,7 @@ La carga del mapa utiliza movimientos acotados de **ocho metros** y lecturas esp
 
 **Use recommended team**, activada inicialmente, prepara el equipo recomendado en cada combate. Al desactivarla, utiliza la selección del usuario. Comprueba la salud del equipo antes de empezar, usa los dos escudos en las primeras oportunidades y lanza los ataques cargados disponibles, incluido el segundo cargado. Si pierde, cierra las pantallas de derrota y continúa con la recuperación del equipo.
 
-Entre combates cura y revive únicamente a los tres Pokémon utilizados. Prioriza **Revivir Máximo** antes de **Revivir** y escoge la poción disponible que cubra la salud que falta; si ninguna basta en una sola aplicación, continúa con las disponibles. Si faltan objetos, comprueba si puede preparar un equipo apto antes de iniciar otro combate.
+Entre combates cura y revive únicamente a los tres Pokémon utilizados. **Potion priority** y **Revive priority** permiten escoger el orden de uso de los objetos. Usa las aplicaciones necesarias hasta completar la recuperación del equipo. Si faltan objetos, comprueba si puede preparar un equipo apto antes de iniciar otro combate.
 
 **Catch all**, activada inicialmente, captura todos los encuentros oscuros válidos. Al desactivarla, permite combinar **Only catch 15/15/15**, **Only catch 0/0/0**, **Only catch shiny**, **Only catch shiny + 15/15/15** y **Only catch 13/13/13 or above**. Los filtros se combinan con «O»; shiny + 15/15/15 exige ambas condiciones, y 13/13/13 or above exige que cada IV sea al menos 13.
 
@@ -148,15 +154,47 @@ En **Engine settings**, **Last cooldown location** permite indicar unas coordena
 
 Los encuentros se capturan sin abrir la cámara. Si el juego presenta la ficha del Pokémon recién capturado o un récord de tamaño, se cierra únicamente la pantalla asociada a esa captura. **Stop** cancela las acciones pendientes y salir a otra app pausa el modo; scrcpy, capturas de pantalla y grabación conservan el mismo tratamiento de foco del Farmer. AutoRocket mantiene sus capturas y no transfiere la colección.
 
+### Event tricks
+
+Este modo se dedica a recoger recompensas de las cajas del evento mientras sigues la ruta de tu joystick. En esta edición trabaja con las cajas de Halloween, con caramelos de especies, Caramelos Raros. Los encuentros Pokémon se dejan sin capturar; no gira Poképaradas ni ejecuta las tareas auxiliares del Farmer.
+
+Después de una recogida confirmada con caramelos, vuelve a procesar la caja mientras continúe disponible. Cuando una respuesta entrega Caramelos Raros, esa caja recibe preferencia en las siguientes recogidas. También mantiene espacio para descubrir cajas nuevas y continuar con los caramelos de especies.
+
+Trabaja con las cajas conocidas por el juego, sin añadir un filtro propio de distancia. Las cantidades se contabilizan desde las respuestas confirmadas. El contenido de una caja se conoce al abrirla; las respuestas rechazadas o sin confirmación mantienen su espera antes de continuar.
+
+Las estadísticas muestran **Boxes opened**, **Pokémon Candy**, **Rare Candy / XL**, **Candy XL**, **XP** y **Stardust**. Las recogidas repetidas cuentan como nuevas operaciones sobre la misma caja. **Clear statistics** restablece únicamente los contadores de este modo.
+
+La recogida continúa en los menús compatibles y con la barra de notificaciones desplegada. Salir a otra app o bloquear la pantalla pausa el modo, y vuelve a continuar al regresar al juego. Incluye **Fix error 12**, **Hide trainer name** y exportación de registros.
+
 ### Only catch: escoger qué Pokémon capturar
 
 **Only catch** permite escoger una o varias especies para las siguientes sesiones. El selector utiliza un catálogo local con miniaturas, orden de Pokédex y búsqueda por nombre o número. La selección queda guardada; si la dejas vacía, el farmer vuelve a capturar todas las especies elegibles.
+
+El catálogo incluye formas regionales de Alola y Galar, además de las especies normales. Incorpora Minior, Mimikyu y Bramblin. La opción general de Minior permite capturar sus apariciones independientemente del color que se revele después de capturarlo.
 
 El filtro se aplica antes de abrir un encuentro salvaje y se vuelve a comprobar antes de usar una baya o lanzar. Seleccionar una especie no modifica sus IV ni condiciona los filtros de conservación: estos se aplican después de capturar.
 
 El selector prepara una máscara de especies que el motor consulta antes de abrir el encuentro. Las capturas de investigación de campo, logro semanal, especiales, de eventos y GO Pass usan orígenes de recompensa separados y no quedan bloqueadas por **Only catch**.
 
 Cuando hay especies seleccionadas, no se activa la recuperación por cinco minutos sin Pokémon: el farmer puede esperar a que aparezcan esas especies sin reiniciar el juego. **Stop**, los límites acumulados y el control de conexión siguen funcionando de la misma forma.
+
+### Select Pokémon to keep
+
+Esta selección aparece debajo de **Keep GO Pass encounters**, dentro de las opciones de transferencia del Farmer. Utiliza el mismo catálogo, miniaturas, búsqueda y orden de Pokédex que **Only catch**, incluidas las formas regionales.
+
+Los Pokémon seleccionados se conservan cuando el Farmer los capture, independientemente de que cumplan los demás filtros de conservación. **Only catch** sigue decidiendo qué apariciones salvajes se capturan; esta selección no fuerza capturas de especies excluidas.
+
+Inicialmente conserva **Articuno de Galar**, **Zapdos de Galar**, **Moltres de Galar**, **Gimmighoul** y **Meltan**. Se aplica también a las capturas de incienso y a los encuentros de sus cajas cuando los entregue el juego. Las demás protecciones globales de transferencia siguen activas.
+
+### Compañero
+
+La sección **Buddy** del Farmer incluye **Feed buddy**, su propia **Berry priority** y **Mega Evolve buddy**. Ambas casillas vienen desactivadas inicialmente.
+
+La alimentación comienza al iniciar el servicio cuando el compañero lo necesita y vuelve a revisarse durante la sesión. Usa las bayas disponibles en el orden elegido, detecta si cambias de compañero y respeta los límites de mochila. Si no hay bayas, espera a que vuelvan a estar disponibles mientras el Farmer continúa.
+
+La megaevolución comprueba las opciones del compañero actual y elige la disponible de menor coste. Puede utilizar megaenergía si hace falta; si no alcanza la energía o el compañero no tiene una opción válida, continúa el farmeo.
+
+Si no hay compañero o está marcada **Remove buddy**, no se ejecutan estas acciones.
 
 ### Transferir sin tocar la colección anterior
 
@@ -243,7 +281,7 @@ El motor utiliza objetos y métodos del proceso original; el cliente del juego s
 
 El arranque dispone de cuatro combinaciones: **ATTACH / FD**, **ATTACH / PATH**, **SEIZE / FD** y **SEIZE / PATH**. Cambian el mecanismo de conexión y la apertura de la biblioteca, no el motor ni sus políticas. La ruta que funcionó queda asociada al dispositivo y al perfil del juego. Hay un máximo de **diez intentos**, con confirmación de salida del intento anterior antes de continuar.
 
-La ejecución se vincula al proceso, la sesión y la cuenta. Los latidos y la consulta de foco van separados de la escritura de registros y de las operaciones de red del feed. El planificador ejecuta las acciones en el hilo Unity y mantiene una sola solicitud pendiente.
+La ejecución se vincula al proceso, la sesión y la cuenta. Los latidos y la consulta de foco van separados de la escritura de registros y de las operaciones de red del feed. El planificador ejecuta las acciones en el hilo Unity y coordina sus solicitudes pendientes. Event tricks utiliza una cola acotada para recoger varias cajas sin bloquear el resto de la interfaz.
 
 La lectura de foco distingue Pokémon GO subyacente, notificaciones y superposiciones del sistema. **scrcpy**, capturas de pantalla y grabación no se interpretan por sí solos como cambio de app. Abrir otra aplicación o bloquear la pantalla pausa las acciones; **Stop** cancela el servicio.
 
@@ -479,6 +517,8 @@ Retirarlo no lo transfiere ni modifica sus datos de inventario. Al terminar no s
 
 **Show IV names**, activado inicialmente, cambia temporalmente el texto mostrado en las filas del inventario. Por ejemplo, un Pokémon con IV **15/14/13** se muestra como **93% 15/14/13**. El porcentaje es entero y el nombre guardado en la cuenta no cambia.
 
+Los **15/15/15** se muestran como **100% 15/15/15** en rojo, tanto en la lista como en su ficha. El color se actualiza al reutilizar las filas del inventario y se restaura al detener el motor.
+
 ```c
 int n = snprintf(out, capacity, "%d%% %d/%d/%d",
     (a + d + s) * 100 / 45, a, d, s);
@@ -601,17 +641,19 @@ Esta edición también mejora la recuperación de desconexiones del canal nativo
 **2.2.11 incorpora AutoRocket (BETA)**, con candidatos de reclutas normales, equipo recomendado, ataques y escudos automáticos, captura por filtros, retorno a la ubicación configurada y curación del equipo entre combates. Añade **Only catch 13/13/13 or above**, **Maximum Rockets** e historial por cuenta.
 El Farmer incorpora las apariciones de incienso normal y diario y **Automatic event actions** para recoger las cajas de Halloween y capturar sus encuentros. Mejora la continuidad durante los avisos informativos de misiones y recompensas, evita aperturas tardías de cámara de las cajas y acorta la espera tras fallos temporales de encuentro.
 
-La siguiente fase es seguir optimizando la continuidad de los tres modos y ampliar la compatibilidad entre dispositivos.
+**2.3.8 incorpora Event tricks**, un modo independiente para recoger caramelos de las cajas del evento, repetir las recogidas confirmadas y dar preferencia a las cajas de Caramelos Raros. Incluye su propia notificación y estadísticas, con continuidad en los menús compatibles y las pausas habituales al salir del juego.
+
+El Farmer añade **Select Pokémon to keep**, formas regionales en ambos selectores y un catálogo actualizado con Minior, Mimikyu y Bramblin. La sección **Buddy** permite alimentar y megaevolucionar al compañero. Los **15/15/15** se identifican en rojo y el nombre temporal se prepara desde el arranque.
+
+AutoRocket incorpora prioridades configurables de pociones y revivires, y acorta la transición de los diálogos y las recompensas hacia la captura. Se refuerza la validación de los objetos de presentación y la conservación de argumentos al ejecutar las llamadas del juego.
+
+La siguiente fase es seguir optimizando la continuidad de los cuatro modos y ampliar la compatibilidad entre dispositivos.
 
 Se buscará agregar la configuración del orden jerárquico del uso de pokebolas. No la de por defecto: 1. Pokeball; 2. Superball; 3. Ultraball
 
 Nuevas mejoras y modos están por aparecer en SilphMod, quedense al tanto de ello..
 
 Algo pendiente también es seguir ampliando el catálogo de pokemones configurados para no transferir, por ejemplo con nundos (0/0/0) o los rank1 (pvp).
-
-Algo relevante es incorporar una función de mantener pokémones que atrape para no transferirlos, por medio de filtros específicos.
-
-Se buscará agregar unas casillas extra con el funcionamiento: "alimentar a tu compañero" y "Megaevolucionar a tu compañero".
 
 Licencia [MIT](LICENSE). Las dependencias conservan sus avisos en [NOTICE](NOTICE) y sus licencias dentro de los assets. Proyecto independiente y personal, sin afiliación con los titulares del juego ni externos.
 

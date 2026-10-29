@@ -17,6 +17,9 @@ typedef struct {
     uint32_t abi,continuous,max_catches,quality,curve,use_berries,keep_options,berry_count;
     int32_t berries[5];
     uint8_t only_species[256];
+#ifdef SILPH_PRESENT_SCOPED
+    uint8_t keep_species[136];
+#endif
 } SilphFarmerOptions;
 size_t silph_farmer_actions_size(void);
 int silph_farmer_actions_metrics(void *,SilphFarmerMetrics *);

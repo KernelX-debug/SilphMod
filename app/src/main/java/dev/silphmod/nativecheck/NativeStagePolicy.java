@@ -1,9 +1,14 @@
 package dev.silphmod.nativecheck;
 
 final class NativeStagePolicy {
+    static int appearanceFeatures(boolean fixLocation){return fixLocation?640:128;}
+    static boolean presentationFailure(String stage,String message){
+        return ("appearance_bootstrap".equals(stage)||"wait_foreground".equals(stage))&&message!=null
+            &&(message.contains("exited")||message.contains("Native startup fault"));
+    }
     static boolean directory(String value){return value!=null&&value.matches("/data/app/[A-Za-z0-9_./+=~-]+/lib/arm64")&&!value.contains("/../")&&!value.contains("/./");}
     static String observer(int mode,String hash){
-        if((mode<1||mode>3)||hash==null||!hash.matches("[a-f0-9]{64}"))throw new IllegalArgumentException("Invalid stage identity");
+        if((mode<1||mode>4)||hash==null||!hash.matches("[a-f0-9]{64}"))throw new IllegalArgumentException("Invalid stage identity");
         return "libsilph-native-observer-"+mode+"-"+hash.substring(0,16)+".so";
     }
     static String bootstrapFailure(int exit,String stage,int error){

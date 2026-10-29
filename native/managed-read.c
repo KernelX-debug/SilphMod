@@ -389,8 +389,20 @@ int silph_read_close(void *memory) {
 #include "managed-rpc.inc"
 #include "managed-proto.inc"
 #include "research-bridge.inc"
+#ifdef SILPH_PILOT_EVENT
+int silph_event_process(void *memory,const SilphSchedulePermit *permit,SilphManagedRef service,SilphManagedRef tappable,SilphReadValue *out){
+    if(!out)return SILPH_MANAGED_ARGUMENT;clear_value(out);if(!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;
+    Read *s=memory;int r=enter_read(s);if(r)return r;void *a=NULL,*b=NULL;
+    r=silph_managed_target(s->managed,service,&a);if(!r)r=silph_managed_target(s->managed,tappable,&b);
+    if(!r&&(!research_type(s,a,"Niantic.Holoholo.Services.DynamicTappables","DynamicTappableBehaviorService")||!research_type(s,b,"","DynamicTappableController")))r=SILPH_MANAGED_CONTRACT;
+    SilphReadArgument arg={.kind=SILPH_READ_REFERENCE,.value.reference=tappable};
+    if(!r)r=call_internal(s,service,NULL,"bfvx",SILPH_READ_REFERENCE,&arg,1,out,permit);return leave_read(s,r);
+}
+#endif
 #ifdef SILPH_PRESENT_SCOPED
 #include "event-actions.h"
+#include "buddy-care.h"
+#include "buddy-care-bridge.inc"
 int silph_event_tap(void *memory,const SilphSchedulePermit *permit,SilphManagedRef service,SilphManagedRef tappable){
     if(!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;Read *s=memory;int r=enter_read(s);if(r)return r;void *a=NULL,*b=NULL;
     r=silph_managed_target(s->managed,service,&a);if(!r)r=silph_managed_target(s->managed,tappable,&b);

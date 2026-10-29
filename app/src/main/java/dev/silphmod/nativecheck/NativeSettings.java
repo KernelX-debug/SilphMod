@@ -34,12 +34,21 @@ final class NativeSettings {
     long elapsed(int mode){return prefs.getLong("stats"+mode+".elapsed",0);}
     void elapsedPulse(int mode,boolean active){long now=android.os.SystemClock.elapsedRealtime();if(clock==0){clock=now;timing=active;return;}long delta=now-clock;if(delta>=1000||!active){if(timing&&delta>0&&delta<=10000){long before=elapsed(mode);prefs.edit().putLong("stats"+mode+".elapsed",before>Long.MAX_VALUE-delta?Long.MAX_VALUE:before+delta).apply();}clock=now;}timing=active;}
 
-    String berryNames(){ArrayList<String> names=new ArrayList<>();for(int id:integers(prefs.getString("berriesOrder","701,705,703")))names.add(dev.rootcatch.nativeengine.ItemCatalog.ENTRIES.stream().filter(e->e.id()==id).findFirst().orElseThrow().name());return String.join(",",names);}
-    void saveBerries(String names){ArrayList<String> ids=new ArrayList<>();for(String name:dev.rootcatch.automation.BerryOptions.parse(names))ids.add(Integer.toString(dev.rootcatch.nativeengine.ItemCatalog.ENTRIES.stream().filter(e->e.name().equals(name)).findFirst().orElseThrow().id()));prefs.edit().putString("berriesOrder",String.join(",",ids)).putBoolean("berries",!ids.isEmpty()).apply();}
+    String berryNames(){return berryNames("berriesOrder","701,705,703");}
+    String buddyBerryNames(){return berryNames("buddyBerriesOrder","703,701,705");}
+    String berryNames(String key,String fallback){ArrayList<String> names=new ArrayList<>();for(int id:integers(prefs.getString(key,fallback)))names.add(dev.rootcatch.nativeengine.ItemCatalog.ENTRIES.stream().filter(e->e.id()==id).findFirst().orElseThrow().name());return String.join(",",names);}
+    void saveBerries(String names){saveBerries(names,"berriesOrder");}
+    void saveBuddyBerries(String names){saveBerries(names,"buddyBerriesOrder");}
+    private void saveBerries(String names,String key){ArrayList<String> ids=new ArrayList<>();for(String name:dev.rootcatch.automation.BerryOptions.parse(names))ids.add(Integer.toString(dev.rootcatch.nativeengine.ItemCatalog.ENTRIES.stream().filter(e->e.name().equals(name)).findFirst().orElseThrow().id()));android.content.SharedPreferences.Editor e=prefs.edit().putString(key,String.join(",",ids));if(key.equals("berriesOrder"))e.putBoolean("berries",!ids.isEmpty());e.apply();}
     NativeSessionState.Totals totals(int mode){String p="stats"+mode+".";return new NativeSessionState.Totals(prefs.getLong(p+"caught",0),prefs.getLong(p+"fled",0),prefs.getLong(p+"spun",0),prefs.getLong(p+"discarded",0),prefs.getLong(p+"transferred",0),prefs.getLong(p+"encounters",0),prefs.getLong(p+"shinies",0),prefs.getLong(p+"xp",0),prefs.getLong(p+"stardust",0));}
     void save(int mode,NativeSessionState.Totals t){String p="stats"+mode+".";prefs.edit().putLong(p+"caught",t.caught).putLong(p+"fled",t.fled).putLong(p+"spun",t.spun).putLong(p+"discarded",t.discarded).putLong(p+"transferred",t.transferred).putLong(p+"encounters",t.encounters).putLong(p+"shinies",t.shinies).putLong(p+"xp",t.xp).putLong(p+"stardust",t.stardust).apply();}
     NativeSessionWire.Config config(int mode,boolean readonly){
         NativeSessionWire.Config c=new NativeSessionWire.Config();c.mode=mode;c.delayMs=prefs.getInt("delay",100);c.durationMs=readonly?300000:0;
+        if(mode==4){c.delayMs=100;c.keep=0;c.flags=readonly?NativeSessionWire.READ_ONLY:NativeSessionWire.SCENES;
+            if(!readonly&&prefs.getBoolean("eventFixLocation",prefs.getBoolean("fixLocation",false)))c.flags|=NativeSessionWire.FIX_LOCATION;
+            if(!readonly&&prefs.getBoolean("eventHideTrainerName",true))c.flags|=NativeSessionWire.TRAINER_NAME;
+            return c;
+        }
         if(readonly){if(prefs.getBoolean("fixLocation",false))throw new IllegalArgumentException("Turn off Read-only check to use Fix error 12");c.flags=NativeSessionWire.READ_ONLY;return c;}
         c.flags=mode!=1?NativeSessionWire.CATCH:(prefs.getBoolean("catches",true)?1:0)|(prefs.getBoolean("spins",true)?2:0);
         if((c.flags&1)!=0&&prefs.getBoolean("berries",true)){c.flags|=16;c.berries=integers(prefs.getString("berriesOrder","701,705,703"));}
@@ -61,8 +70,14 @@ final class NativeSettings {
         }
         NativeSessionState.Totals t=totals(mode);
         if(mode==1){c.maxCatches=(c.flags&1)!=0?remaining(prefs.getInt("catchesMax",4800),t.caught,"Catch"):0;c.maxSpins=(c.flags&2)!=0?remaining(prefs.getInt("spinsMax",2400),t.spun,"Spin"):0;
-            for(int id:integers(prefs.getString("species","")))c.select(id);
+            for(int id:dev.rootcatch.automation.PokemonSelection.parse(prefs.getString("species","")))c.select(id);
+            for(int id:dev.rootcatch.automation.PokemonSelection.parse(prefs.getString("keepSpecies",dev.rootcatch.automation.PokemonSelection.KEEP_DEFAULT)))c.retain(id);
+            if(!prefs.getBoolean("removeBuddy",false)){
+                if(prefs.getBoolean("feedBuddy",false)){c.buddyBerries=integers(prefs.getString("buddyBerriesOrder","703,701,705"));if(c.buddyBerries.length>0)c.buddyFlags|=1;}
+                if(prefs.getBoolean("megaBuddy",false))c.buddyFlags|=2;
+            }
         }else if(mode==3){if(prefs.getBoolean("rocketRecommendedTeam",true))c.flags|=NativeSessionWire.RECOMMENDED_TEAM;c.maxEncounters=remaining(prefs.getInt("rocketsMax",700),t.spun,"Rocket");c.filters=prefs.getBoolean("rocketCatchAll",true)?0:prefs.getInt("rocketFilters",0);
+            c.potionOrder=RocketCareOrder.parse(prefs.getString("rocketPotionOrder",""),false);c.reviveOrder=RocketCareOrder.parse(prefs.getString("rocketReviveOrder",""),true);
             if(!prefs.getBoolean("rocketCatchAll",true)&&c.filters==0)throw new IllegalArgumentException("Select a catch filter");
             String location=prefs.getString("rocketCooldownLocation","").trim();if(!location.isEmpty())dev.rootcatch.ugphone.KecleonFeed.parseCoordinates(location);
         }else{c.maxEncounters=remaining(prefs.getInt("encountersMax",1000),t.encounters,"Encounter");c.filters=prefs.getInt("filters",0);}

@@ -278,7 +278,12 @@ int silph_game_read_select(void *memory,double maximum,SilphPokemonPredicate acc
             status=silph_read_call(s->read,current.reference,"get_EncounterId",SILPH_READ_U64,NULL,0,&value);uint64_t id=value.bits;uint32_t species=0;
             if(!status)status=scalar(s,current.reference,"get_PokemonId",&species);
             if(!status&&(!id||!species))status=SILPH_MANAGED_CONTRACT;
-            if(!status&&accept&&!accept(context,id,species)){status=release(s,&current.reference);continue;}
+            #ifdef SILPH_PRESENT_SCOPED
+            if(!status&&accept&&!accept(context,id,species,current.reference))
+#else
+            if(!status&&accept&&!accept(context,id,species))
+#endif
+            {status=release(s,&current.reference);continue;}
             if(!status)status=release(s,&output->object);
             if(!status){output->object=current.reference;memset(&current.reference,0,sizeof(current.reference));output->encounter=id;output->species=species;output->spawn_kind=incense;output->meters=meters;}
         }
@@ -290,6 +295,17 @@ int silph_game_read_select(void *memory,double maximum,SilphPokemonPredicate acc
     if(status){release(s,&output->object);memset(output,0,sizeof(*output));return status;}
     return output->object.serial?0:SILPH_MANAGED_NOT_READY;
 }
+#ifdef SILPH_PRESENT_SCOPED
+int silph_game_read_pokemon_form(void *memory,SilphManagedRef pokemon,bool map,uint32_t *out){
+    GameRead *s=memory;if(!s||!s->opened||!out)return SILPH_MANAGED_ARGUMENT;*out=0;SilphReadValue display={0},form={0};
+    int r=map?silph_read_call(s->read,pokemon,"get_PokemonDisplay",SILPH_READ_REFERENCE,NULL,0,&display):silph_read_field(s->read,pokemon,"pokemonDisplay_",SILPH_READ_REFERENCE,&display);
+    if(!r&&!display.reference.serial)r=SILPH_MANAGED_NOT_READY;
+    if(!r)r=silph_read_is_type(s->read,display.reference,"Holoholo.Rpc","PokemonDisplayProto");
+    if(!r)r=silph_read_field(s->read,display.reference,"Form",SILPH_READ_ENUM32,&form);
+    if(!r)*out=(uint32_t)form.bits;int d=release(s,&display.reference);return r?r:d;
+}
+int silph_game_read_buddy_service(void *memory,uint32_t kind,SilphManagedRef *out);
+#endif
 int silph_game_read_nearest(void *memory,double maximum,SilphGameTarget *output){return silph_game_read_select(memory,maximum,NULL,NULL,output);}
 int silph_game_read_owned(void *memory,uint64_t id,SilphManagedRef *output){
     GameRead *s=memory;if(!s||!s->opened||!id||!output)return SILPH_MANAGED_ARGUMENT;memset(output,0,sizeof(*output));
@@ -305,6 +321,13 @@ static int service(GameRead *s,const char *assembly,const char *space,const char
     if(!status){*output=value.reference;memset(&value.reference,0,sizeof(value.reference));}
     int a=release(s,&type),b=release(s,&value.reference);return status?status:a?a:b;
 }
+#ifdef SILPH_PILOT_EVENT
+int silph_game_read_event_targets(void *memory,SilphManagedRef *behavior,SilphManagedRef *directory){
+    GameRead *s=memory;if(!s||!s->opened||!behavior||!directory)return SILPH_MANAGED_ARGUMENT;*behavior=*directory=(SilphManagedRef){0};
+    int r=service(s,"holo-game.dll","Niantic.Holoholo.Services.DynamicTappables","IDynamicTappableBehaviorService",behavior);
+    void *object=NULL;if(!r)r=silph_managed_target(s->managed,s->directory,&object);if(!r)r=silph_managed_retain(s->managed,object,false,directory);return r;
+}
+#endif
 #ifdef SILPH_PRESENT_SCOPED
 int silph_game_read_event_service(void *memory,SilphManagedRef *output){
     GameRead *s=memory;if(!s||!s->opened||!output)return SILPH_MANAGED_ARGUMENT;*output=(SilphManagedRef){0};
@@ -315,12 +338,31 @@ int silph_game_read_rpc_handler(void *memory,SilphManagedRef *output){
     GameRead *s=memory;if(!s||!s->opened||!output)return SILPH_MANAGED_ARGUMENT;memset(output,0,sizeof(*output));
     return service(s,"holo-game.dll","Niantic.Holoholo.Rpc","IRpcHandler",output);
 }
+#ifdef SILPH_PRESENT_SCOPED
+int silph_game_read_buddy_service(void *memory,uint32_t kind,SilphManagedRef *out){
+    GameRead *s=memory;if(!s||!s->opened||!out||kind>4)return SILPH_MANAGED_ARGUMENT;*out=(SilphManagedRef){0};
+    if(kind==4){void *object=NULL;int r=silph_managed_target(s->managed,s->pokemon_bag,&object);return r?r:silph_managed_retain(s->managed,object,false,out);}
+    const char *spaces[]={"Niantic.Holoholo.Buddy","Niantic.Holoholo.Buddy","Niantic.Holoholo.Buddy","Niantic.Holoholo.Services"};
+    const char *names[]={"IBuddyPokemonService","IBuddyRpcService","IBuddyStatsService","IMegaEvoCostService"};
+    return service(s,kind==2||kind==3?"holo-game-interfaces.dll":"holo-game.dll",spaces[kind],names[kind],out);
+}
+#endif
 int silph_game_read_service(void *memory,uint32_t kind,SilphManagedRef *output){
     GameRead *s=memory;if(!s||!s->opened||!output||kind>1)return SILPH_MANAGED_ARGUMENT;memset(output,0,sizeof(*output));
     return kind?service(s,"holo-game.dll","Niantic.Holoholo.Buddy","IBuddyPokemonService",output):service(s,"holo-protos.dll","","IGameMasterData",output);
 }
 int silph_game_read_rocket_service(void *memory,uint32_t kind,SilphManagedRef *out){
-    GameRead *s=memory;if(!s||!s->opened||!out||kind>7)return SILPH_MANAGED_ARGUMENT;memset(out,0,sizeof(*out));
+    GameRead *s=memory;if(!s||!s->opened||!out||kind>
+#ifdef SILPH_PILOT_ROCKET
+        8
+#else
+        7
+#endif
+    )return SILPH_MANAGED_ARGUMENT;
+    memset(out,0,sizeof(*out));
+#ifdef SILPH_PILOT_ROCKET
+    if(kind==8)return service(s,"holo-game.dll","Niantic.Holoholo.Combat.Util","ICombatDirectorProperties",out);
+#endif
     if(kind==7)return silph_read_field_type(s->read,s->map,"Niantic.Holoholo","IPokemonBag",out);
     if(kind==5)return silph_read_field_type(s->read,s->map,"Niantic.Holoholo.Map","MapContentHandler",out);
     if(kind==6)return service(s,"holo-game.dll","Niantic.Holoholo","ILocationProvider",out);

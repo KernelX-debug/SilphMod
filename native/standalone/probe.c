@@ -87,7 +87,7 @@ static void remote_error(SilphTrace *trace, Symbols *symbols, char *output, size
     output[index] = 0;
 }
 
-static int run(pid_t pid, uint64_t ticks, const char *library_path, const char *route, int seized, int managed) {
+static int run(pid_t pid, uint64_t ticks, const char *library_path, const char *route, int seized, int managed, uint32_t appearance) {
     Symbols symbols;
     memset(&symbols, 0, sizeof(symbols));
     SilphTrace trace;
@@ -118,8 +118,8 @@ static int run(pid_t pid, uint64_t ticks, const char *library_path, const char *
     if (call(&trace, "allocate_scratch", symbols.mmap, args, 6, &allocation, 1)) goto call_failed;
     if (!allocation || allocation == UINT64_MAX) { failure = "ALLOCATION";failed_stage = "remote_mmap_failed";goto cleanup; }
     trace.stack = (allocation + allocation_bytes - 256) & ~UINT64_C(15);
-    const char *symbol = managed == 2 ? (trace.legacy_boundary ? "silph_native_managed_probe_threaded" : "silph_native_managed_probe") : managed ? "silph_native_probe" : "silph_native_bootstrap";
-    if(managed==2){printf("{\"event\":\"native_managed_profile\",\"method\":\"%s\"}\n",trace.legacy_boundary?"pthread_stack":"direct");fflush(stdout);}
+    const char *symbol = managed == 3 ? "silph_native_appearance_bootstrap" : managed == 2 ? "silph_native_managed_probe_threaded" : managed ? "silph_native_probe" : "silph_native_bootstrap";
+    if(managed==2){printf("{\"event\":\"native_managed_profile\",\"method\":\"%s\"}\n","pthread_stack");fflush(stdout);}
     if (silph_remote_write(pid, allocation, library_path, strlen(library_path) + 1)
         || silph_remote_write(pid, allocation + 4096, symbol, strlen(symbol) + 1)) goto call_failed;
     failure = "LINKER";
@@ -143,9 +143,9 @@ static int run(pid_t pid, uint64_t ticks, const char *library_path, const char *
     if (call(&trace, "resolve_probe_entry", symbols.dlsym, args, 2, &result, 0)) goto call_failed;
     if (!result) { failed_stage = "entry_not_found";remote_error(&trace, &symbols, detail, sizeof(detail));goto cleanup; }
     const uint64_t entry = result;
-    args[0] = allocation + 8192;args[1] = sizeof(report);
+    args[0] = allocation + 8192;args[1] = sizeof(report);args[2] = appearance;
     failure = "REMOTE_CALL";
-    if (call(&trace, managed == 2 ? "native_managed_bridge_probe" : managed ? "native_metadata_probe" : "native_bootstrap_probe", entry, args, 2, &result, 0)) goto call_failed;
+    if (call(&trace, managed==3 ? "native_appearance_bootstrap" : managed == 2 ? "native_managed_bridge_probe" : managed ? "native_metadata_probe" : "native_bootstrap_probe", entry, args, managed==3?3:2, &result, 0)) goto call_failed;
     if (silph_remote_read(pid, allocation + 8192, &report, sizeof(report))) goto call_failed;
     failure = "PROTOCOL";
     if (managed == 2 && report.managed_abi == 1 && (!report.managed_closed || !report.managed_threads_restored)) {
@@ -230,7 +230,7 @@ int main(int argc, char **argv) {
     pid_t pid = 0;
     uint64_t ticks = 0;
     int seized = 1;
-    int managed = 0;
+    int managed = 0;uint32_t appearance=0;
     for (int index = 1; index < argc; index++) {
         if (index + 1 < argc && !strcmp(argv[index], "--library")) library = argv[++index];
         else if (index + 1 < argc && !strcmp(argv[index], "--route")) route = argv[++index];
@@ -241,9 +241,10 @@ int main(int argc, char **argv) {
         }
         else if (index + 1 < argc && !strcmp(argv[index], "--level")) {
             const char *level = argv[++index];
-            if (strcmp(level, "bootstrap") && strcmp(level, "metadata") && strcmp(level, "managed")) return 2;
-            managed = !strcmp(level, "managed") ? 2 : !strcmp(level, "metadata");
+            if (strcmp(level, "bootstrap") && strcmp(level, "metadata") && strcmp(level, "managed") && strcmp(level,"appearance")) return 2;
+            managed = !strcmp(level,"appearance") ? 3 : !strcmp(level, "managed") ? 2 : !strcmp(level, "metadata");
         }
+        else if (index + 1 < argc && !strcmp(argv[index], "--features")) {uint64_t number=decimal(argv[++index]);if(number>UINT32_MAX)return 2;appearance=(uint32_t)number;}
         else if (index + 1 < argc && !strcmp(argv[index], "--pid")) { uint64_t number = decimal(argv[++index]);if (number > INT_MAX) return 2;pid = (pid_t)number; }
         else if (index + 1 < argc && !strcmp(argv[index], "--start")) ticks = decimal(argv[++index]);
         else { event("invalid_arguments", EINVAL);return 2; }
@@ -254,6 +255,7 @@ int main(int argc, char **argv) {
     if (!ticks || silph_process_name(pid, name, sizeof(name)) || strcmp(name, "com.nianticlabs.pokemongo")) {
         event("target_not_authorized", EINVAL);return 2;
     }
-    int result = run(pid, ticks, library, route, seized, managed);
+    if(managed==3?(appearance!=128u&&appearance!=640u):appearance!=0)return 2;
+    int result = run(pid, ticks, library, route, seized, managed, appearance);
     return result;
 }

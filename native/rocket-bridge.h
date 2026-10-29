@@ -8,4 +8,5 @@ int silph_rocket_class(void *,SilphManagedRef,char *,uint32_t);
 int silph_rocket_medicine(void *,const SilphSchedulePermit *,SilphManagedRef,uint64_t,uint32_t,SilphManagedRef *);
 int silph_rocket_prepared_team(void *,SilphManagedRef,uint64_t[3],bool *);
 int silph_rocket_map_settings(void *,const SilphSchedulePermit *,SilphManagedRef,float[3],bool);
+int silph_rocket_battle_visuals(void *,const SilphSchedulePermit *,SilphManagedRef,float[4],bool);
 #endif

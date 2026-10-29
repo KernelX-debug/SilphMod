@@ -131,3 +131,13 @@ uint32_t rocket_care_decide(const uint64_t team[3],const RocketHealth health[3],
     }
     return out->kind=ROCKET_HEALTHY;
 }
+uint32_t rocket_care_ordered(const uint64_t team[3],const RocketHealth health[3],const RocketCareItems *items,const RocketCareOrder *order,bool fresh,RocketDecision *out){
+    uint32_t kind=rocket_care_decide(team,health,items,fresh,out);
+    if(!order||(kind!=ROCKET_HEAL&&kind!=ROCKET_REVIVE))return kind;
+    const uint32_t *ids=kind==ROCKET_HEAL?order->potions:order->revives;unsigned count=kind==ROCKET_HEAL?4:2;uint32_t first=kind==ROCKET_HEAL?101:201;
+    bool custom=false;for(unsigned i=0;i<count;i++)custom|=ids[i]!=0;if(!custom)return kind;
+    const int32_t counts[]={items->potion,items->super_potion,items->hyper_potion,items->max_potion,items->revive,items->max_revive};
+    for(unsigned i=0;i<count;i++){if(ids[i]<first||ids[i]>=first+count)return out->kind=ROCKET_INVALID;for(unsigned j=0;j<i;j++)if(ids[i]==ids[j])return out->kind=ROCKET_INVALID;}
+    for(unsigned i=0;i<count;i++)if(counts[ids[i]-first+(kind==ROCKET_REVIVE?4:0)]>0){out->item=(int32_t)ids[i];return kind;}
+    return out->kind=ROCKET_NO_ITEMS;
+}

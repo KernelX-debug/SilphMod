@@ -76,7 +76,8 @@ final class NativeCheckRunner {
     private boolean connectionDiagnosed,failedProcessAlive,failedWhileActive;
     private NativeExitReport exitReport;
     private String startupStage="prepare";
-    private boolean gameNamespace;
+    private boolean gameNamespace,deferAppearance,earlyAppearance;
+    private String appearanceCache;
     private long launchWallTime;
     private String namespaceCache;
     private String gameComponent;
@@ -87,9 +88,9 @@ final class NativeCheckRunner {
     void stop(){stopping=true;NativeSessionController current=controller;if(current!=null)current.requestStop("Stopped by user");}
     String details(){
         NativeSessionController c=controller;NativeSessionState.Totals t=c==null?settings.totals(mode):c.totals();
-        String counts=mode==1?"Catches "+t.caught+" · Spins "+t.spun+" · Transferred "+t.transferred:
+        String counts=mode==4?"Boxes "+t.spun+" · Pokémon candy "+t.caught+" · Rare Candy "+t.shinies:mode==1?"Catches "+t.caught+" · Spins "+t.spun+" · Transferred "+t.transferred:
             (mode==3?"Rockets "+t.spun:"Encounters "+t.encounters)+" · Catches "+t.caught+" · Shinies "+t.shinies;
-        return(mode==1?"Farmer":mode==2?"Kecleon (BETA)":"AutoRocket (BETA)")+"\n"+counts+"\nItems deleted "+t.discarded+
+        return(mode==4?"Event tricks":mode==1?"Farmer":mode==2?"Kecleon (BETA)":"AutoRocket (BETA)")+"\n"+counts+(mode==4?"\nCandy XL "+t.discarded+" · Unsuccessful "+t.fled:"\nItems deleted "+t.discarded)+
             "\nXP "+((rewardsAvailable&1)!=0?t.xp:"—")+" · Stardust "+((rewardsAvailable&2)!=0?t.stardust:"—")+"\nTime "+String.format(java.util.Locale.US,"%02d:%02d:%02d",settings.elapsed(mode)/3600000,settings.elapsed(mode)/60000%60,settings.elapsed(mode)/1000%60);
     }
     private void status(String text){status=text;display.accept(text,details());log.write("status",text);}
@@ -223,7 +224,7 @@ final class NativeCheckRunner {
     private void releaseAttempt(boolean returnToApp) throws Exception {
             settings.elapsedPulse(mode,false);
             if(mode==3&&gamePid>1)try{log.write("rocket_native_details",command("logcat -d -v brief --pid="+gamePid+" -s SilphRocket:V SilphRuntime:I | tail -c 18000",3000));}catch(Exception error){log.write("rocket_diagnostic_error",error.toString());}
-            if(mode==1&&gamePid>1)try{log.write("farmer_native_details",command("logcat -b all -d -v brief --pid="+gamePid+" -s SilphFarmer:I SilphEvent:I SilphRuntime:I | tail -c 16000",3000));}catch(Exception error){log.write("farmer_diagnostic_error",error.toString());}
+            if((mode==1||mode==4)&&gamePid>1)try{log.write("farmer_native_details",command("logcat -b all -d -v brief --pid="+gamePid+" -s SilphFarmer:I SilphEvent:I SilphRuntime:I | tail -c 16000",3000));}catch(Exception error){log.write("farmer_diagnostic_error",error.toString());}
             if(mode==2&&gamePid>1)try{log.write("kecleon_native_details",command("logcat -b all -d -v brief --pid="+gamePid+" -s SilphRuntime:I SilphFarmer:I | tail -c 12000",3000));}catch(Exception error){log.write("kecleon_diagnostic_error",error.toString());}
             if(kecleon!=null)kecleon.close();if(rocket!=null)rocket.close();
             pulseQuit=true;if(pulseThread!=null)pulseThread.interrupt();focusQuit=true;if(focusThread!=null)focusThread.interrupt();
@@ -257,7 +258,7 @@ final class NativeCheckRunner {
         status("Checking root and game…");startupStage="root";
         RootShell.Result root=shell.execute("id",12000);log.write("root_check","exit="+root.code+" "+root.output);
         if(root.code!=0||!root.output.contains("uid=0"))throw new IOException("Root access required");checkStop();
-        log.write("session_config","mode="+mode+" fixLocation="+settings.prefs.getBoolean("fixLocation",false));
+        log.write("session_config","mode="+mode+" fixLocation="+(mode==4?settings.prefs.getBoolean("eventFixLocation",settings.prefs.getBoolean("fixLocation",false)):settings.prefs.getBoolean("fixLocation",false)));
         powerState();
         String environment=command("getprop ro.build.version.sdk; getprop ro.product.cpu.abilist; getprop ro.dalvik.vm.native.bridge; getconf PAGESIZE; getenforce; uname -r",5000);
         log.write("environment",environment);
@@ -282,7 +283,7 @@ final class NativeCheckRunner {
         File directory=new File(context.getApplicationInfo().nativeLibraryDir).getCanonicalFile();
         log.write("native_library_directory",directory.getAbsolutePath());
         if(!directory.getAbsolutePath().matches("/data/app/[A-Za-z0-9_./+=~-]+/lib/arm64"))throw new IOException("Invalid native library directory");
-        for(String name:new String[]{"libsilph-native-probe.so","libsilph-control.so","libsilph-farmer-check.so","libsilph-kecleon-check.so","libsilph-farmer-status.so","libsilph-kecleon-status.so","libsilph-rocket-check.so","libsilph-rocket-status.so","libshadowhook.so","libshadowhook_nothing.so"}){
+        for(String name:new String[]{"libsilph-native-probe.so","libsilph-control.so","libsilph-farmer-check.so","libsilph-kecleon-check.so","libsilph-farmer-status.so","libsilph-kecleon-status.so","libsilph-rocket-check.so","libsilph-rocket-status.so","libsilph-event-check.so","libsilph-event-status.so","libshadowhook.so","libshadowhook_nothing.so"}){
             File file=new File(directory,name);if(!file.isFile()||!file.getCanonicalFile().getParentFile().equals(directory))throw new IOException("Native component missing: "+name);
             String actual=hash(file);if(!actual.equals(NativeArtifacts.hash(name)))throw new IOException("Native component integrity mismatch");log.write("component",name+" sha256="+actual);
         }
@@ -294,13 +295,19 @@ final class NativeCheckRunner {
         }
         String cache="route."+android.os.Build.FINGERPRINT.hashCode()+"."+GAME_SHA.substring(0,16);
         int preferred=settings.prefs.getInt(cache,2);if(preferred<0||preferred>3)preferred=2;
+        appearanceCache="appearance.stable."+android.os.Build.FINGERPRINT.hashCode()+"."+GAME_SHA.substring(0,16)+"."+BuildConfig.VERSION_CODE;
+        deferAppearance=settings.prefs.getBoolean(appearanceCache,false);
         Exception startupFailure=null;
         for(;startupAttempts<10;){
             int attempt=startupAttempts++;
             int route=attempt==0?preferred:((preferred+attempt)%4);
-            try{launchAndLoad(directory,route,attempt==0&&!settings.prefs.getBoolean("fixLocation",false)&&settings.prefs.getInt("startup",0)!=1&&existing.matches("[0-9]+"));settings.prefs.edit().putInt(cache,route).apply();startupFailure=null;break;}
+            try{launchAndLoad(directory,route,attempt==0&&!(mode==4?settings.prefs.getBoolean("eventFixLocation",settings.prefs.getBoolean("fixLocation",false)):settings.prefs.getBoolean("fixLocation",false))&&settings.prefs.getInt("startup",0)!=1&&existing.matches("[0-9]+"));settings.prefs.edit().putInt(cache,route).apply();startupFailure=null;break;}
             catch(Exception error){startupFailure=error;log.write("startup_attempt","attempt="+(attempt+1)+" route="+route+" stage="+startupStage+" error="+errorText(error));checkStop();
                 startupFailureDetails(attempt+1);
+                if(earlyAppearance&&NativeStagePolicy.presentationFailure(startupStage,error.getMessage())){
+                    deferAppearance=true;settings.prefs.edit().putBoolean(appearanceCache,true).apply();
+                    log.write("appearance_recovery","Early presentation interrupted; stable presentation retained for this profile");
+                }
                 if(error instanceof SymbolResolutionFailure||error instanceof NamespaceFailure)throw error;
                 if(error.getMessage()!=null&&(error.getMessage().contains("policy denied")||error.getMessage().contains("profile mismatch")||error.getMessage().contains("profile rejected")||error.getMessage().contains("instrumentation conflict")||error.getMessage().contains("Game stage file conflict")))throw error;
                 closeBoundGame();cleanGameStage();gamePid=0;ticks=0;injected=false;
@@ -325,7 +332,7 @@ final class NativeCheckRunner {
                 if((snapshot.flags&2)!=0){if(accountHi==0&&accountLo==0){accountHi=snapshot.accountHi;accountLo=snapshot.accountLo;}else if(accountHi!=snapshot.accountHi||accountLo!=snapshot.accountLo)throw new IllegalStateException("Account changed during recovery");}
                 String key="state="+snapshot.state+" flags="+snapshot.flags+" error="+snapshot.error+" reason="+snapshot.reason+" catches="+snapshot.caught+" spins="+snapshot.spun+" transferred="+snapshot.transferred+" items="+snapshot.discarded+" encounters="+snapshot.encounters+" candidateState="+snapshot.candidateState+" xp="+snapshot.xp+" stardust="+snapshot.stardust+" rewardsAvailable="+snapshot.rewardsAvailable+" encounterId="+Long.toUnsignedString(snapshot.encounterId)+" capturedId="+Long.toUnsignedString(snapshot.capturedId)+" visualAvailable="+snapshot.visualAvailable+" visualFailed="+snapshot.visualFailed+" ivReads="+snapshot.ivReads+" nameUpdates="+snapshot.nameUpdates;
 
-                key+=" locationStatus="+snapshot.locationStatus;
+                key+=" locationStatus="+snapshot.locationStatus;if(mode==4)key+=" eventBoxes="+snapshot.spun+" pokemonCandy="+snapshot.caught+" rareCandy="+snapshot.shinies+" candyXL="+snapshot.discarded+" rareCandyXL="+snapshot.candidateRequest+" pending="+snapshot.candidateState+" rewardError="+snapshot.researchStatus;
                 if(mode==1)key+=" researchState="+snapshot.candidateState+" researchClaims="+(snapshot.candidateRequest&0xffffffffL)+" researchRemoved="+(snapshot.candidateRequest>>>32)+" researchStatus="+snapshot.researchStatus;
                 long now=SystemClock.elapsedRealtime();if(!key.equals(snapshotKey)||now-snapshotLoggedAt>=5000){snapshotKey=key;snapshotLoggedAt=now;event("native_snapshot","sequence="+sequence+" "+key);}
             }
@@ -339,19 +346,26 @@ final class NativeCheckRunner {
     }
     private String controlKey;
     private void launchAndLoad(File directory,int route,boolean existing) throws Exception {
-        observedPid=0;startupStage="launch";checkStop();if(!existing)command("am force-stop "+GAME,5000);
+        observedPid=0;earlyAppearance=false;startupStage="launch";checkStop();if(!existing)command("am force-stop "+GAME,5000);
         log.write("startup_route","trace="+(route<2?"ATTACH":"SEIZE")+" library="+(route%2==0?"FD":"PATH")+" game="+(existing?"EXISTING":"COLD"));
         Intent launch=context.getPackageManager().getLaunchIntentForPackage(GAME);
         if(launch==null||launch.getComponent()==null)throw new IOException("Game launch activity missing");
         String component=launch.getComponent().flattenToString();if(!component.matches("com\\.nianticlabs\\.pokemongo/[A-Za-z0-9_.$]+"))throw new IOException("Invalid game launch activity");
         gameComponent=component;
-        File probe=new File(directory,"libsilph-native-probe.so"),source=new File(directory,mode==1?"libsilph-farmer-check.so":mode==2?"libsilph-kecleon-check.so":"libsilph-rocket-check.so");
+        File probe=new File(directory,"libsilph-native-probe.so"),source=new File(directory,mode==4?"libsilph-event-check.so":mode==1?"libsilph-farmer-check.so":mode==2?"libsilph-kecleon-check.so":"libsilph-rocket-check.so");
         File payload=null;int bootstrapPid=0;long bootstrapTicks=0;
-        if(settings.prefs.getBoolean("fixLocation",false))payload=gameNamespace?stageForGame(source):stage(directory,source);
+        if((mode==4?settings.prefs.getBoolean("eventFixLocation",settings.prefs.getBoolean("fixLocation",false)):settings.prefs.getBoolean("fixLocation",false)))payload=gameNamespace?stageForGame(source):stage(directory,source);
         launchWallTime=System.currentTimeMillis();
         status("Opening Pokémon GO…");log.write("game_launch",command("am start -W -n "+quote(component),15000));
-        if(settings.prefs.getBoolean("fixLocation",false)){
+        boolean earlyVisuals=!readonly&&!deferAppearance&&settings.prefs.getBoolean(mode==4?"eventHideTrainerName":"hideTrainerName",true);
+        if((mode==4?settings.prefs.getBoolean("eventFixLocation",settings.prefs.getBoolean("fixLocation",false)):settings.prefs.getBoolean("fixLocation",false))&&!earlyVisuals){
             payload=bootstrapLocation(probe,payload,source,route);bootstrapPid=gamePid;bootstrapTicks=ticks;
+        }
+        if(earlyVisuals){
+            earlyAppearance=true;
+            if(payload==null)payload=gameNamespace?stageForGame(source):stage(directory,source);
+            payload=bootstrapAppearance(probe,payload,source,route,bootstrapPid!=0);
+            bootstrapPid=gamePid;bootstrapTicks=ticks;
         }
         startupStage="wait_libraries";
         NativeFocus focus=new NativeFocus(shell,()->stopping,s->log.write("focus",s));
@@ -407,6 +421,7 @@ final class NativeCheckRunner {
         controlKey=detail.group(3);
     }
     private void verifyInstrumentation(int pid,File ownedPayload) throws Exception {
+        assertStartupTarget(null);
         String before=command("cat /proc/"+pid+"/status; grep -iE 'silph-native-observer|silph-farmer-check|silph-kecleon-check' /proc/"+pid+"/maps || true",5000);
         if(!Pattern.compile("^TracerPid:\\s+0$",Pattern.MULTILINE).matcher(before).find())throw new IOException("Game instrumentation conflict");
         Pattern foreign=Pattern.compile("silph-.*check|silph-native-observer",Pattern.CASE_INSENSITIVE);
@@ -441,6 +456,33 @@ final class NativeCheckRunner {
             SystemClock.sleep(500);
         }
         throw new IOException("Location bootstrap could not reach a safe startup boundary");
+    }
+    private File bootstrapAppearance(File probe,File payload,File source,int route,boolean alreadyLoaded) throws Exception {
+        long until=SystemClock.elapsedRealtime()+10_000;
+        while(gamePid==0&&SystemClock.elapsedRealtime()<until){checkStop();String pid=command("pidof "+GAME+" || true",3000);if(pid.matches("[0-9]+")){gamePid=Integer.parseInt(pid);ticks=readTicks(gamePid);}else SystemClock.sleep(100);}
+        if(gamePid<2||ticks<1)throw new IOException("Appearance bootstrap game identity unavailable");
+        observedPid=gamePid;startupStage="appearance_bootstrap";verifyInstrumentation(gamePid,alreadyLoaded?payload:null);status("Preparing game visuals…");
+        int features=NativeStagePolicy.appearanceFeatures((mode==4?settings.prefs.getBoolean("eventFixLocation",settings.prefs.getBoolean("fixLocation",false)):settings.prefs.getBoolean("fixLocation",false)));
+        String[] traces={"attach","attach","seize","seize"},routes={"fd","path","fd","path"};boolean gameStage=gameNamespace;
+        for(int attempt=0;attempt<8;attempt++){
+            checkStop();assertStartupTarget(null);int connection=NativeStagePolicy.bootstrapRoute(route,attempt);
+            RootShell.Result result=shell.execute(quote(probe.getAbsolutePath())+" --pid "+gamePid+" --start "+ticks+" --library "+quote(payload.getAbsolutePath())+" --trace "+traces[connection]+" --route "+routes[connection]+" --level appearance --features "+features,15000);
+            log.write("appearance_bootstrap_exit","exit="+result.code+" retry="+(attempt+1)+" route="+connection+" gameStage="+gameStage);log.write("appearance_bootstrap_loader",result.output);JSONObject report=null,lastStage=null;
+            for(String line:result.output.split("\\R"))try{JSONObject value=new JSONObject(line);if("native_loader_result".equals(value.optString("event")))report=value;else if("native_loader_stage".equals(value.optString("event")))lastStage=value;}catch(Exception ignored){ }
+            if(report==null)throw new IOException(NativeStagePolicy.bootstrapFailure(result.code,lastStage==null?"":lastStage.optString("stage"),lastStage==null?0:lastStage.optInt("errno")));
+            assertStartupTarget(report);
+            if("SYMBOL_RESOLUTION".equals(report.optString("failure")))throw new SymbolResolutionFailure(report.optInt("errno"));
+            if(result.code==0&&report.optBoolean("passed")&&report.optBoolean("restored")&&report.optBoolean("detached")&&!report.optBoolean("restartRequired")){
+                JSONObject observation=report.optJSONObject("observation");
+                if(observation==null||!"Native appearance bootstrap: pending deadlineMs=120000 gameActions=0".equals(observation.optString("detail")))throw new IOException("Appearance bootstrap identity invalid");
+                injected=true;log.write("appearance_bootstrap","Prepared before managed engine; gameActions=0 features="+features);
+                if((features&NativeSessionWire.FIX_LOCATION)!=0)log.write("location_bootstrap","Prepared with presentation in one startup entry; gameActions=0");return payload;
+            }
+            if(!gameStage&&namespaceRejected(report)){rememberGameNamespace();payload=stageForGame(source);gameStage=true;continue;}
+            if(gameStage&&namespaceRejected(report))throw new NamespaceFailure();
+            if(!retryBoundary(report))throw new IOException("Appearance bootstrap failed; export logs");SystemClock.sleep(250);
+        }
+        throw new IOException("Appearance bootstrap could not reach a safe startup boundary");
     }
     private void rememberGameNamespace(){
         gameNamespace=true;settings.prefs.edit().putBoolean(namespaceCache,true).apply();
@@ -552,7 +594,7 @@ final class NativeCheckRunner {
         consume();log.write("telemetry","dropped="+droppedLogs);
     }
     private JSONObject readNativeStatus(String event) throws Exception {
-        File reader=new File(context.getApplicationInfo().nativeLibraryDir,mode==1?"libsilph-farmer-status.so":mode==2?"libsilph-kecleon-status.so":"libsilph-rocket-status.so");
+        File reader=new File(context.getApplicationInfo().nativeLibraryDir,mode==4?"libsilph-event-status.so":mode==1?"libsilph-farmer-status.so":mode==2?"libsilph-kecleon-status.so":"libsilph-rocket-status.so");
         JSONObject value=new JSONObject(command(quote(reader.getAbsolutePath())+" "+gamePid+" "+ticks+" "+statusAddress+" "+nonceText,4000));
         log.write(event,value.toString());return value;
     }
@@ -566,7 +608,7 @@ final class NativeCheckRunner {
     private void verifyCleanup() throws Exception {
         if(!cleanup){
             if(injected&&statusAddress!=null&&readTicks(gamePid)==ticks){
-                File diagnostic=new File(context.getApplicationInfo().nativeLibraryDir,mode==1?"libsilph-farmer-status.so":mode==2?"libsilph-kecleon-status.so":"libsilph-rocket-status.so");
+                File diagnostic=new File(context.getApplicationInfo().nativeLibraryDir,mode==4?"libsilph-event-status.so":mode==1?"libsilph-farmer-status.so":mode==2?"libsilph-kecleon-status.so":"libsilph-rocket-status.so");
                 JSONObject value=new JSONObject(command(quote(diagnostic.getAbsolutePath())+" "+gamePid+" "+ticks+" "+statusAddress+" "+nonceText,4000));log.write("native_failure_status",value.toString());
                 if(mode==1&&value.optInt("sessionReason")!=0){nativeReason=value.optInt("sessionReason");if(nativeReason==1)finishReason="Session catch limit reached";else if(nativeReason==2)finishReason="Session spin limit reached";}
                 cleanup=value.optInt("stopped")==1&&value.optInt("hookRemoved")==1&&value.optInt("remaining")==0&&value.getString("created").equals(value.getString("released"))&&value.optInt("locationRemaining")==0&&value.optInt("locationRefs")==0&&value.optInt("presentationHooks",-1)==0&&value.optInt("presentationRefs",-1)==0;
@@ -578,7 +620,7 @@ final class NativeCheckRunner {
             }
             return;
         }cleanup=false;
-        File reader=new File(context.getApplicationInfo().nativeLibraryDir,mode==1?"libsilph-farmer-status.so":mode==2?"libsilph-kecleon-status.so":"libsilph-rocket-status.so");
+        File reader=new File(context.getApplicationInfo().nativeLibraryDir,mode==4?"libsilph-event-status.so":mode==1?"libsilph-farmer-status.so":mode==2?"libsilph-kecleon-status.so":"libsilph-rocket-status.so");
         long end=SystemClock.elapsedRealtime()+8000;
         while(SystemClock.elapsedRealtime()<end){
             JSONObject value=new JSONObject(command(quote(reader.getAbsolutePath())+" "+gamePid+" "+ticks+" "+statusAddress+" "+nonceText,4000));

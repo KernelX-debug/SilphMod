@@ -8,7 +8,7 @@ size_t silph_session_link_size(void){return sizeof(Link);}
 static int lock(Link *s){if(!s||s->magic!=MAGIC)return SILPH_SCHEDULE_ARGUMENT;unsigned zero=0;return atomic_compare_exchange_strong_explicit(&s->gate,&zero,1,memory_order_acquire,memory_order_relaxed)?0:SILPH_SCHEDULE_BUSY;}
 static void unlock(Link *s){atomic_store_explicit(&s->gate,0,memory_order_release);}
 int silph_session_link_open(void *memory,size_t bytes,const SilphScheduleIdentity *id,uint32_t mode){
-    if(!memory||bytes!=sizeof(Link)||(uintptr_t)memory%_Alignof(Link)||!id||id->pid<=1||!id->process_ticks||(!id->session_hi&&!id->session_lo)||mode<1||mode>3)return SILPH_SCHEDULE_ARGUMENT;
+    if(!memory||bytes!=sizeof(Link)||(uintptr_t)memory%_Alignof(Link)||!id||id->pid<=1||!id->process_ticks||(!id->session_hi&&!id->session_lo)||mode<1||mode>SILPH_MODE_MAX)return SILPH_SCHEDULE_ARGUMENT;
     Link *s=memory;if(s->magic==MAGIC)return SILPH_SCHEDULE_STATE;memset(s,0,bytes);atomic_init(&s->gate,0);s->magic=MAGIC;s->mode=mode;s->identity=*id;
     s->snapshot=(SilphSessionSnapshot){.mode=mode,.pid=id->pid,.ticks=id->process_ticks,.session_hi=id->session_hi,.session_lo=id->session_lo};return 0;
 }

@@ -7,18 +7,19 @@ import java.util.TreeSet;
 
 public final class PokemonSelection {
     public static final String KEY = "only_catch";
-    public static final int MAX_DEX = 1025;
+    public static final int MAX_DEX = 1025, MAX_KEY = 1063;
+    public static final String KEEP_DEFAULT = "808,999,1052,1053,1054";
     private PokemonSelection() { }
     public static List<Integer> parse(String value) {
         if (value == null || value.trim().isEmpty()) return Collections.emptyList();
         String[] fields = value.split(",", -1);
-        if (fields.length > MAX_DEX) throw new IllegalArgumentException("Invalid Only catch selection");
+        if (fields.length > MAX_KEY) throw new IllegalArgumentException("Invalid Only catch selection");
         TreeSet<Integer> ids = new TreeSet<>();
         for (String field : fields) {
             String text = field.trim();
             if (!text.matches("[0-9]{1,4}")) throw new IllegalArgumentException("Invalid Only catch selection");
             int id = Integer.parseInt(text);
-            if (id < 1 || id > MAX_DEX) throw new IllegalArgumentException("Invalid Only catch selection");
+            if (id < 1 || id > MAX_KEY) throw new IllegalArgumentException("Invalid Only catch selection");
             ids.add(id);
         }
         return Collections.unmodifiableList(new ArrayList<>(ids));
@@ -26,7 +27,7 @@ public final class PokemonSelection {
     public static String encode(Iterable<Integer> selected) {
         TreeSet<Integer> ids = new TreeSet<>();
         for (Integer id : selected) {
-            if (id == null || id < 1 || id > MAX_DEX) throw new IllegalArgumentException("Invalid Only catch selection");
+            if (id == null || id < 1 || id > MAX_KEY) throw new IllegalArgumentException("Invalid Only catch selection");
             ids.add(id);
         }
         StringBuilder value = new StringBuilder();

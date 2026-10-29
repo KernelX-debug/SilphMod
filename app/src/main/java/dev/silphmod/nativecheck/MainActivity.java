@@ -35,7 +35,7 @@ public final class MainActivity extends Activity {
     @Override protected void onPause(){handler.removeCallbacks(refresh);super.onPause();}
     private void show(){
         edits.clear();inputError="";ui=new ModeUi(this);status=null;start=null;
-        if(mode!=1&&mode!=2&&mode!=3){
+        if(mode!=1&&mode!=2&&mode!=3&&mode!=4){
             ui.title("SilphMod",BuildConfig.VERSION_NAME);
             LinearLayout farmer=ui.card("FARMER");farmer.addView(ui.text("Autocatch & autospin",23,ModeUi.TEXT));
             farmer.addView(ui.text("Wild catches · PokéStops · Inventory",14,ModeUi.MUTED));
@@ -44,17 +44,27 @@ public final class MainActivity extends Activity {
             kec.addView(ui.text("Candidate queue · Automatic jumps · IV & shiny filters",14,ModeUi.MUTED));
             ui.button(kec,"Open Kecleon (BETA)",false).setOnClickListener(v->open(2));
             LinearLayout rocket=ui.card("AUTOROCKET (BETA)");rocket.addView(ui.text("Automatic grunt battles & shadow catches",23,ModeUi.TEXT));
-            rocket.addView(ui.text("Rocket queue · Team healing · IV & shiny filters",14,ModeUi.MUTED));ui.button(rocket,"Open AutoRocket (BETA)",false).setOnClickListener(v->open(3));ui.show();return;
+            rocket.addView(ui.text("Rocket queue · Team healing · IV & shiny filters",14,ModeUi.MUTED));ui.button(rocket,"Open AutoRocket (BETA)",false).setOnClickListener(v->open(3));
+            LinearLayout events=ui.card("EVENT TRICKS");events.addView(ui.text("Automatic event box collection",23,ModeUi.TEXT));
+            events.addView(ui.text("Pokémon Candy · Rare Candy · No catches or spins",14,ModeUi.MUTED));
+            ui.button(events,"Open Event tricks",false).setOnClickListener(v->open(4));ui.show();return;
         }
         ui.button(ui.page,"‹  Modes",false).setOnClickListener(v->{mode=0;show();});
-        ui.title(mode==1?"Farmer":mode==2?"Kecleon (BETA)":"AutoRocket (BETA)","SilphMod");
+        ui.title(mode==4?"Event tricks":mode==1?"Farmer":mode==2?"Kecleon (BETA)":"AutoRocket (BETA)","SilphMod");
         status=ui.text(CheckService.view.status,17,ModeUi.ACCENT);ui.page.addView(status);
         elapsed=ui.text("00:00:00",16,ModeUi.MUTED);ui.page.addView(elapsed);
         details=ui.text("",13,ModeUi.MUTED);ui.page.addView(details);
-        String[] labels=mode==1?new String[]{"Catches","PokéStops","Transferred","Items deleted","XP","Stardust"}:new String[]{mode==3?"Rockets":"Encounters","Catches","Shinies","Items deleted","XP","Stardust"};
+        String[] labels=mode==4?new String[]{"Boxes opened","Pokémon Candy","Rare Candy / XL","Candy XL","XP","Stardust"}:mode==1?new String[]{"Catches","PokéStops","Transferred","Items deleted","XP","Stardust"}:new String[]{mode==3?"Rockets":"Encounters","Catches","Shinies","Items deleted","XP","Stardust"};
         for(int row=0;row<3;row++){LinearLayout line=ui.row();ui.page.addView(line);for(int col=0;col<2;col++)metrics[row*2+col]=ui.metric(line,labels[row*2+col]);}
         clear=ui.button(ui.page,"Clear statistics",false);clear.setOnClickListener(v->{if(CheckService.view.running)return;
             inputError="";settings.save(mode,new NativeSessionState.Totals());settings.prefs.edit().putLong("stats"+mode+".elapsed",0).apply();if(mode==2)dev.rootcatch.ugphone.KecleonHost.clearHistory(this);if(mode==3)NativeRocketHost.clear(this);render();});ui.space(ui.page,16);
+        if(mode==4){
+            LinearLayout event=ui.card("Event boxes");
+            event.addView(ui.text("Collects box rewards as you follow your route. Pokémon encounters are left uncaught.",14,ModeUi.MUTED));
+            check(event,"Fix error 12","eventFixLocation",settings.prefs.getBoolean("fixLocation",false));
+            check(event,"Hide trainer name","eventHideTrainerName",true);
+            serviceControls();ui.show();render();return;
+        }
         SettingsDialogs dialogs=new SettingsDialogs(this);
         LinearLayout features=ui.card("Features");
         check(features,"Fix error 12","fixLocation",false);
@@ -86,12 +96,27 @@ public final class MainActivity extends Activity {
             String[] names={"Keep shiny","Keep 15/15/15","Keep Dynamax","Keep hatched","Keep background","Keep shiny + background","Keep field research encounters"};
             for(int i=0;i<names.length;i++)bit(options,names[i],"keep",1<<i,95);
             check(options,"Keep GO Pass encounters","keepGoPass",true);
+            String kept=settings.prefs.getString("keepSpecies",dev.rootcatch.automation.PokemonSelection.KEEP_DEFAULT);
+            int keptCount=dev.rootcatch.automation.PokemonSelection.parse(kept).size();
+            setting(options,"Select Pokémon to keep",keptCount==0?"None selected":keptCount+" selected").setOnClickListener(v->new PokemonPickerDialog(this,kept,true).show(value->{settings.prefs.edit().putString("keepSpecies",value).apply();show();}));
             transfer.setOnCheckedChangeListener((v,on)->{settings.prefs.edit().putBoolean("transfer",on).apply();options.setVisibility(on?View.VISIBLE:View.GONE);});options.setVisibility(transfer.isChecked()?View.VISIBLE:View.GONE);
         }
         CompoundButton clean=toggle(features,"Clean item bag","clean",false);
         LinearLayout itemOptions=ui.column();features.addView(itemOptions);
         setting(itemOptions,"Item limits",itemSummary()).setOnClickListener(v->dialogs.itemsDialog(settings.prefs.getString("limits",""),value->{settings.prefs.edit().putString("limits",value).apply();show();}));
         clean.setOnCheckedChangeListener((v,on)->{settings.prefs.edit().putBoolean("clean",on).apply();itemOptions.setVisibility(on?View.VISIBLE:View.GONE);});itemOptions.setVisibility(clean.isChecked()?View.VISIBLE:View.GONE);
+        if(mode==1){
+            LinearLayout buddy=ui.card("Buddy");
+            check(buddy,"Feed buddy","feedBuddy",false);
+            setting(buddy,"Berry priority",settings.buddyBerryNames().replace(","," · ")).setOnClickListener(v->dialogs.berriesDialog(settings.buddyBerryNames(),value->{settings.saveBuddyBerries(value);show();}));
+            check(buddy,"Mega Evolve buddy","megaBuddy",false);
+            buddy.addView(ui.text(settings.prefs.getBoolean("removeBuddy",false)?"Disabled while Remove buddy is enabled":"Uses the available Mega Evolution with the lowest energy cost",13,ModeUi.MUTED));
+        }
+        if(mode==3){
+            LinearLayout care=ui.card("Team care");
+            setting(care,"Potion priority",medicineSummary(false)).setOnClickListener(v->dialogs.medicineDialog("Potion priority",settings.prefs.getString("rocketPotionOrder",""),false,value->{settings.prefs.edit().putString("rocketPotionOrder",value).apply();show();}));
+            setting(care,"Revive priority",medicineSummary(true)).setOnClickListener(v->dialogs.medicineDialog("Revive priority",settings.prefs.getString("rocketReviveOrder",""),true,value->{settings.prefs.edit().putString("rocketReviveOrder",value).apply();show();}));
+        }
         LinearLayout inventory=ui.card("Inventory tools");
         toggle(inventory,"Show IV names","showIvNames",true);
         toggle(inventory,"Extended manual transfer","extendedManualTransfer",false);
@@ -100,17 +125,20 @@ public final class MainActivity extends Activity {
         if(mode!=3){toggle(game,"Auto-open gifts","autoOpenGifts",false);toggle(game,"Auto-send gifts","autoSendGifts",false);}
         toggle(game,"Hide trainer name","hideTrainerName",true);
         Button engine=ui.button(ui.page,"Engine settings",false);edits.add(engine);engine.setOnClickListener(v->engineDialog());
+        serviceControls();ui.show();render();
+    }
+    private void serviceControls(){
         start=ui.button(ui.controls,"Start service",true);start.setOnClickListener(v->{if(CheckService.view.running){startService(new Intent(this,CheckService.class).setAction(CheckService.STOP));return;}
             try{inputError="";settings.config(mode,false);getPreferences(0).edit().putInt("mode",mode).apply();startForegroundService(new Intent(this,CheckService.class).setAction(CheckService.START).putExtra("mode",mode));}
             catch(Exception error){inputError=error.getMessage();status.setText(inputError);Toast.makeText(this,inputError,Toast.LENGTH_LONG).show();}
         });
-        export=ui.button(ui.controls,"Export logs",false);export.setOnClickListener(v->export());ui.show();render();
+        export=ui.button(ui.controls,"Export logs",false);export.setOnClickListener(v->export());
     }
     private void open(int selected){mode=selected;getPreferences(0).edit().putInt("mode",mode).apply();show();}
     private void render(){
         if(status==null)return;CheckService.View value=CheckService.view;var t=settings.totals(mode);
         set(status,value.running||inputError.isEmpty()?value.status:inputError);set(details,value.running?value.details:"");
-        long[] values=mode==1?new long[]{t.caught,t.spun,t.transferred,t.discarded,t.xp,t.stardust}:new long[]{mode==3?t.spun:t.encounters,t.caught,t.shinies,t.discarded,t.xp,t.stardust};
+        long[] values=mode==4?new long[]{t.spun,t.caught,t.shinies,t.discarded,t.xp,t.stardust}:mode==1?new long[]{t.caught,t.spun,t.transferred,t.discarded,t.xp,t.stardust}:new long[]{mode==3?t.spun:t.encounters,t.caught,t.shinies,t.discarded,t.xp,t.stardust};
         long seconds=settings.elapsed(mode)/1000;set(elapsed,String.format(Locale.US,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60));
         for(int i=0;i<6;i++)set(metrics[i],String.format(Locale.US,"%,d",values[i]));
         set(start,value.running?"Stop service":"Start service");clear.setEnabled(!value.running);for(View edit:edits)edit.setEnabled(!value.running);
@@ -123,6 +151,7 @@ public final class MainActivity extends Activity {
     private void bit(LinearLayout parent,String title,String key,int bit,int fallback){CheckBox b=ui.check(parent,title,(settings.prefs.getInt(key,fallback)&bit)!=0);edits.add(b);b.setOnCheckedChangeListener((v,on)->{int n=settings.prefs.getInt(key,fallback);settings.prefs.edit().putInt(key,on?n|bit:n&~bit).apply();});}
     private Button setting(LinearLayout parent,String label,String value){Button b=ui.button(parent,label+"\n"+value,false);edits.add(b);return b;}
     private String speciesSummary(){int n=dev.rootcatch.automation.PokemonSelection.parse(settings.prefs.getString("species","")).size();return n==0?"All Pokémon":n+" selected";}
+    private String medicineSummary(boolean revives){int[] ids=RocketCareOrder.parse(settings.prefs.getString(revives?"rocketReviveOrder":"rocketPotionOrder",""),revives);if(ids.length==0)return "Automatic";java.util.ArrayList<String> names=new java.util.ArrayList<>();for(int id:ids)for(ItemCatalog.Entry item:ItemCatalog.ENTRIES)if(item.id()==id)names.add(item.label());return String.join(" · ",names);}
     private String itemSummary(){String text=settings.prefs.getString("limits","");return text.isBlank()?"Not configured":text.split(",").length+" item types";}
     private void export(){export.setEnabled(false);export.setText("Exporting…");new Thread(()->{String result;try{CheckLog.export(this);result="Saved to Downloads/SilphMod";}catch(Exception error){result=error.getMessage();}String message=result;runOnUiThread(()->{export.setEnabled(true);export.setText("Export logs");Toast.makeText(this,message==null?"Export failed":message,Toast.LENGTH_LONG).show();});},"silph-export").start();}
     private void engineDialog(){

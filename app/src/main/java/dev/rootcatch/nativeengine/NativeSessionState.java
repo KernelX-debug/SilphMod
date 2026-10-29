@@ -34,7 +34,8 @@ public final class NativeSessionState {
         }
         long[] counters={next.caught,next.fled,next.spun,next.discarded,next.transferred,next.encounters,next.shinies,next.berries,next.throwsCount,next.xp,next.stardust};
         for(long count:counters)if(count<0)throw new IllegalStateException("Native counter overflow");
-        if(next.transferred>next.caught||next.caught>next.encounters||next.shinies>next.encounters)throw new IllegalStateException("Inconsistent native counts");
+        if(config.mode==NativeSessionWire.EVENT){if(next.transferred!=0||next.berries!=0||next.throwsCount!=0||next.spun>next.encounters||next.fled>next.encounters||next.spun>next.encounters-next.fled)throw new IllegalStateException("Inconsistent event counts");}
+        else if(next.transferred>next.caught||next.caught>next.encounters||next.shinies>next.encounters)throw new IllegalStateException("Inconsistent native counts");
         if(config.mode==NativeSessionWire.FARMER&&config.maxCatches>0&&next.caught>config.maxCatches||config.maxSpins>0&&next.spun>config.maxSpins
                 ||config.mode==NativeSessionWire.KECLEON&&config.maxEncounters>0&&next.encounters>config.maxEncounters||config.mode==NativeSessionWire.ROCKET&&config.maxEncounters>0&&next.spun>config.maxEncounters)throw new IllegalStateException("Native limit exceeded");
         if((config.flags&NativeSessionWire.READ_ONLY)!=0){

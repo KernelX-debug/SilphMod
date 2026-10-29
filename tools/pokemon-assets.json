@@ -4625,6 +4625,13 @@
       "bytes": 6786
     },
     {
+      "id": 778,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/778.png",
+      "sha256": "48cc0a1c5379403603e073b3704983a6fbb3fca3664bfc9a67cb5f169de1f7f0",
+      "bytes": 11489,
+      "size": 128
+    },
+    {
       "id": 779,
       "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm779.icon.png",
       "sha256": "413850b427fcfabbf0bc3377f16f4a63b894abecfe872f428407c5bdfa125bbe",
@@ -4787,6 +4794,13 @@
       "bytes": 17368
     },
     {
+      "id": 807,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/807.png",
+      "sha256": "6ca2fdb4d0fe065e5c51ace68808c9a61a58df2bcf8e6baa70b910e8e3bd1e18",
+      "bytes": 18677,
+      "size": 128
+    },
+    {
       "id": 808,
       "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm808.icon.png",
       "sha256": "9ca04acb7777206b616ec205fe70f4957ac3af637abbc88dd004a240d8a8855d",
@@ -4883,6 +4897,27 @@
       "bytes": 17070
     },
     {
+      "id": 824,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/824.png",
+      "sha256": "e15adff303055053b8e808c2a524a31a6e711824f57babf6f11545ddc42a5fbc",
+      "bytes": 9175,
+      "size": 128
+    },
+    {
+      "id": 825,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/825.png",
+      "sha256": "85be5b2979e9340202bcc40015af8ed51b84c3bca9493333ad03c0c63d75469b",
+      "bytes": 14095,
+      "size": 128
+    },
+    {
+      "id": 826,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/826.png",
+      "sha256": "277bc79d7fdea737457f96121eff89f9f346c22fdcb7f9d8da677e15f3e6631d",
+      "bytes": 17020,
+      "size": 128
+    },
+    {
       "id": 827,
       "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm827.icon.png",
       "sha256": "a7a337ccb0546601e1362dff28ef26bfc201ea7729899f6648681fac2e421c91",
@@ -4967,10 +5002,52 @@
       "bytes": 11494
     },
     {
+      "id": 843,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/843.png",
+      "sha256": "00300f910b3c1d36216662285be9ebe23fa1ad6a17c4dcf6a4d153fbb9c21090",
+      "bytes": 11548,
+      "size": 128
+    },
+    {
+      "id": 844,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/844.png",
+      "sha256": "cea2d67ea96450127293ff412a6387a7f5aa79c6c4c5b1a04b6497bdc37866f6",
+      "bytes": 13552,
+      "size": 128
+    },
+    {
       "id": 845,
       "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/845.png",
       "sha256": "409c99c2eeb0e93b559b05d120b57431c1eac0cf06c2aefe5ab326166b6183d6",
       "bytes": 738
+    },
+    {
+      "id": 846,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/846.png",
+      "sha256": "d817524c3f837c3363fe8425033332ec0a2ff395861cb4d87379ebe23c7245c9",
+      "bytes": 9645,
+      "size": 128
+    },
+    {
+      "id": 847,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/847.png",
+      "sha256": "b73c7d547a3fb26e81b11cf1d80a177b392f58921d02e640862778912bec4537",
+      "bytes": 10295,
+      "size": 128
+    },
+    {
+      "id": 848,
+      "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm848.icon.png",
+      "sha256": "5e875aba279c267b20c54beb975f9c5520d7df2d0e6b7daf58f44f6d2739e3bb",
+      "bytes": 7634,
+      "size": 128
+    },
+    {
+      "id": 849,
+      "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm849.fAMPED.icon.png",
+      "sha256": "e850c655d0dfaef642aebb511ff9c36f5454b51d62c1cb8ad12edb1892cb660e",
+      "bytes": 14859,
+      "size": 128
     },
     {
       "id": 850,
@@ -4995,6 +5072,13 @@
       "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/853.png",
       "sha256": "2a2cd72ca63a814e523cde1de9a6e06c9f33e07778133a53297705da33ac3061",
       "bytes": 772
+    },
+    {
+      "id": 854,
+      "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm854.icon.png",
+      "sha256": "2771b66be87c20bd9e7862d62e5da10a9f9bbec8c214831b580960a35f500f66",
+      "bytes": 3978,
+      "size": 128
     },
     {
       "id": 855,
@@ -5369,6 +5453,13 @@
       "bytes": 18355
     },
     {
+      "id": 931,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/931.png",
+      "sha256": "8fcf817727dedd89a423d215c6d95c915728c88428f2bd398003818f88e3a7b7",
+      "bytes": 15155,
+      "size": 128
+    },
+    {
       "id": 932,
       "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/932.png",
       "sha256": "3317e8fbae411043c0660a34657b05023d413f2df799ceb88ef614c1734eb6b9",
@@ -5429,6 +5520,20 @@
       "bytes": 1799
     },
     {
+      "id": 942,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/942.png",
+      "sha256": "a3fcccc6a38260255b71e72a4c75d4340b67dea92b7ff2fe1c9482e2b338ad6e",
+      "bytes": 10801,
+      "size": 128
+    },
+    {
+      "id": 943,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/943.png",
+      "sha256": "3b2845244066d7c9a7f99a2df1a233d4cbf27097933507e76d120ab6bf29cf0c",
+      "bytes": 14721,
+      "size": 128
+    },
+    {
       "id": 944,
       "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm944.icon.png",
       "sha256": "929683fcb41e1e32cec97e8ba26287ea9292dba870ad5cd2c321bdff64d687ca",
@@ -5439,6 +5544,20 @@
       "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm945.icon.png",
       "sha256": "de42cd9d557ee5b46361d0c3e0c069b45149a3b020ca8dcf5ac7f19cd787c4eb",
       "bytes": 13558
+    },
+    {
+      "id": 946,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/946.png",
+      "sha256": "5b2646438243906065470c747f75dcf98ced652f43b87ae5a39385106a43fe77",
+      "bytes": 21674,
+      "size": 128
+    },
+    {
+      "id": 947,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/947.png",
+      "sha256": "29e6b150f99cdb124340ce12ef627983cf74b4c394fca83368ff6ce8237d4471",
+      "bytes": 25196,
+      "size": 128
     },
     {
       "id": 948,
@@ -5457,6 +5576,20 @@
       "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/950.png",
       "sha256": "78b4ad9c54259e8336537e96f56a40dfb9f98bb3fb3fd7b80d704710850b350e",
       "bytes": 2562
+    },
+    {
+      "id": 955,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/955.png",
+      "sha256": "a7bc25d5e61948832e65a8efe67eb35d2bb90f7c467a1ab141304be66ac08448",
+      "bytes": 16917,
+      "size": 128
+    },
+    {
+      "id": 956,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/956.png",
+      "sha256": "9ec03e0627404bcdeff0abfb4d8a376176ce8489292e2ce0375f6bf5f12a9606",
+      "bytes": 18595,
+      "size": 128
     },
     {
       "id": 957,
@@ -5507,6 +5640,13 @@
       "bytes": 26884
     },
     {
+      "id": 968,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/968.png",
+      "sha256": "54132c99fd013848a9b92d8b3b693796bd82f1ee21d9faeedc6fabddbede4fc2",
+      "bytes": 16609,
+      "size": 128
+    },
+    {
       "id": 969,
       "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/969.png",
       "sha256": "fa829f19724c6f3746f91d57ead76c8ef2ca2ec6b64deedb1540d4ce0519f307",
@@ -5529,6 +5669,13 @@
       "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm972.icon.png",
       "sha256": "1e458a4e4356ae463a8f252cbe84e4b00571464af12646a45fb0ad44bd2cfe8d",
       "bytes": 24748
+    },
+    {
+      "id": 973,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/0dc105d5b12416932f29b594078282ab4be045f5/sprites/pokemon/other/official-artwork/973.png",
+      "sha256": "e0ca5f3b96d02bfc7623169de34069443f0e56b0d9eec7c198b7c4df227e8850",
+      "bytes": 8101,
+      "size": 128
     },
     {
       "id": 974,
@@ -5631,6 +5778,456 @@
       "url": "https://raw.githubusercontent.com/PokeMiners/pogo_assets/c2a686eb08ace6e890d8fe3d2134c76988db87b5/Images/Pokemon/Addressable%20Assets/pm1019.icon.png",
       "sha256": "f155656664b01764a20e2d8dbe0d9e45ad86c8af9c0e9489ebff9c38039a83e4",
       "bytes": 14970
+    },
+    {
+      "id": 1026,
+      "species": 19,
+      "form": 46,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10091.png",
+      "sha256": "238947a10775200d60ff44c8b78f44346e6a11343a76b27dd175e8a30ec1bb57",
+      "bytes": 10482,
+      "size": 128
+    },
+    {
+      "id": 1027,
+      "species": 20,
+      "form": 48,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10092.png",
+      "sha256": "83690d25f5cabf0edbd258e6bda07e6f8a0f56de7e3d5f96487c4a1645cc0604",
+      "bytes": 13074,
+      "size": 128
+    },
+    {
+      "id": 1028,
+      "species": 26,
+      "form": 50,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10100.png",
+      "sha256": "b31f9d2308133791d01ffd314e4a9db711efdcfa6e769362f49ddd3173e0037b",
+      "bytes": 12487,
+      "size": 128
+    },
+    {
+      "id": 1029,
+      "species": 27,
+      "form": 52,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10101.png",
+      "sha256": "60ead68cc83288f78b94cd7756ecbde0398e20a4fb5db52ddf13c1b564c7fef2",
+      "bytes": 15786,
+      "size": 128
+    },
+    {
+      "id": 1030,
+      "species": 28,
+      "form": 54,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10102.png",
+      "sha256": "201446b7da054f60a35099d7f085ba25ed2b03aa664612da2b9cbe5246ce5e97",
+      "bytes": 16479,
+      "size": 128
+    },
+    {
+      "id": 1031,
+      "species": 37,
+      "form": 56,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10103.png",
+      "sha256": "eb6d2b7d1932838e1c341507c1b854b81aa01c1030f7e5a5a025a6386d8b7162",
+      "bytes": 12788,
+      "size": 128
+    },
+    {
+      "id": 1032,
+      "species": 38,
+      "form": 58,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10104.png",
+      "sha256": "3b6c061f60103af4b188d9519360d187e6dd3797e00d906cdb117f31b0f6fd5f",
+      "bytes": 14443,
+      "size": 128
+    },
+    {
+      "id": 1033,
+      "species": 50,
+      "form": 60,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10105.png",
+      "sha256": "54312664cb72d8c2f53d3f374b5b0d9818cfae94c726bc4d198628b0b08b3724",
+      "bytes": 9238,
+      "size": 128
+    },
+    {
+      "id": 1034,
+      "species": 51,
+      "form": 62,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10106.png",
+      "sha256": "4d9454183c1834e28576f008ecc2f790bd8eb47f2941dad394b60bc1cf3a2b78",
+      "bytes": 17248,
+      "size": 128
+    },
+    {
+      "id": 1035,
+      "species": 52,
+      "form": 64,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10107.png",
+      "sha256": "6b4955c1119d8cd062d3f3c5dd591386bea8802b97b1bafb4dccf92b24eb0eba",
+      "bytes": 11823,
+      "size": 128
+    },
+    {
+      "id": 1036,
+      "species": 52,
+      "form": 2335,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10161.png",
+      "sha256": "03329656c2cb27fe70cb3727608119ba2ef7b5f248b157074a43a2fc6b7e61d8",
+      "bytes": 15131,
+      "size": 128
+    },
+    {
+      "id": 1037,
+      "species": 53,
+      "form": 66,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10108.png",
+      "sha256": "f1cfe7854a51fe196cfa5b0a67587e6602a6052c86ca77182106f19439332f46",
+      "bytes": 13113,
+      "size": 128
+    },
+    {
+      "id": 1038,
+      "species": 74,
+      "form": 68,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10109.png",
+      "sha256": "fb54068417945deddd2cb9f7f1200385156cb4d57b8baeedbd78a3f9ade66a26",
+      "bytes": 14913,
+      "size": 128
+    },
+    {
+      "id": 1039,
+      "species": 75,
+      "form": 70,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10110.png",
+      "sha256": "77bd5155174daedaf35e922332abe5c40ce216258b39b12f2137a3c218bd0920",
+      "bytes": 14706,
+      "size": 128
+    },
+    {
+      "id": 1040,
+      "species": 76,
+      "form": 72,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10111.png",
+      "sha256": "280ae7ccf750e21bc83626baf32dddd16141be1ff6b907162fc5bc488bb7ea78",
+      "bytes": 15838,
+      "size": 128
+    },
+    {
+      "id": 1041,
+      "species": 77,
+      "form": 2336,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10162.png",
+      "sha256": "beef5796ff35a4e7480c53a8f737e62713e506a6fba2a422f60f3e5cbd92190d",
+      "bytes": 14111,
+      "size": 128
+    },
+    {
+      "id": 1042,
+      "species": 78,
+      "form": 2337,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10163.png",
+      "sha256": "b95afa0b2137d0d9a2e0e5966ff9d3baec3f6520b38a0cbec43519a70d68984e",
+      "bytes": 17257,
+      "size": 128
+    },
+    {
+      "id": 1043,
+      "species": 79,
+      "form": 2582,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10164.png",
+      "sha256": "c0bf3afb2eb2431e553ffddf596e9c0250cd48473fbb11d471473beeb43314b5",
+      "bytes": 9977,
+      "size": 128
+    },
+    {
+      "id": 1044,
+      "species": 80,
+      "form": 2583,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10165.png",
+      "sha256": "4f9ff15b250ea2648afdc738876d615e87a5551734fcfc8d8b08313d1c9603d4",
+      "bytes": 18753,
+      "size": 128
+    },
+    {
+      "id": 1045,
+      "species": 83,
+      "form": 2338,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10166.png",
+      "sha256": "b96ebca5b8426ff8612529d3820bc0118c99aa0ef0aeabfb87178e17b0a69ad1",
+      "bytes": 10704,
+      "size": 128
+    },
+    {
+      "id": 1046,
+      "species": 88,
+      "form": 74,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10112.png",
+      "sha256": "f82cd13bbe4368d1b9db30149e2b980c11c997c10a2f1281cf86919b7d8aafd7",
+      "bytes": 14275,
+      "size": 128
+    },
+    {
+      "id": 1047,
+      "species": 89,
+      "form": 76,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10113.png",
+      "sha256": "c5b7da669dceb654708f3d58300cbac5308fc0763fc4452d2350afcfbc8a5c75",
+      "bytes": 12498,
+      "size": 128
+    },
+    {
+      "id": 1048,
+      "species": 103,
+      "form": 78,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10114.png",
+      "sha256": "44fb4107edf025669a8371d8d2bb49b280ffe65b5aacc48c2c75c0ba2404d804",
+      "bytes": 8113,
+      "size": 128
+    },
+    {
+      "id": 1049,
+      "species": 105,
+      "form": 80,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10115.png",
+      "sha256": "5ffb875fd8af338ffe2370a8897ba73af29cb0817c13dd78af7a4eb40dcfa7fd",
+      "bytes": 11758,
+      "size": 128
+    },
+    {
+      "id": 1050,
+      "species": 110,
+      "form": 944,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10167.png",
+      "sha256": "955555500412fe9f8d09f8969ff090e4711aa565799c7d1c574161aa4a4be400",
+      "bytes": 15496,
+      "size": 128
+    },
+    {
+      "id": 1051,
+      "species": 122,
+      "form": 2339,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10168.png",
+      "sha256": "ce4dff1ab83d227db294386d692fd6b4ed1d17327236e061175b2fdb90299205",
+      "bytes": 17535,
+      "size": 128
+    },
+    {
+      "id": 1052,
+      "species": 144,
+      "form": 2801,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10169.png",
+      "sha256": "b83129747bab2b5e3a6b27c6259dd01af9b6dc3812fba609f8af12253f9896d8",
+      "bytes": 14632,
+      "size": 128
+    },
+    {
+      "id": 1053,
+      "species": 145,
+      "form": 2800,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10170.png",
+      "sha256": "d719515e9ab01acb5e49e63b62b962289eedcfeea8dbb74136128526b2814b86",
+      "bytes": 16356,
+      "size": 128
+    },
+    {
+      "id": 1054,
+      "species": 146,
+      "form": 2799,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10171.png",
+      "sha256": "39c733c9ba5c5041c7310af3897c7e57a1b30e243db31012ad9a184e7c2c9b84",
+      "bytes": 20419,
+      "size": 128
+    },
+    {
+      "id": 1055,
+      "species": 199,
+      "form": 2584,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10172.png",
+      "sha256": "8b2c5f93cb019f01f6a70d0bc03386ccd4bad4d462dad4c333f6001b0589790e",
+      "bytes": 17354,
+      "size": 128
+    },
+    {
+      "id": 1056,
+      "species": 222,
+      "form": 2340,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10173.png",
+      "sha256": "87b4b487b63b7c8b985dcf0f602fc61858ef8afd980693238ac1588375a1a334",
+      "bytes": 11546,
+      "size": 128
+    },
+    {
+      "id": 1057,
+      "species": 263,
+      "form": 946,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10174.png",
+      "sha256": "614e50dbb5ed3376f4a201de8f3ea753d2f71bd5467e14964f7ca8bf1a833739",
+      "bytes": 16849,
+      "size": 128
+    },
+    {
+      "id": 1058,
+      "species": 264,
+      "form": 948,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10175.png",
+      "sha256": "99ad0b9cec44a18300efd1c5589f14a8ea9fa5ff28ba6df20d64571aba588a55",
+      "bytes": 13436,
+      "size": 128
+    },
+    {
+      "id": 1059,
+      "species": 554,
+      "form": 2341,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10176.png",
+      "sha256": "d34d9305bb02531a901853082fa5d94e60efd3c5e855b32394c743f9c8b0fe63",
+      "bytes": 13150,
+      "size": 128
+    },
+    {
+      "id": 1060,
+      "species": 555,
+      "form": 2342,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10177.png",
+      "sha256": "3a9f0e6de3015c3cc2bff2ac2843c4a88a9888deebed2c816a549635820573b4",
+      "bytes": 15008,
+      "size": 128
+    },
+    {
+      "id": 1061,
+      "species": 555,
+      "form": 2343,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10178.png",
+      "sha256": "129012997a87fec360c4c2bfb0270ce24b9f2573564ae20570f0ea6e8013bc8d",
+      "bytes": 14143,
+      "size": 128
+    },
+    {
+      "id": 1062,
+      "species": 562,
+      "form": 2344,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10179.png",
+      "sha256": "0edcc7e3a61c8472ce8c250294c4cd591018b4b7fd147dac137e64354193a835",
+      "bytes": 11460,
+      "size": 128
+    },
+    {
+      "id": 1063,
+      "species": 618,
+      "form": 2345,
+      "url": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10180.png",
+      "sha256": "e34695ce94f62880d573523f30f4fcd393a4d920df55256072519232ab7a5517",
+      "bytes": 12234,
+      "size": 128
+    }
+  ],
+  "catalogVerifiedAsOf": "2026-10-28",
+  "catalogAdditions": [
+    {
+      "id": 778,
+      "name": "Mimikyu",
+      "source": "https://pokemongo.com/en/news/a-shockingly-good-time"
+    },
+    {
+      "id": 807,
+      "name": "Zeraora",
+      "source": "https://pokemongo.com/en/seasons/forever-forward"
+    },
+    {
+      "id": 824,
+      "name": "Blipbug",
+      "source": "https://pokemongo.com/en/news/bug-out-2026"
+    },
+    {
+      "id": 825,
+      "name": "Dottler",
+      "source": "https://pokemongo.com/en/news/bug-out-2026"
+    },
+    {
+      "id": 826,
+      "name": "Orbeetle",
+      "source": "https://pokemongo.com/en/news/bug-out-2026"
+    },
+    {
+      "id": 843,
+      "name": "Silicobra",
+      "source": "https://pokemongo.com/en/news/sustainability-week-2026"
+    },
+    {
+      "id": 844,
+      "name": "Sandaconda",
+      "source": "https://pokemongo.com/en/news/sustainability-week-2026"
+    },
+    {
+      "id": 846,
+      "name": "Arrokuda",
+      "source": "https://pokemongo.com/en/news/water-festival-2026"
+    },
+    {
+      "id": 847,
+      "name": "Barraskewda",
+      "source": "https://pokemongo.com/en/news/water-festival-2026"
+    },
+    {
+      "id": 848,
+      "name": "Toxel",
+      "source": "https://pokemongo.com/en/news/get-ready-for-go-wild-area-2024"
+    },
+    {
+      "id": 849,
+      "name": "Toxtricity",
+      "source": "https://pokemongo.com/en/news/get-ready-for-go-wild-area-2024"
+    },
+    {
+      "id": 854,
+      "name": "Sinistea",
+      "source": "https://pokemongo.com/en/news/just-my-cup-of-tea-2024"
+    },
+    {
+      "id": 931,
+      "name": "Squawkabilly",
+      "source": "https://pokemongo.com/en/news/flying-taxi-2026"
+    },
+    {
+      "id": 942,
+      "name": "Maschiff",
+      "source": "https://pokemongo.com/en/news/mega-squads-2026"
+    },
+    {
+      "id": 943,
+      "name": "Mabosstiff",
+      "source": "https://pokemongo.com/en/news/mega-squads-2026"
+    },
+    {
+      "id": 946,
+      "name": "Bramblin",
+      "source": "https://pokemongo.com/en/news/fall-marathon-buddy-trek-2026"
+    },
+    {
+      "id": 947,
+      "name": "Brambleghast",
+      "source": "https://pokemongo.com/en/news/fall-marathon-buddy-trek-2026"
+    },
+    {
+      "id": 955,
+      "name": "Flittle",
+      "source": "https://pokemongo.com/en/news/spring-marathon-2026"
+    },
+    {
+      "id": 956,
+      "name": "Espathra",
+      "source": "https://pokemongo.com/en/news/spring-marathon-2026"
+    },
+    {
+      "id": 968,
+      "name": "Orthworm",
+      "source": "https://pokemongo.com/en/news/steeled-resolve-2026"
+    },
+    {
+      "id": 973,
+      "name": "Flamigo",
+      "source": "https://pokemongo.com/en/news/carnival-of-flamigo-2026"
     }
   ]
 }

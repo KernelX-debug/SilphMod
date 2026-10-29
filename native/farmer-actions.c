@@ -1,6 +1,7 @@
 #include "farmer-actions.h"
 #ifdef SILPH_PRESENT_SCOPED
 #include "event-actions.h"
+#include "pokemon-selection.h"
 #endif
 #include "research-bridge.h"
 #include "research-policy.h"
@@ -75,12 +76,23 @@ int silph_farmer_actions_configure(void *memory,const SilphFarmerOptions *option
     free(s->scope);s->scope=scope;s->options=*options;
     for(unsigned i=0;i<sizeof(options->only_species);i++)if(options->only_species[i])s->only_active=1;return 0;
 }
-static bool accept_target(void *context,uint64_t id,uint32_t species){
+static bool accept_target(void *context,uint64_t id,uint32_t species
+#ifdef SILPH_PRESENT_SCOPED
+    ,SilphManagedRef object
+#endif
+){
     Farmer *s=context;bool event=false;
 #ifdef SILPH_PRESENT_SCOPED
     event=silph_event_owned(id);
 #endif
+    #ifdef SILPH_PRESENT_SCOPED
+    if(!event&&s->only_active){
+        uint32_t form=0;if(silph_species_regional(species)&&silph_game_read_pokemon_form(s->game,object,true,&form))return false;
+        if(!silph_selection_has(s->options.only_species,sizeof(s->options.only_species),species,form))return false;
+    }
+#else
     if(!event&&s->only_active&&(species>=2048||!(s->options.only_species[species/8]&(1u<<(species%8)))))return false;
+#endif
     unsigned slot=(unsigned)((id^(id>>32))*UINT64_C(11400714819323198485))&2047;
     for(unsigned i=0;i<16;i++){unsigned n=(slot+i)&2047;if(s->seen[n].id==id&&s->seen[n].until>s->clock)return false;}return true;
 }
@@ -147,6 +159,15 @@ static int transfer_new(Farmer *s,const SilphSchedulePermit *permit,uint64_t now
     if(status==SILPH_MANAGED_NOT_READY&&now-s->owned_started<UINT64_C(15000000000))return 0;
     SilphTransferVerdict verdict={0};
     if(!status){data.options=s->options.keep_options;data.source=s->source;if(silph_transfer_evaluate(&data,sizeof(data),&verdict))status=SILPH_MANAGED_CONTRACT;}
+    #ifdef SILPH_PRESENT_SCOPED
+    if(!status&&verdict.decision==SILPH_VERDICT_CANDIDATE){
+        uint32_t form=0;bool regional=silph_species_regional((uint32_t)data.species);int inspected=0;
+        if(regional)inspected=silph_game_read_pokemon_form(s->game,pokemon,false,&form);
+        if(inspected||silph_selection_has(s->options.keep_species,sizeof(s->options.keep_species),(uint32_t)data.species,form)){
+            verdict.decision=SILPH_VERDICT_RETAIN;verdict.reasons=SILPH_REASON_SELECTED_SPECIES;
+        }
+    }
+#endif
     s->metrics.transfer_decision=verdict.decision;s->metrics.transfer_reasons=verdict.reasons;
     if(status||verdict.decision!=SILPH_VERDICT_CANDIDATE){
         s->metrics.transfer_error=status;silph_core_finish(s->scope,id,0);s->metrics.state=SILPH_FARMER_DONE;status=0;

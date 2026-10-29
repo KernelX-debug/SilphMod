@@ -4,11 +4,17 @@
 #include "maintenance-actions.h"
 #include "research-actions.h"
 #include "pass-actions.h"
+#ifdef SILPH_PRESENT_SCOPED
+#include "buddy-care.h"
+#endif
 
 enum {SILPH_SESSION_RUNNING=1,SILPH_SESSION_DONE=2,SILPH_SESSION_UNVERIFIED=3};
 enum {SILPH_SESSION_CATCH_LIMIT=1,SILPH_SESSION_SPIN_LIMIT=2,SILPH_SESSION_RESPONSE_UNKNOWN=3};
 typedef struct {
     SilphFarmerOptions farmer;
+#ifdef SILPH_PRESENT_SCOPED
+    SilphBuddyCareOptions buddy;
+#endif
     uint32_t abi,catches,spins,clean,max_spins,limit_count,research;
     struct {int32_t item;uint32_t floor;} limits[64];
 } SilphFarmerSessionOptions;
