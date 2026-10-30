@@ -108,7 +108,6 @@ The app brings together **Farmer**, **Kecleon (BETA)**, **AutoRocket (BETA)** an
 | Clean bag | Deletes surpluses of the selected types **from the start**, and maintains those limits during the session. It does not need to wait for the bag to fill up. |
 | Kecleon (BETA) | Automatic search and catching of candidates, with filters and per-account history. This is still under development. |
 | AutoRocket (BETA) | Goes through regular Grunt candidates only (for now), validates the incident, battles, catches according to the filters and heals the team between battles. Includes recommended team, two shields and a return location for catches (Alan Method). |
-| Event tricks | For now, collects rewards from the event boxes and repeats confirmed Candy collections, prioritizing Rare Candy. Has independent statistics and does not perform catches or spins. |
 | Fix error 12 | Location handling inside the game process, optional and tied to the session. |
 | Statistics | Accumulated catches, flees, spins, transfers, deleted items, XP, Stardust and active time. Kept when stopping, restarting and recovering the map. |
 | Clear statistics | Resets only the counters of the open mode, with the service stopped. In Kecleon it also clears its candidate history; in AutoRocket it deletes the history and the return location. Found below the statistics. |
@@ -153,18 +152,6 @@ In **Engine settings**, **Last cooldown location** lets you specify return coord
 **Maximum Rockets** limits accumulated completed battles and defaults to **700**. The statistics show **Rockets**, **Catches**, **Shinies**, **Items deleted**, **XP** and **Stardust**. **Clear statistics** resets those counters, the candidate history and the return location. Throw quality, berries and bag limits remain in the shared configuration.
 
 Encounters are caught without opening the camera. If the game presents the detail screen of the newly caught Pokémon or a size record, only the screen associated with that catch is closed. **Stop** cancels pending actions and leaving for another app pauses the mode; scrcpy, screenshots and recording keep the same focus handling as the Farmer. AutoRocket keeps its catches and does not transfer the collection.
-
-### Event tricks
-
-This mode is dedicated to collecting rewards from the event boxes while you follow your joystick route. In this edition it works with the Halloween boxes, with species Candy, Rare Candy. Pokémon encounters are left uncaught; it does not spin PokéStops or run the Farmer's auxiliary tasks.
-
-After a confirmed collection with Candy, it processes the box again while it remains available. When a response delivers Rare Candy, that box gets preference in the following collections. It also keeps room to discover new boxes and continue with species Candy.
-
-It works with the boxes known to the game, without adding its own distance filter. Quantities are counted from confirmed responses. The contents of a box are known when it is opened; rejected or unconfirmed responses keep their wait before continuing.
-
-The statistics show **Boxes opened**, **Pokémon Candy**, **Rare Candy / XL**, **Candy XL**, **XP** and **Stardust**. Repeated collections count as new operations on the same box. **Clear statistics** resets only this mode's counters.
-
-Collection continues in compatible menus and with the notification bar expanded. Leaving for another app or locking the screen pauses the mode, and it resumes on returning to the game. It includes **Fix error 12**, **Hide trainer name** and log export.
 
 ### Only catch: choosing which Pokémon to catch
 
