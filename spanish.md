@@ -108,7 +108,6 @@ La aplicación reúne **Farmer**, **Kecleon (BETA)**, **AutoRocket (BETA)** y **
 | Limpiar mochila | Elimina excedentes de los tipos seleccionados **desde el inicio**, y mantiene esos límites durante la sesión. No necesita esperar a que la mochila se llene. |
 | Kecleon (BETA) | Búsqueda y captura automática de candidatos, con filtros e historial por cuenta. Esto aún está en desarrollo. |
 | AutoRocket (BETA) | Recorre solo candidatos de reclutas normales (por ahora), valida la incidencia, combate, captura según los filtros y cura al equipo entre combates. Incluye equipo recomendado, dos escudos y ubicación de retorno para las capturas (Método Alan). |
-| Event tricks | Por ahora, recoge las recompensas de las cajas del evento y repite las recogidas de caramelos confirmadas, dando prioridad a las cajas de Caramelos Raros. Tiene estadísticas independientes y no realiza capturas ni giros. |
 | Solucionar error 12 | Tratamiento de ubicación dentro del proceso del juego, opcional y vinculado a la sesión. |
 | Estadísticas | Capturas, huidas, giros, transferencias, objetos eliminados, XP, polvo estelar y tiempo activo acumulados. Se conservan al detener, volver a iniciar y recuperar el mapa. |
 | Clear statistics | Restablece únicamente los contadores del modo abierto, con el servicio detenido. En Kecleon también limpia su historial de candidatos; en AutoRocket elimina el historial y la ubicación de retorno. Se encuentra debajo de las estadísticas. |
@@ -153,18 +152,6 @@ En **Engine settings**, **Last cooldown location** permite indicar unas coordena
 **Maximum Rockets** limita los combates completados acumulados y viene en **700**. Las estadísticas muestran **Rockets**, **Catches**, **Shinies**, **Items deleted**, **XP** y **Stardust**. **Clear statistics** restablece esos contadores, el historial de candidatos y la ubicación de retorno. La calidad de tiro, las bayas y los límites de mochila se mantienen en la configuración compartida.
 
 Los encuentros se capturan sin abrir la cámara. Si el juego presenta la ficha del Pokémon recién capturado o un récord de tamaño, se cierra únicamente la pantalla asociada a esa captura. **Stop** cancela las acciones pendientes y salir a otra app pausa el modo; scrcpy, capturas de pantalla y grabación conservan el mismo tratamiento de foco del Farmer. AutoRocket mantiene sus capturas y no transfiere la colección.
-
-### Event tricks
-
-Este modo se dedica a recoger recompensas de las cajas del evento mientras sigues la ruta de tu joystick. En esta edición trabaja con las cajas de Halloween, con caramelos de especies, Caramelos Raros. Los encuentros Pokémon se dejan sin capturar; no gira Poképaradas ni ejecuta las tareas auxiliares del Farmer.
-
-Después de una recogida confirmada con caramelos, vuelve a procesar la caja mientras continúe disponible. Cuando una respuesta entrega Caramelos Raros, esa caja recibe preferencia en las siguientes recogidas. También mantiene espacio para descubrir cajas nuevas y continuar con los caramelos de especies.
-
-Trabaja con las cajas conocidas por el juego, sin añadir un filtro propio de distancia. Las cantidades se contabilizan desde las respuestas confirmadas. El contenido de una caja se conoce al abrirla; las respuestas rechazadas o sin confirmación mantienen su espera antes de continuar.
-
-Las estadísticas muestran **Boxes opened**, **Pokémon Candy**, **Rare Candy / XL**, **Candy XL**, **XP** y **Stardust**. Las recogidas repetidas cuentan como nuevas operaciones sobre la misma caja. **Clear statistics** restablece únicamente los contadores de este modo.
-
-La recogida continúa en los menús compatibles y con la barra de notificaciones desplegada. Salir a otra app o bloquear la pantalla pausa el modo, y vuelve a continuar al regresar al juego. Incluye **Fix error 12**, **Hide trainer name** y exportación de registros.
 
 ### Only catch: escoger qué Pokémon capturar
 
