@@ -51,8 +51,10 @@ int silph_rocket_session_open(void *memory,size_t bytes,void *read,void *managed
     if(!memory||bytes!=sizeof(Rocket)||!read||!managed||!game||!link||!id||!config||config->mode!=3)return SILPH_MANAGED_ARGUMENT;
     Rocket *s=memory;if(s->opened)return SILPH_MANAGED_STATE;memset(s,0,bytes);s->read=read;s->managed=managed;s->game=game;s->link=link;s->identity=*id;s->config=*config;s->opened=1;
     s->rpc=calloc(1,silph_rpc_action_size());s->maintenance=calloc(1,silph_maintenance_size());s->medicine=calloc(1,silph_managed_promise_size());if(!s->rpc||!s->maintenance||!s->medicine)return SILPH_MANAGED_CAPACITY;
-    int r=silph_rpc_action_open(s->rpc,silph_rpc_action_size(),read,managed,game,id);
-    if(!r)r=silph_game_read_rocket_service(game,0,&s->incident);if(!r)r=silph_game_read_rocket_service(game,1,&s->gui);
+    unsigned stage=1;int r=silph_rpc_action_open(s->rpc,silph_rpc_action_size(),read,managed,game,id);
+    if(!r){stage=2;r=silph_game_read_rocket_service(game,0,&s->incident);}
+    if(!r){stage=3;r=silph_game_read_rocket_service(game,1,&s->gui);}
+    if(r)__android_log_print(ANDROID_LOG_ERROR,"SilphRocket","session initialization failed stage=%u error=%d",stage,r);
     s->metrics.request=1;phase(s,1,0,0);return r;
 }
 bool silph_rocket_inventory_due(void *memory){Rocket *s=memory;if(!s||!s->opened)return true;struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);uint64_t n=(uint64_t)t.tv_sec*1000000000+t.tv_nsec;
@@ -195,7 +197,7 @@ static int scan_director(Rocket *s,const SilphSchedulePermit *permit,SilphManage
 }
 static int find_director(Rocket *s,const SilphSchedulePermit *permit,uint64_t now){
     if(s->director.serial||now<s->director_at)return 0;s->director_at=now+UINT64_C(1000000000);
-    SilphManagedRef set={0};int r=fieldref(s,s->gui,"dddt",&set);if(!r)r=scan_director(s,permit,set);drop(s,&set);
+    SilphManagedRef set={0};int r=fieldref(s,s->gui,"cumh",&set);if(!r)r=scan_director(s,permit,set);drop(s,&set);
     const uint32_t layers[]={300,200,320,100,0,350,400,500,600,700,800,900,1000,1100};
     for(unsigned i=0;!r&&!s->director.serial&&i<14;i++){
         SilphReadArgument argument={.kind=SILPH_READ_ENUM32,.value.bits=layers[i]};SilphReadValue value={0};
@@ -421,7 +423,7 @@ static int capture_owner_match(Rocket *s,SilphManagedRef gui,uint64_t expected,b
     uint64_t state=0,id=0,post=0;SilphManagedRef pokemon={0},data={0};int r=scalar(s,gui,"currentState",SILPH_READ_ENUM32,&state,false);
     if(!r&&state!=2)return 0;
     if(!r)r=callref(s,gui,"get_CurrentPokemon",&pokemon);if(!r&&pokemon.serial)r=scalar(s,pokemon,"id_",SILPH_READ_U64,&id,false);
-    if(!r&&id==expected){r=fieldref(s,gui,"egbx",&data);if(!r&&data.serial)r=scalar(s,data,"IsPostEncounter",SILPH_READ_BOOL,&post,false);}
+    if(!r&&id==expected){r=fieldref(s,gui,"egiq",&data);if(!r&&data.serial)r=scalar(s,data,"IsPostEncounter",SILPH_READ_BOOL,&post,false);}
     if(!r)*match=id==expected&&post;int a=drop(s,&data),b=drop(s,&pokemon);return r?r:a?a:b;
 }
 static int capture_record_owner(Rocket *s,const SilphSchedulePermit *permit,SilphManagedRef *out){
@@ -449,7 +451,7 @@ static int capture_result_ui(Rocket *s,const SilphSchedulePermit *permit,uint64_
     if(!r&&istype(s,top.reference,"Niantic.Holoholo.UI.Pokemon","PokemonInfoGuiController")){
         r=callref(s,top.reference,"get_CurrentPokemon",&pokemon);
         if(!r&&pokemon.serial)r=scalar(s,pokemon,"id_",SILPH_READ_U64,&id,false);
-        if(!r&&id==s->capture_gate.captured){r=fieldref(s,top.reference,"egbx",&data);if(!r&&data.serial)r=scalar(s,data,"IsPostEncounter",SILPH_READ_BOOL,&post,false);}
+        if(!r&&id==s->capture_gate.captured){r=fieldref(s,top.reference,"egiq",&data);if(!r&&data.serial)r=scalar(s,data,"IsPostEncounter",SILPH_READ_BOOL,&post,false);}
         if(!r&&id==s->capture_gate.captured&&post){
             *blocked=true;uint32_t decision=rocket_capture_result(&s->capture_gate,id,true,now);
             if(decision==ROCKET_RESULT_DISMISS){SilphReadArgument expected={.kind=SILPH_READ_U64,.value.bits=id};r=action(s,permit,RK_CAPTURE_INFO,top.reference,&expected,1);

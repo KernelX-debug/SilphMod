@@ -30,7 +30,7 @@ static int release_rpc_ref(Read *s,SilphManagedRef *ref){
 }
 static int rpc_handler(Read *s,SilphManagedRef ref,void **object,void **klass){
     int status=silph_managed_target(s->managed,ref,object);*klass=status?NULL:s->base.object_get_class(*object);
-    void *expected=lookup_class(s,"holo-game.dll","Niantic.Holoholo.Rpc","IRpcHandler");
+    void *expected=lookup_class(s,"holo-game-interfaces.dll","Niantic.Holoholo.Rpc","IRpcHandler");
     if(!status&&(!expected||!*klass||!s->api.class_is_assignable_from(expected,*klass)))status=SILPH_MANAGED_CONTRACT;
     return status;
 }

@@ -235,7 +235,7 @@ static void *appearance_worker(void *unused){
             if(appearance_image.dynamic&&silph_managed_api_load(&api,resolve_managed,&appearance_image)){status=1;break;}}
         void *domain=api.domain_get?api.domain_get():NULL;if(domain&&!attached){attached=api.thread_current();owns=attached==NULL;if(owns)attached=api.thread_attach(domain);}
         if(attached){
-            uintptr_t first=appearance_image.base+UINT64_C(0x9f05564),second=appearance_image.base+UINT64_C(0x9f09734);
+            uintptr_t first=appearance_image.base+UINT64_C(0x9f63f98),second=appearance_image.base+UINT64_C(0x9f68170);
             if(!accessible(&appearance_image,first,16,PF_X)||!accessible(&appearance_image,second,16,PF_X)){status=1;break;}
             status=silph_visual_offset(&api,resolve_managed,&appearance_image,read_process,first,second,&offset);if(status!=5)break;
         }

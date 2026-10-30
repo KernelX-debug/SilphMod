@@ -4,6 +4,9 @@
 #include <string.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#ifdef SILPH_PILOT_EVENT
+#include "event-call-trace.h"
+#endif
 #ifdef SILPH_ENABLE_ACTIONS
 #include "managed-action.h"
 #include "core.h"
@@ -259,6 +262,10 @@ static int invoke_checked(Read *state,const void *found,void *object,uint32_t ki
         if(permit)status=SILPH_MANAGED_STATE;
 #endif
         if(!status) {
+#ifdef SILPH_PILOT_EVENT
+            const char *called=state->base.method_get_name(found);
+            if(called&&!strcmp(called,"bftu")){void *runtime=NULL;memcpy(&runtime,&state->base.runtime_invoke,sizeof(runtime));event_trace_call(found,runtime);}
+#endif
             void *exception=NULL,*result=state->base.runtime_invoke(found,instance,count?parameters:NULL,&exception);
             if(exception){status=SILPH_MANAGED_EXCEPTION;
 #ifdef SILPH_PRESENT_SCOPED
@@ -396,7 +403,7 @@ int silph_event_process(void *memory,const SilphSchedulePermit *permit,SilphMana
     r=silph_managed_target(s->managed,service,&a);if(!r)r=silph_managed_target(s->managed,tappable,&b);
     if(!r&&(!research_type(s,a,"Niantic.Holoholo.Services.DynamicTappables","DynamicTappableBehaviorService")||!research_type(s,b,"","DynamicTappableController")))r=SILPH_MANAGED_CONTRACT;
     SilphReadArgument arg={.kind=SILPH_READ_REFERENCE,.value.reference=tappable};
-    if(!r)r=call_internal(s,service,NULL,"bfvx",SILPH_READ_REFERENCE,&arg,1,out,permit);return leave_read(s,r);
+    if(!r)r=call_internal(s,service,NULL,"bftu",SILPH_READ_REFERENCE,&arg,1,out,permit);return leave_read(s,r);
 }
 #endif
 #ifdef SILPH_PRESENT_SCOPED
@@ -481,7 +488,7 @@ int silph_action_release(void *memory,const SilphSchedulePermit *permit,void *sc
     void *object=NULL,*bag_object=NULL;status=silph_managed_target(state->managed,pokemon,&object);
     if(!status)status=silph_managed_target(state->managed,bag,&bag_object);
     void *expected=lookup_class(state,"holo-protos.dll","Holoholo.Rpc","PokemonProto");
-    void *bag_class=lookup_class(state,"holo-game.dll","Niantic.Holoholo","IPokemonBag");
+    void *bag_class=lookup_class(state,"holo-game-interfaces.dll","Niantic.Holoholo","IPokemonBag");
     if(!status&&(!expected||!bag_class||state->base.object_get_class(object)!=expected
         ||!state->api.class_is_assignable_from(bag_class,state->base.object_get_class(bag_object))))status=SILPH_MANAGED_CONTRACT;
     const void *field=status?NULL:find_field(state,expected,"id_",NULL,NULL,&status);uint64_t id=0;

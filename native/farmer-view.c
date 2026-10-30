@@ -8,6 +8,10 @@
 #include <time.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#ifdef SILPH_PILOT_EVENT
+#include "callback-lane.h"
+#include "callback-memory.h"
+#endif
 
 typedef struct {
     const void **(*assemblies)(void *,size_t *);
@@ -32,10 +36,17 @@ typedef struct {
     SilphVisualAllowed allowed;SilphFarmerPump pump;
     unsigned owner,closed,busy,continuation,rocket,kecleon;uint32_t interval_ms;uint64_t next;
     SilphFarmerViewMetrics metrics;
+#ifdef SILPH_PILOT_EVENT
+    void *map_class;const void *map_alive;
+#endif
 } View;
 static _Atomic(View *) current;
 static atomic_uint owner_tid;
+#ifdef SILPH_PILOT_EVENT
+static atomic_uint event_callback_depth;
+#else
 static void (*update_original)(void *,const void *);
+#endif
 static uint64_t clock_ns(void){struct timespec t={0};return clock_gettime(CLOCK_MONOTONIC,&t)?0:(uint64_t)t.tv_sec*UINT64_C(1000000000)+(uint64_t)t.tv_nsec;}
 static void *klass(View *s,const char *assembly,const char *space,const char *name){
     size_t n=0;const void **all=s->api.assemblies(s->base.domain_get(),&n);if(!all||!n||n>2048)return NULL;
@@ -76,9 +87,18 @@ static uint32_t classify(View *s,void *map){
     for(unsigned i=0;i<3;i++)if(k&&k==s->stores[i])return SILPH_VIEW_STORE;
     return visible&&k==s->main_menu?SILPH_VIEW_MAP:0;
 }
+#ifdef SILPH_PILOT_EVENT
+static void observe_update(shadowhook_cpu_context_t *cpu,void *data){
+    (void)data;if(!cpu||atomic_load(&owner_tid)!=(unsigned)syscall(__NR_gettid))return;
+    SilphCallbackScope scope __attribute__((cleanup(silph_callback_leave)))=silph_callback_enter(&event_callback_depth);
+    if(atomic_load(&event_callback_depth)!=1)return;
+    View *s=atomic_load(&current);void *object=(void *)cpu->regs[0];
+    if(!s||s->closed||s->busy||s->owner!=(unsigned)syscall(__NR_gettid)||!silph_callback_object(object,s->scheduler))return;
+#else
 static void update(void *object,const void *m){
     update_original(object,m);if(atomic_load(&owner_tid)!=(unsigned)syscall(__NR_gettid))return;View *s=atomic_load(&current);
     if(!s||s->closed||s->busy||s->owner!=(unsigned)syscall(__NR_gettid)||s->base.object_get_class(object)!=s->scheduler)return;
+#endif
     s->metrics.updates++;uint64_t now=clock_ns();if(!now||now<s->next)return;
     uint32_t interval=s->continuation&&s->interval_ms==100?33:s->interval_ms;s->next=now+(uint64_t)interval*UINT64_C(1000000);
     void *map=NULL;if(silph_managed_target(s->managed,s->map,&map)||!map){s->metrics.stage=4;
@@ -86,6 +106,11 @@ static void update(void *object,const void *m){
         s->pump(NULL,false,0);
 #endif
         return;}
+#ifdef SILPH_PILOT_EVENT
+    uintptr_t live=0;
+    if(!silph_callback_object(map,s->map_class)){s->metrics.stage=4;s->pump(NULL,false,0);return;}
+    s->api.get(map,s->map_alive,&live);if(!live){s->metrics.stage=4;s->pump(NULL,false,0);return;}
+#endif
     s->busy=1;uint32_t kind=s->allowed(s->allowed_context)?classify(s,map):0;s->metrics.kind=kind;
     if(kind){s->metrics.pumps++;if(kind!=SILPH_VIEW_MAP)s->metrics.menu_pumps++;}else s->metrics.skipped++;
     uint64_t cost=clock_ns()-now;if(cost>s->metrics.max_ns)s->metrics.max_ns=cost;s->busy=0;
@@ -120,23 +145,38 @@ int silph_farmer_view_open(void *memory,size_t bytes,const SilphManagedApi *base
 #endif
     const char *stores[]={"StorefrontGuiController","StorefrontGuiControllerV2","StorefrontGuiControllerLinkout"};
     for(unsigned i=0;i<3;i++)s->stores[i]=klass(s,"holo-game.dll","Niantic.Holoholo.Storefront",stores[i]);
-    void *gui=klass(s,"holo-game.dll","Niantic.Holoholo.NUI","GuiLayerService"),*go=klass(s,"UnityEngine.CoreModule.dll","UnityEngine","GameObject");
+    void *gui=klass(s,"holo-game-core.dll","Niantic.Holoholo.NUI","GuiLayerService"),*go=klass(s,"UnityEngine.CoreModule.dll","UnityEngine","GameObject");
     s->top=method(s,gui,"TopGui",18);s->active=method(s,s->base.object_get_class(map),"get_IsActiveState",2);s->visible=method(s,s->base.object_get_class(map),"get_IsVisible",2);
     s->remote=method(s,s->pokemon,"get_IsRemoteTradeView",2);s->selection=field(s,s->pokemon,"multiChoiceButtons","UnityEngine.GameObject");s->selection_active=method(s,go,"get_activeInHierarchy",2);
-    const void *entry=method(s,s->scheduler,"Update",1),*gui_field=field(s,s->base.object_get_class(map),"ellz","Niantic.Holoholo.NUI.IGuiLayerService");
+    const void *entry=method(s,s->scheduler,"Update",1),*gui_field=field(s,s->base.object_get_class(map),"eltg","Niantic.Holoholo.NUI.IGuiLayerService");
     if(!s->scheduler||!s->pokemon||!s->items||!s->profile||!s->main_menu||!s->top||!s->active||!s->visible||!entry||!gui_field)return 1;
+#ifdef SILPH_PILOT_EVENT
+    s->map_class=s->base.object_get_class(map);s->map_alive=field(s,s->map_class,"m_CachedPtr","System.IntPtr");if(!s->map_alive)return 1;
+#endif
     s->metrics.stage=3;size_t size=silph_managed_size(4);s->managed=calloc(1,size);if(!s->managed)return 1;
     if(silph_managed_open(s->managed,size,base,4,64)){free(s->managed);s->managed=NULL;return 1;}
     s->metrics.stage=5;
     void *service=NULL;s->api.get(map,gui_field,&service);if(!service||s->base.object_get_class(service)!=gui)return 1;
     if(silph_managed_retain(s->managed,map,true,&s->map)||silph_managed_retain(s->managed,service,true,&s->gui))return 1;
     memcpy(&s->address,(const char *)entry+offset,sizeof(s->address));if((s->address&3)||!address(s->address,context))return 1;
-    memcpy(s->before,(void *)s->address,16);atomic_store(&owner_tid,s->owner);atomic_store(&current,s);s->stub=shadowhook_hook_func_addr((void *)s->address,(void *)update,(void **)&update_original);
+    memcpy(s->before,(void *)s->address,16);atomic_store(&owner_tid,s->owner);atomic_store(&current,s);
+#ifdef SILPH_PILOT_EVENT
+    s->stub=shadowhook_intercept_func_addr((void *)s->address,observe_update,NULL,SHADOWHOOK_INTERCEPT_WITH_FPSIMD_READ_WRITE);
+#else
+    s->stub=shadowhook_hook_func_addr((void *)s->address,(void *)update,(void **)&update_original);
+#endif
     if(!s->stub){atomic_store(&current,NULL);atomic_store(&owner_tid,0);return 1;}s->metrics.available=1;s->metrics.stage=2;return 0;
 }
 int silph_farmer_view_close(void *memory,SilphFarmerViewMetrics *out){
     View *s=memory;if(!s||s->owner!=(unsigned)syscall(__NR_gettid)||s->busy)return 1;s->closed=1;
-    if(s->stub){if(shadowhook_unhook(s->stub)||memcmp((void *)s->address,s->before,16))return 1;s->stub=NULL;}
+    if(s->stub){
+#ifdef SILPH_PILOT_EVENT
+        int removed=shadowhook_unintercept(s->stub);
+#else
+        int removed=shadowhook_unhook(s->stub);
+#endif
+        if(removed||memcmp((void *)s->address,s->before,16))return 1;s->stub=NULL;
+    }
     SilphManagedRef *refs[]={&s->gui,&s->map};for(unsigned i=0;i<2;i++)if(refs[i]->serial){if(silph_managed_release(s->managed,*refs[i]))return 1;memset(refs[i],0,sizeof(*refs[i]));}
     SilphManagedMetrics m={0};if(s->managed){if(silph_managed_close(s->managed,&m))return 1;free(s->managed);s->managed=NULL;}
     if(atomic_load(&current)==s){atomic_store(&current,NULL);atomic_store(&owner_tid,0);}s->metrics.available=0;s->metrics.hooks=0;s->metrics.remaining=m.live_refs;s->metrics.created=m.refs_created;s->metrics.released=m.refs_released;if(out)*out=s->metrics;return 0;

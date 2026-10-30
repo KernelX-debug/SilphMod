@@ -43,7 +43,7 @@ final class CheckLog {
         try{
             JSONObject row=new JSONObject().put("time",System.currentTimeMillis()).put("event",event).put("message",LogPrivacy.redact(message));
             byte[] data=(row+"\n").getBytes(StandardCharsets.UTF_8);
-            boolean terminal=event.equals("finished")||event.equals("error")||event.startsWith("startup_")||event.startsWith("failure_")||event.equals("native_cleanup")||event.equals("native_failure_status");
+            boolean terminal=event.equals("finished")||event.equals("error")||event.startsWith("startup_")||event.startsWith("failure_")||event.equals("native_cleanup")||event.equals("native_failure_status")||event.equals("event_summary")||event.equals("logging_health");
             if(bytes+data.length>(terminal?MAX_BYTES:MAX_BYTES-FINAL_RESERVE)){dropped++;return;}
             try(FileOutputStream out=new FileOutputStream(file,true)){out.write(data);}
             bytes+=data.length;
@@ -51,6 +51,12 @@ final class CheckLog {
     }
     void write(String event,String message){
         synchronized(FILE_LOCK){try{append(event,message);}catch(IOException error){writeError=error.toString();dropped++;}}
+    }
+    void health(){
+        synchronized(FILE_LOCK){
+            try{append("logging_health","bytes="+bytes+" droppedEvents="+dropped+" writeError="+writeError);}
+            catch(IOException error){writeError=error.toString();dropped++;}
+        }
     }
     static JSONObject device(Context context){
         JSONObject result=new JSONObject();

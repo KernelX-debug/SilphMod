@@ -266,7 +266,7 @@ static void setup_trainer(Visual *s,uint32_t offset){
         s->hud_fields[0]=field(s,s->hud,"playerName","UnityEngine.UI.Text");s->hud_fields[1]=field(s,s->hud,"playerNameShadow","UnityEngine.UI.Text");
         s->profile_field=field(s,s->profile,"playerNameText","UnityEngine.UI.Text");s->friends_field=field(s,s->friends,"playerName","UnityEngine.UI.Text");
         s->get_hud=method(s,klass(s,"holo-game.dll","Niantic.Holoholo.Map","MapExploreState"),"get_PlayerHud","Niantic.Holoholo.Map.UI.IPlayerHudGuiController",NULL);
-        const void *methods[]={method(s,s->hud,"Initialize","System.Void",NULL),method(s,s->hud,"SetVisible","System.Void","System.Boolean"),method(s,s->hud,"coiw","System.Void","Niantic.Holoholo.PlayerService.PlayerInfo"),method(s,s->profile,"Reinitialize","System.Void",NULL),method(s,s->friends,"SetI18NText","System.Void",NULL)};
+        const void *methods[]={method(s,s->hud,"Initialize","System.Void",NULL),method(s,s->hud,"SetVisible","System.Void","System.Boolean"),method(s,s->hud,"cofc","System.Void","Niantic.Holoholo.PlayerInfo"),method(s,s->profile,"Reinitialize","System.Void",NULL),method(s,s->friends,"SetI18NText","System.Void",NULL)};
         bool valid=s->get_text&&s->set_text&&s->text_alive&&s->hud_fields[0]&&s->hud_fields[1]&&s->profile_field&&s->friends_field;
         for(unsigned i=0;i<5;i++)valid=valid&&methods[i];
 

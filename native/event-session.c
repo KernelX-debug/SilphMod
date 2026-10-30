@@ -79,7 +79,7 @@ int silph_events_tick(void *memory,const SilphSchedulePermit *permit,const Silph
     uint64_t started=clock_ns();int r=0;
     for(unsigned i=0;!r&&i<SILPH_EVENT_PENDING;i++)if(s->pending[i].promise)r=finish(s,&s->pending[i],now,wall);
     if(!r&&now>=s->next_scan&&now>=s->paused_until&&s->metrics.pending<SILPH_EVENT_PENDING){
-        s->next_scan=now+UINT64_C(100000000);SilphManagedRef list={0},object={0};uint64_t count=0;r=field(s,s->directory,"emdt",&list);if(!r)r=value(s,list,"get_Count",SILPH_READ_I32,&count);if(!r&&count>65536)r=SILPH_MANAGED_CONTRACT;
+        s->next_scan=now+UINT64_C(100000000);SilphManagedRef list={0},object={0};uint64_t count=0;r=field(s,s->directory,"emkz",&list);if(!r)r=value(s,list,"get_Count",SILPH_READ_I32,&count);if(!r&&count>65536)r=SILPH_MANAGED_CONTRACT;
         uint64_t scan_started=clock_ns();
         for(unsigned i=0;!r&&count&&i<SILPH_EVENT_PRIORITY&&s->metrics.pending<SILPH_EVENT_PENDING-1;i++){
             SilphEventRareBox *box=&s->priority.boxes[s->priority.cursor++%SILPH_EVENT_PRIORITY];

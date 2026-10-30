@@ -44,7 +44,7 @@ int silph_rocket_invoke(void *memory,const SilphSchedulePermit *permit,uint32_t 
         uint64_t encounter=0;const void *id=status?NULL:find_field(s,s->base.object_get_class(cached),"EncounterId",NULL,NULL,&status);
         if(!status&&!matches_kind(s,s->api.field_get_type(id),SILPH_READ_U64))status=SILPH_MANAGED_CONTRACT;
         if(!status){s->api.field_get_value(cached,id,&encounter);if(encounter!=args[0].value.bits)status=SILPH_MANAGED_STALE;}
-        if(!status)status=call_internal(s,receiver,NULL,"betq",SILPH_READ_VOID,&args[1],1,out,permit);
+        if(!status)status=call_internal(s,receiver,NULL,"bert",SILPH_READ_VOID,&args[1],1,out,permit);
         return leave_read(s,status);
     }
 #endif
@@ -79,7 +79,7 @@ int silph_rocket_invoke(void *memory,const SilphSchedulePermit *permit,uint32_t 
         void *object=NULL;status=silph_managed_target(s->managed,receiver,&object);
         if(!status&&(count||!research_type(s,object,"Niantic.Holoholo.Combat.PokemonPartyState","CombatPokemonPartyWidget")))status=SILPH_MANAGED_CONTRACT;
         SilphReadValue service={0},league={0},scroll={0},page={0},party={0};
-        const char *fields[]={"dnoc","dnoq","dynoScrollRect"};SilphReadValue *values[]={&service,&league,&scroll};
+        const char *fields[]={"dnux","dnvl","dynoScrollRect"};SilphReadValue *values[]={&service,&league,&scroll};
         for(unsigned i=0;!status&&i<3;i++){
             const void *field=find_field(s,s->base.object_get_class(object),fields[i],NULL,NULL,&status);
             if(!status){void *v=NULL;s->api.field_get_value(object,field,&v);status=accept_reference(s,s->api.field_get_type(field),v,values[i]);}
@@ -92,7 +92,7 @@ int silph_rocket_invoke(void *memory,const SilphSchedulePermit *permit,uint32_t 
         if(!status&&!league.reference.serial){
             SilphReadValue gate={0},rolled_back={0};SilphManagedRef key={0};const char *template="NPC_LEAGUE_SUFFIX_ROLL_BACK";
             void *widget=NULL;status=silph_managed_target(s->managed,receiver,&widget);
-            const void *field=status?NULL:find_field(s,s->base.object_get_class(widget),"dnom",NULL,NULL,&status);
+            const void *field=status?NULL:find_field(s,s->base.object_get_class(widget),"dnvh",NULL,NULL,&status);
             if(!status){void *v=NULL;s->api.field_get_value(widget,field,&v);status=accept_reference(s,s->api.field_get_type(field),v,&gate);}
             if(!status)status=silph_managed_ascii(s->managed,template,(uint32_t)strlen(template),&key);
             SilphReadArgument argument={.kind=SILPH_READ_REFERENCE,.value.reference=key};
@@ -139,7 +139,7 @@ int silph_rocket_invoke(void *memory,const SilphSchedulePermit *permit,uint32_t 
         SilphReadValue pokemon={0},data={0};uint64_t id=0;uint8_t post=0;
         if(!status)status=call_internal(s,source,NULL,"get_CurrentPokemon",SILPH_READ_REFERENCE,NULL,0,&pokemon,permit);
         if(!status&&!pokemon.reference.serial)status=SILPH_MANAGED_NOT_READY;
-        const void *field=status?NULL:find_field(s,s->base.object_get_class(object),"egbx",NULL,NULL,&status);
+        const void *field=status?NULL:find_field(s,s->base.object_get_class(object),"egiq",NULL,NULL,&status);
         if(!status){void *v=NULL;s->api.field_get_value(object,field,&v);status=accept_reference(s,s->api.field_get_type(field),v,&data);}
         if(!status&&!data.reference.serial)status=SILPH_MANAGED_NOT_READY;
         if(!status)status=silph_managed_target(s->managed,pokemon.reference,&object);

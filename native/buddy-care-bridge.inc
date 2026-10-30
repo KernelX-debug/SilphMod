@@ -40,7 +40,7 @@ int silph_buddy_care_cost(void *memory,const SilphSchedulePermit *p,SilphManaged
 int silph_buddy_care_mega(void *memory,const SilphSchedulePermit *p,SilphManagedRef bag,SilphManagedRef pokemon,uint64_t id,uint32_t form,SilphReadValue *out){
     if(!out||!id||!form||!silph_schedule_permitted(p,true))return SILPH_MANAGED_ARGUMENT;clear_value(out);Read *s=memory;int r=enter_read(s);if(r)return r;
     SilphManagedRef proto={0};void *object=NULL;r=silph_managed_target(s->managed,bag,&object);
-    void *expected=lookup_class(s,"holo-game.dll","Niantic.Holoholo","IPokemonBag");
+    void *expected=lookup_class(s,"holo-game-interfaces.dll","Niantic.Holoholo","IPokemonBag");
     if(!r&&(!expected||!s->api.class_is_assignable_from(expected,s->base.object_get_class(object))))r=SILPH_MANAGED_CONTRACT;
     if(!r)r=fresh_proto(s,"MegaEvolvePokemonProto",&proto);
     if(!r)r=fresh_scalar(s,proto,"PokemonId",SILPH_READ_U64,id);

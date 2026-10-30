@@ -27,7 +27,7 @@ final class NativeCheckRunner {
         final boolean workStarted;
         ProgressStalled(boolean workStarted){super("Native engine progress stalled");this.workStarted=workStarted;}
     }
-    static final String GAME="com.nianticlabs.pokemongo",GAME_SHA="a98b7107ef60fb91abc1c7cea9678d45e71b715bd53aacaf4b3ff688b99b6cfd";
+    static final String GAME="com.nianticlabs.pokemongo",GAME_SHA="88cff795fca76d05e4bd4e97dd147a50a0b52450ec48c3a82f2804e90d88c356";
     static final class Result {final String reason;final boolean cleanup;Result(String reason,boolean cleanup){this.reason=reason;this.cleanup=cleanup;}}
     private final Context context;
     private final int mode;
@@ -59,6 +59,8 @@ final class NativeCheckRunner {
     private String statusAddress,nonceText;
     private String snapshotKey="";
     private long snapshotLoggedAt;
+    private final EventLogCadence eventLogCadence=new EventLogCadence();
+    private volatile NativeSessionWire.Snapshot eventLastSnapshot;
     private boolean injected,cleanup;
     private String finishReason="";
     private volatile int nativeReason,nativeError;
@@ -233,7 +235,7 @@ final class NativeCheckRunner {
                 cleanGameStage();
                 for(Thread thread:new Thread[]{pulseThread,readerThread,focusThread})if(thread!=null){thread.join(3500);if(thread.isAlive())throw new IOException("Native controller worker did not stop");}
                 try{consume();}catch(Exception error){log.write("final_event_error",error.toString());}
-                if(controller!=null)settings.save(mode,controller.totals());
+                if(controller!=null){settings.save(mode,controller.totals());if(mode==4)eventSummary();}
                 if(returnToApp)command("am start -n "+BuildConfig.APPLICATION_ID+"/dev.silphmod.nativecheck.MainActivity --ei mode "+mode,5000);
     }
     private void closeBoundGame() throws Exception {
@@ -250,6 +252,7 @@ final class NativeCheckRunner {
         kecleon=null;rocket=null;controller=null;client=null;pulseThread=readerThread=focusThread=null;lines.clear();candidates.clear();
         focusActive=focusQuit=streamFailed=streamEnded=pulseQuit=stopAcknowledged=cleanupForeground=false;focusAt=0;pulseFailure=null;
         frames=sequence=0;gamePid=0;ticks=0;snapshotKey="";snapshotLoggedAt=0;injected=cleanup=false;finishReason="";statusAddress=nonceText=null;
+        eventLogCadence.reset();eventLastSnapshot=null;
         startupWorkStarted=false;nativeReason=nativeError=0;progressWatch=null;controlKey=null;
         farmerMenuBlocked=false;
         connectedAt=lastGameActiveAt=0;confirmedWork=connectionDiagnosed=failedProcessAlive=failedWhileActive=false;exitReport=null;
@@ -268,7 +271,7 @@ final class NativeCheckRunner {
         startupStage="game_profile";
         settings.config(mode,readonly);
         PackageInfo info=context.getPackageManager().getPackageInfo(GAME,0);
-        if(!"0.433.1".equals(info.versionName))throw new IOException("Pokémon GO 0.433.1 required");
+        if(!"0.435.1".equals(info.versionName))throw new IOException("Pokémon GO 0.435.1 required");
         for(String other:new String[]{"dev.silphmod.nativetest","dev.silphmod.nativecheck"}){
             if(other.equals(BuildConfig.APPLICATION_ID))continue;
             String services=command("dumpsys activity services "+other,8000);
@@ -330,11 +333,13 @@ final class NativeCheckRunner {
                 if(snapshot.caught!=0||snapshot.spun!=0||snapshot.transferred!=0||snapshot.discarded!=0)confirmedWork=true;
                 nativeReason=snapshot.reason;nativeError=snapshot.error;
                 if((snapshot.flags&2)!=0){if(accountHi==0&&accountLo==0){accountHi=snapshot.accountHi;accountLo=snapshot.accountLo;}else if(accountHi!=snapshot.accountHi||accountLo!=snapshot.accountLo)throw new IllegalStateException("Account changed during recovery");}
+                long now=SystemClock.elapsedRealtime();
+                if(mode==4){eventLastSnapshot=snapshot;if(!eventLogCadence.due(now,snapshot.state,snapshot.flags,snapshot.error,snapshot.reason,snapshot.rewardsAvailable,snapshot.visualFailed,snapshot.locationStatus,snapshot.researchStatus))return;}
                 String key="state="+snapshot.state+" flags="+snapshot.flags+" error="+snapshot.error+" reason="+snapshot.reason+" catches="+snapshot.caught+" spins="+snapshot.spun+" transferred="+snapshot.transferred+" items="+snapshot.discarded+" encounters="+snapshot.encounters+" candidateState="+snapshot.candidateState+" xp="+snapshot.xp+" stardust="+snapshot.stardust+" rewardsAvailable="+snapshot.rewardsAvailable+" encounterId="+Long.toUnsignedString(snapshot.encounterId)+" capturedId="+Long.toUnsignedString(snapshot.capturedId)+" visualAvailable="+snapshot.visualAvailable+" visualFailed="+snapshot.visualFailed+" ivReads="+snapshot.ivReads+" nameUpdates="+snapshot.nameUpdates;
 
                 key+=" locationStatus="+snapshot.locationStatus;if(mode==4)key+=" eventBoxes="+snapshot.spun+" pokemonCandy="+snapshot.caught+" rareCandy="+snapshot.shinies+" candyXL="+snapshot.discarded+" rareCandyXL="+snapshot.candidateRequest+" pending="+snapshot.candidateState+" rewardError="+snapshot.researchStatus;
                 if(mode==1)key+=" researchState="+snapshot.candidateState+" researchClaims="+(snapshot.candidateRequest&0xffffffffL)+" researchRemoved="+(snapshot.candidateRequest>>>32)+" researchStatus="+snapshot.researchStatus;
-                long now=SystemClock.elapsedRealtime();if(!key.equals(snapshotKey)||now-snapshotLoggedAt>=5000){snapshotKey=key;snapshotLoggedAt=now;event("native_snapshot","sequence="+sequence+" "+key);}
+                if(mode==4||!key.equals(snapshotKey)||now-snapshotLoggedAt>=5000){snapshotKey=key;snapshotLoggedAt=now;event("native_snapshot","sequence="+sequence+" "+key);}
             }
             public void candidate(NativeKecleonWire.Event value){startupWorkStarted=true;event(mode==3?"rocket_native_event":"kecleon_native_event","request="+value.request+" phase="+value.phase+" reason="+value.reason+" verified="+value.verified+" source="+value.source+" fort="+value.fort+" incident="+value.incident);if(!candidates.offer(value)){streamFailed=true;event(mode==3?"rocket_queue":"kecleon_queue","overflow");}}
             public void reply(long executed){progressWatch.reply(SystemClock.elapsedRealtime(),executed);}
@@ -554,8 +559,8 @@ final class NativeCheckRunner {
         String line;while((line=lines.poll())!=null){
             int separator=line.indexOf('\t');if(separator<0)throw new IOException("Invalid session event");
             String kind=line.substring(0,separator),message=line.substring(separator+1);log.write(kind,message);
-            if(kind.equals("native_snapshot"))settings.save(mode,controller.totals());
-            if(kind.equals("status")||kind.equals("native_snapshot"))display.accept(status,details());
+            if(kind.equals("native_snapshot")&&mode!=4)settings.save(mode,controller.totals());
+            if(kind.equals("status")||kind.equals("native_snapshot")&&mode!=4)display.accept(status,details());
         }
         NativeKecleonWire.Event candidate;while((candidate=candidates.poll())!=null){if(kecleon!=null)kecleon.accept(candidate);if(rocket!=null)rocket.accept(candidate);}
         if(kecleon!=null)kecleon.tick();if(rocket!=null)rocket.tick();
@@ -568,7 +573,7 @@ final class NativeCheckRunner {
             consume();if(controller.finished())break;
             long now=SystemClock.elapsedRealtime();settings.elapsedPulse(mode,focusActive&&now-focusAt<=2500&&(mode==3?controller.active():status.equals("Active"))&&!stopping);
             if(stopping){controller.requestStop("Stopped by user");if(stopAt==0)stopAt=now;}
-            if(now-lastDisplay>=1000){lastDisplay=now;display.accept(status,details());}
+            if(now-lastDisplay>=1000){lastDisplay=now;if(mode==4&&frames>0)settings.save(mode,controller.totals());display.accept(status,details());}
             wakeOwnerForCleanup();
             if(readonly&&now-begin>360_000&&stopAt==0){controller.requestStop("Session time limit reached");stopAt=now;}
             if(now-lastPid>=1000){if(readTicks(gamePid)!=ticks)throw new IOException("Game process changed");lastPid=now;}
@@ -592,6 +597,20 @@ final class NativeCheckRunner {
             SystemClock.sleep(100);
         }
         consume();log.write("telemetry","dropped="+droppedLogs);
+    }
+    private void eventSummary(){
+        NativeSessionWire.Snapshot s=eventLastSnapshot;if(s==null)return;
+        NativeSessionState.Totals t=controller.totals();
+        try{
+            JSONObject result=new JSONObject().put("scope","native_attempt").put("sequence",s.sequence).put("frames",frames)
+                .put("state",s.state).put("error",s.error).put("reason",s.reason).put("cleanupConfirmed",cleanup)
+                .put("requests",s.encounters).put("boxesOpened",s.spun).put("unsuccessful",s.fled).put("pokemonCandy",s.caught)
+                .put("rareCandy",Math.max(0,s.shinies-s.candidateRequest)).put("rareCandyXL",s.candidateRequest).put("candyXL",s.discarded)
+                .put("pending",s.candidateState).put("rewardError",s.researchStatus).put("xp",s.xp).put("stardust",s.stardust)
+                .put("accumulatedBoxes",t.spun).put("accumulatedPokemonCandy",t.caught).put("accumulatedRareCandyAndXL",t.shinies)
+                .put("accumulatedCandyXL",t.discarded).put("elapsedMs",settings.elapsed(mode));
+            log.write("event_summary",result.toString());log.health();
+        }catch(org.json.JSONException error){log.write("error","Cannot encode Event tricks summary");}
     }
     private JSONObject readNativeStatus(String event) throws Exception {
         File reader=new File(context.getApplicationInfo().nativeLibraryDir,mode==4?"libsilph-event-status.so":mode==1?"libsilph-farmer-status.so":mode==2?"libsilph-kecleon-status.so":"libsilph-rocket-status.so");

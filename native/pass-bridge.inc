@@ -2,9 +2,9 @@ int silph_pass_enumerate(void *memory,SilphManagedRef receiver,uint32_t operatio
     int status=silph_gift_enumerate(memory,receiver,operation,out);if(status!=SILPH_MANAGED_CONTRACT)return status;
     Read *s=memory;status=enter_read(s);if(status)return status;void *object=NULL;status=silph_managed_target(s->managed,receiver,&object);
     void *owner=lookup_class(s,"holo-game.dll","Niantic.Holoholo.UI.TodayView.EventPass","EventPassService"),*expected=NULL,*iterator=NULL;
-    for(unsigned i=0;owner&&s->research_nested&&i<256;i++){void *nested=s->research_nested(owner,&iterator);if(!nested)break;const char *name=s->api.class_get_name(nested);if(name&&!strcmp(name,"fyr")){if(expected){status=SILPH_MANAGED_CONTRACT;break;}expected=nested;}}
+    for(unsigned i=0;owner&&s->research_nested&&i<256;i++){void *nested=s->research_nested(owner,&iterator);if(!nested)break;const char *name=s->api.class_get_name(nested);if(name&&!strcmp(name,"fvs")){if(expected){status=SILPH_MANAGED_CONTRACT;break;}expected=nested;}}
     if(!status&&(!expected||s->base.object_get_class(object)!=expected))status=SILPH_MANAGED_CONTRACT;
-    const char *names[]={"MoveNext","cfkm","cfkj","cfkn"};uint32_t kind=operation==1?SILPH_READ_BOOL:operation==3?SILPH_READ_VOID:SILPH_READ_REFERENCE;
+    const char *names[]={"MoveNext","cffa","cfex","cffb"};uint32_t kind=operation==1?SILPH_READ_BOOL:operation==3?SILPH_READ_VOID:SILPH_READ_REFERENCE;
     if(!status)status=call_internal(s,receiver,NULL,names[operation-1],kind,NULL,0,out,NULL);return leave_read(s,status);
 }
 int silph_pass_invoke(void *memory,const SilphSchedulePermit *permit,uint32_t operation,SilphManagedRef receiver,const SilphReadArgument *args,uint32_t count,SilphReadValue *out){

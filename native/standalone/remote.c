@@ -409,6 +409,42 @@ static int legacy_syscall_info(pid_t pid,const struct user_pt_regs *registers,st
     memset(info,0,sizeof(*info));info->op=registers->regs[7]?PTRACE_SYSCALL_INFO_EXIT:PTRACE_SYSCALL_INFO_ENTRY;
     if(info->op==PTRACE_SYSCALL_INFO_ENTRY)info->entry.nr=(uint64_t)number;return 0;
 }
+#ifdef SILPH_LEGACY_HWSTEP
+static int legacy_debug_quiet(pid_t pid){
+    const int notes[]={NT_ARM_HW_BREAK,NT_ARM_HW_WATCH};
+    for(unsigned i=0;i<2;i++){
+        struct user_hwdebug_state debug={0};struct iovec data={&debug,sizeof(debug)};
+        if(ptrace(PTRACE_GETREGSET,pid,(void *)(intptr_t)notes[i],&data))return -1;
+        unsigned count=debug.dbg_info&0xffu;
+        if(count>16||data.iov_len<8u+count*sizeof(debug.dbg_regs[0])||data.iov_len>sizeof(debug)){errno=ENOTSUP;return -1;}
+        for(unsigned j=0;j<count;j++)if(debug.dbg_regs[j].ctrl&1u)return 0;
+    }
+    return 1;
+}
+static int legacy_user_boundary(SilphTrace *trace,struct user_pt_regs *registers){
+    trace->stage="legacy_user_boundary";
+    int quiet=legacy_debug_quiet(trace->pid);
+    if(ptrace(PTRACE_SINGLESTEP,trace->pid,NULL,NULL))return -1;trace->stopped=0;
+    int status=wait_stop(trace,1000);if(status<0)return -1;
+    siginfo_t info={0};int info_ok=!ptrace(PTRACE_GETSIGINFO,trace->pid,NULL,&info);
+    int read_ok=!read_registers(trace->pid,registers);
+    int hardware_step=info_ok&&read_ok&&quiet==1&&info.si_code==TRAP_HWBKPT
+        &&(uintptr_t)info.si_addr==registers->pc&&legacy_debug_quiet(trace->pid)==1;
+    int recognized=info_ok&&WSTOPSIG(status)==SIGTRAP&&!((unsigned)status>>16)
+        &&(info.si_code==TRAP_TRACE||hardware_step);
+    fprintf(stdout,"{\"event\":\"native_boundary_step\",\"signal\":%d,\"eventCode\":%u,\"signalInfo\":%s,\"signalCode\":%d,\"debugQuiet\":%d,\"registersRead\":%s,\"accepted\":%s}\n",
+        WSTOPSIG(status),(unsigned)status>>16,info_ok?"true":"false",info_ok?info.si_code:0,quiet,read_ok?"true":"false",recognized?"true":"false");fflush(stdout);
+    if(!recognized){
+        trace->delivery_signal=WSTOPSIG(status);errno=EINTR;return -1;
+    }
+    if(!read_ok)return -1;
+    const uint64_t single_step_flag=UINT64_C(1)<<21;registers->pstate&=~single_step_flag;
+    if((registers->pstate&PSR_MODE32_BIT)||!registers->pc||(registers->pc&3)||(registers->sp&15)){errno=ENOTSUP;return -1;}
+    trace->delivery_signal=0;
+    return 0;
+}
+
+#else
 static int legacy_user_boundary(SilphTrace *trace,struct user_pt_regs *registers){
     trace->stage="legacy_user_boundary";
     if(ptrace(PTRACE_SINGLESTEP,trace->pid,NULL,NULL))return -1;trace->stopped=0;
@@ -422,6 +458,8 @@ static int legacy_user_boundary(SilphTrace *trace,struct user_pt_regs *registers
     if((registers->pstate&PSR_MODE32_BIT)||!registers->pc||(registers->pc&3)||(registers->sp&15)){errno=ENOTSUP;return -1;}
     return 0;
 }
+
+#endif
 
 int silph_trace_open(SilphTrace *trace, pid_t pid, uint64_t ticks) {
     return silph_trace_open_mode(trace, pid, ticks, 1);

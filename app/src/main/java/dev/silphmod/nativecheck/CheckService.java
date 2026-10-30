@@ -11,7 +11,7 @@ public final class CheckService extends Service {
         final boolean running;final String status,details;
         View(boolean running,String status,String details){this.running=running;this.status=status;this.details=details;}
     }
-    static volatile View view=new View(false,"Ready","Pokémon GO 0.433.1 · ARM64");
+    static volatile View view=new View(false,"Ready","Pokémon GO 0.435.1 · ARM64");
     private final Handler main=new Handler(Looper.getMainLooper());
     private volatile NativeCheckRunner runner;
     private PowerManager.WakeLock wake;
