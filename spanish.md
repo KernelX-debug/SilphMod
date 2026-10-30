@@ -9,7 +9,7 @@ Los modos **Kecleon (BETA)**, **AutoRocket (BETA)** y **Event tricks** tienen su
 
 Configuras las funciones, pulsas **Start service** y sigues el progreso desde la notificación. **Stop** y **Export logs** permiten detener la sesión y revisar sus resultados. La interfaz, las notificaciones y los recursos visuales están en inglés.
 
-**Edición:** `2.3.8` · [MIT](LICENSE)
+**Edición:** `2.3.15` · [MIT](LICENSE)
 
 **Plataforma:** Android 10 o posterior, ARM64 y root. Una misma APK para UGPhone y teléfonos físicos.
 
@@ -66,7 +66,7 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 | Sistema | Android **10 o posterior** y permiso `su` |
 | Entornos | UGPhone y teléfonos físicos ARM64 con root |
 | Arquitectura | **ARM64**, punteros de 64 bits |
-| Juego | Pokémon GO original **0.433.1**, `versionCode 2026101502` |
+| Juego | Pokémon GO original **0.435.1**, `versionCode 2026102802` |
 | Motor del juego | Unity **6000.3.22f1**, IL2CPP |
 | APK | `minSdk 29`, `targetSdk 36` |
 | Tratamiento opcional de Error 12 | Contratos JNI de `Location` resueltos según la versión del sistema |
@@ -108,7 +108,7 @@ La aplicación reúne **Farmer**, **Kecleon (BETA)**, **AutoRocket (BETA)** y **
 | Limpiar mochila | Elimina excedentes de los tipos seleccionados **desde el inicio**, y mantiene esos límites durante la sesión. No necesita esperar a que la mochila se llene. |
 | Kecleon (BETA) | Búsqueda y captura automática de candidatos, con filtros e historial por cuenta. Esto aún está en desarrollo. |
 | AutoRocket (BETA) | Recorre solo candidatos de reclutas normales (por ahora), valida la incidencia, combate, captura según los filtros y cura al equipo entre combates. Incluye equipo recomendado, dos escudos y ubicación de retorno para las capturas (Método Alan). |
-| Event tricks | Recoge las recompensas de las cajas del evento y repite las recogidas de caramelos confirmadas, dando prioridad a las cajas de Caramelos Raros. Tiene estadísticas independientes y no realiza capturas ni giros. |
+| Event tricks | Por ahora, recoge las recompensas de las cajas del evento y repite las recogidas de caramelos confirmadas, dando prioridad a las cajas de Caramelos Raros. Tiene estadísticas independientes y no realiza capturas ni giros. |
 | Solucionar error 12 | Tratamiento de ubicación dentro del proceso del juego, opcional y vinculado a la sesión. |
 | Estadísticas | Capturas, huidas, giros, transferencias, objetos eliminados, XP, polvo estelar y tiempo activo acumulados. Se conservan al detener, volver a iniciar y recuperar el mapa. |
 | Clear statistics | Restablece únicamente los contadores del modo abierto, con el servicio detenido. En Kecleon también limpia su historial de candidatos; en AutoRocket elimina el historial y la ubicación de retorno. Se encuentra debajo de las estadísticas. |
@@ -317,7 +317,7 @@ Cada recuperación dispone de **hasta diez intentos de arranque**. **Stop** canc
 
 La ingeniería inversa se utilizó para identificar contratos, estructuras y firmas del perfil admitido. El motor resuelve clases y servicios en ejecución y valida lo que va a utilizar; no distribuye la biblioteca del juego ni su metadata decompilada.
 
-| Operación | Entrada utilizada en el perfil 0.433.1 |
+| Operación | Entrada utilizada en el perfil 0.435.1 |
 | --- | --- |
 | Resolver servicios | `Zenject.Internal.ZenUtilInternal.GetAllSceneContexts` y `DiContainer.TryResolve(System.Type)` |
 | Leer posición | `Niantic.Holoholo.Avatar.IMapAvatar.get_Location`, estructura `Niantic.LatLng` |
@@ -586,7 +586,7 @@ $env:ANDROID_HOME = "C:\Users\usuario\AppData\Local\Android\Sdk"
 
 Gradle compila los componentes C desde [native](native) mediante [build_native.ps1](tools/build_native.ps1). El backend de hooks se obtiene de una revisión fija de ShadowHook y se conserva fuera del código publicable, en `.dependencies/`. Puedes indicar instalaciones existentes con `SILPH_NDK` y `SILPH_SHADOWHOOK`.
 
-La compilación genera los **diez componentes nativos `.so`** y sus huellas SHA-256. El servicio vuelve a verificarlas antes de cargar el motor. Estos archivos se construyen desde C y la dependencia de hooks. Gradle los incorpora al APK desde `app/src/main/jniLibs/arm64-v8a/`.
+La compilación genera los **doce componentes nativos `.so`** y sus huellas SHA-256. El servicio vuelve a verificarlas antes de cargar el motor. Estos archivos se construyen desde C y la dependencia de hooks. Gradle los incorpora al APK desde `app/src/main/jniLibs/arm64-v8a/`.
 
 Sin configuración de firma, la salida release es **unsigned**. Para firmarla, proporciona `SILPH_KEYSTORE`, `SILPH_STORE_PASSWORD`, `SILPH_KEY_ALIAS` y `SILPH_KEY_PASSWORD`. Las claves quedan fuera del repositorio; actualizar una instalación existente utiliza el mismo certificado.
 
@@ -646,6 +646,12 @@ El Farmer incorpora las apariciones de incienso normal y diario y **Automatic ev
 El Farmer añade **Select Pokémon to keep**, formas regionales en ambos selectores y un catálogo actualizado con Minior, Mimikyu y Bramblin. La sección **Buddy** permite alimentar y megaevolucionar al compañero. Los **15/15/15** se identifican en rojo y el nombre temporal se prepara desde el arranque.
 
 AutoRocket incorpora prioridades configurables de pociones y revivires, y acorta la transición de los diálogos y las recompensas hacia la captura. Se refuerza la validación de los objetos de presentación y la conservación de argumentos al ejecutar las llamadas del juego.
+
+**2.3.15 actualiza la compatibilidad a Pokémon GO 0.435.1** en Farmer, Kecleon, AutoRocket y Event tricks. Se adaptan las referencias del juego, los servicios y la preparación del nombre temporal desde el arranque.
+
+AutoRocket corrige el inicio del motor antes de abrir al recluta y conserva la selección de equipo, los escudos, la captura por filtros, la ubicación de retorno y la curación entre combates.
+
+El arranque amplía las comprobaciones para kernels antiguos y mantiene sus cuatro rutas de conexión. Los registros de Event tricks reducen las entradas repetitivas y conservan los cambios de estado y el resumen final de la sesión. Se mantienen la prioridad de Caramelos Raros, la configuración de recogida y las protecciones de transferencia.
 
 La siguiente fase es seguir optimizando la continuidad de los cuatro modos y ampliar la compatibilidad entre dispositivos.
 

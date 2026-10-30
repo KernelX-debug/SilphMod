@@ -9,7 +9,7 @@ The **Kecleon (BETA)**, **AutoRocket (BETA)** and **Event tricks** modes have th
 
 You configure the features, press **Start service** and follow the progress from the notification. **Stop** and **Export logs** let you stop the session and review its results. The interface, notifications and visual assets are in English.
 
-**Edition:** `2.3.8` · [MIT](LICENSE)
+**Edition:** `2.3.15` · [MIT](LICENSE)
 
 **Platform:** Android 10 or later, ARM64 and root. One APK for both UGPhone and physical phones.
 
@@ -66,7 +66,7 @@ You configure the features, press **Start service** and follow the progress from
 | System | Android **10 or later** and `su` permission |
 | Environments | UGPhone and rooted ARM64 physical phones |
 | Architecture | **ARM64**, 64-bit pointers |
-| Game | Original Pokémon GO **0.433.1**, `versionCode 2026101502` |
+| Game | Original Pokémon GO **0.435.1**, `versionCode 2026102802` |
 | Game engine | Unity **6000.3.22f1**, IL2CPP |
 | APK | `minSdk 29`, `targetSdk 36` |
 | Optional Error 12 handling | JNI `Location` contracts resolved according to the system version |
@@ -108,7 +108,7 @@ The app brings together **Farmer**, **Kecleon (BETA)**, **AutoRocket (BETA)** an
 | Clean bag | Deletes surpluses of the selected types **from the start**, and maintains those limits during the session. It does not need to wait for the bag to fill up. |
 | Kecleon (BETA) | Automatic search and catching of candidates, with filters and per-account history. This is still under development. |
 | AutoRocket (BETA) | Goes through regular Grunt candidates only (for now), validates the incident, battles, catches according to the filters and heals the team between battles. Includes recommended team, two shields and a return location for catches (Alan Method). |
-| Event tricks | Collects rewards from the event boxes and repeats confirmed Candy collections, prioritizing Rare Candy. Has independent statistics and does not perform catches or spins. |
+| Event tricks | For now, collects rewards from the event boxes and repeats confirmed Candy collections, prioritizing Rare Candy. Has independent statistics and does not perform catches or spins. |
 | Fix error 12 | Location handling inside the game process, optional and tied to the session. |
 | Statistics | Accumulated catches, flees, spins, transfers, deleted items, XP, Stardust and active time. Kept when stopping, restarting and recovering the map. |
 | Clear statistics | Resets only the counters of the open mode, with the service stopped. In Kecleon it also clears its candidate history; in AutoRocket it deletes the history and the return location. Found below the statistics. |
@@ -317,7 +317,7 @@ Each recovery has **up to ten startup attempts**. **Stop** also cancels the retr
 
 Reverse engineering was used to identify contracts, structures and signatures of the supported profile. The engine resolves classes and services at runtime and validates what it is going to use; it does not distribute the game's library or its decompiled metadata.
 
-| Operation | Entry point used in profile 0.433.1 |
+| Operation | Entry point used in profile 0.435.1 |
 | --- | --- |
 | Resolve services | `Zenject.Internal.ZenUtilInternal.GetAllSceneContexts` and `DiContainer.TryResolve(System.Type)` |
 | Read position | `Niantic.Holoholo.Avatar.IMapAvatar.get_Location`, `Niantic.LatLng` structure |
@@ -586,7 +586,7 @@ $env:ANDROID_HOME = "C:\Users\user\AppData\Local\Android\Sdk"
 
 Gradle builds the C components from [native](native) through [build_native.ps1](tools/build_native.ps1). The hook backend is obtained from a pinned ShadowHook revision and kept outside the publishable code, in `.dependencies/`. You can point to existing installations with `SILPH_NDK` and `SILPH_SHADOWHOOK`.
 
-The build generates the **ten native `.so` components** and their SHA-256 fingerprints. The service verifies them again before loading the engine. These files are built from C and the hook dependency. Gradle bundles them into the APK from `app/src/main/jniLibs/arm64-v8a/`.
+The build generates the **twelve native `.so` components** and their SHA-256 fingerprints. The service verifies them again before loading the engine. These files are built from C and the hook dependency. Gradle bundles them into the APK from `app/src/main/jniLibs/arm64-v8a/`.
 
 Without a signing configuration, the release output is **unsigned**. To sign it, provide `SILPH_KEYSTORE`, `SILPH_STORE_PASSWORD`, `SILPH_KEY_ALIAS` and `SILPH_KEY_PASSWORD`. The keys stay out of the repository; updating an existing installation uses the same certificate.
 
@@ -646,6 +646,12 @@ The Farmer adds regular and daily incense spawns and **Automatic event actions**
 The Farmer adds **Select Pokémon to keep**, regional forms in both selectors and an updated catalog with Minior, Mimikyu and Bramblin. The **Buddy** section allows feeding and mega evolving the buddy. **15/15/15** are identified in red and the temporary name is prepared from startup.
 
 AutoRocket adds configurable Potion and Revive priorities, and shortens the transition from dialogs and rewards to the catch. The validation of presentation objects and the preservation of arguments when executing game calls are reinforced.
+
+**2.3.15 updates compatibility for Pokémon GO 0.435.1** in Farmer, Kecleon, AutoRocket and Event tricks. Game references, services and preparation of the temporary name at startup have been adapted.
+
+AutoRocket fixes engine startup before opening the Grunt and preserves team selection, shields, filtered catches, the return location and healing between battles.
+
+Startup expands the checks for older kernels and keeps its four connection routes. Event tricks logs reduce repetitive entries and preserve state changes and the final session summary. Rare Candy priority, collection settings and transfer protections are maintained.
 
 The next phase is to keep optimizing the continuity of the four modes and expand compatibility across devices.
 
