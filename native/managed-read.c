@@ -437,7 +437,7 @@ int silph_action_call(void *memory,const SilphSchedulePermit *permit,uint32_t op
     if(!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;
     Read *state=memory;int status=enter_read(state);if(status)return status;
     void *object=NULL;status=silph_managed_target(state->managed,ref,&object);
-    void *expected=lookup_class(state,"holo-game.dll",operation==SILPH_ACTION_BERRY?"Niantic.Holoholo":"Niantic.Holoholo.Map",
+    void *expected=lookup_class(state,operation==SILPH_ACTION_BERRY?"holo-game-interfaces.dll":"holo-game.dll",operation==SILPH_ACTION_BERRY?"Niantic.Holoholo":"Niantic.Holoholo.Map",
         operation==SILPH_ACTION_BERRY?"IItemBag":"MapPokemon");
     if(!status&&(!expected||(!state->api.class_is_assignable_from(expected,state->base.object_get_class(object))
         &&!(operation==SILPH_ACTION_CAPTURE&&research_type(state,object,"Niantic.Holoholo.Quests","QuestMapPokemon")))))status=SILPH_MANAGED_CONTRACT;
