@@ -43,12 +43,8 @@ final class NativeSettings {
     NativeSessionState.Totals totals(int mode){String p="stats"+mode+".";return new NativeSessionState.Totals(prefs.getLong(p+"caught",0),prefs.getLong(p+"fled",0),prefs.getLong(p+"spun",0),prefs.getLong(p+"discarded",0),prefs.getLong(p+"transferred",0),prefs.getLong(p+"encounters",0),prefs.getLong(p+"shinies",0),prefs.getLong(p+"xp",0),prefs.getLong(p+"stardust",0));}
     void save(int mode,NativeSessionState.Totals t){String p="stats"+mode+".";prefs.edit().putLong(p+"caught",t.caught).putLong(p+"fled",t.fled).putLong(p+"spun",t.spun).putLong(p+"discarded",t.discarded).putLong(p+"transferred",t.transferred).putLong(p+"encounters",t.encounters).putLong(p+"shinies",t.shinies).putLong(p+"xp",t.xp).putLong(p+"stardust",t.stardust).apply();}
     NativeSessionWire.Config config(int mode,boolean readonly){
+        if(mode<1||mode>3)throw new IllegalArgumentException("Mode unavailable");
         NativeSessionWire.Config c=new NativeSessionWire.Config();c.mode=mode;c.delayMs=prefs.getInt("delay",100);c.durationMs=readonly?300000:0;
-        if(mode==4){c.delayMs=100;c.keep=0;c.flags=readonly?NativeSessionWire.READ_ONLY:NativeSessionWire.SCENES;
-            if(!readonly&&prefs.getBoolean("eventFixLocation",prefs.getBoolean("fixLocation",false)))c.flags|=NativeSessionWire.FIX_LOCATION;
-            if(!readonly&&prefs.getBoolean("eventHideTrainerName",true))c.flags|=NativeSessionWire.TRAINER_NAME;
-            return c;
-        }
         if(readonly){if(prefs.getBoolean("fixLocation",false))throw new IllegalArgumentException("Turn off Read-only check to use Fix error 12");c.flags=NativeSessionWire.READ_ONLY;return c;}
         c.flags=mode!=1?NativeSessionWire.CATCH:(prefs.getBoolean("catches",true)?1:0)|(prefs.getBoolean("spins",true)?2:0);
         if((c.flags&1)!=0&&prefs.getBoolean("berries",true)){c.flags|=16;c.berries=integers(prefs.getString("berriesOrder","701,705,703"));}

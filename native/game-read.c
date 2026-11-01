@@ -321,13 +321,6 @@ static int service(GameRead *s,const char *assembly,const char *space,const char
     if(!status){*output=value.reference;memset(&value.reference,0,sizeof(value.reference));}
     int a=release(s,&type),b=release(s,&value.reference);return status?status:a?a:b;
 }
-#ifdef SILPH_PILOT_EVENT
-int silph_game_read_event_targets(void *memory,SilphManagedRef *behavior,SilphManagedRef *directory){
-    GameRead *s=memory;if(!s||!s->opened||!behavior||!directory)return SILPH_MANAGED_ARGUMENT;*behavior=*directory=(SilphManagedRef){0};
-    int r=service(s,"holo-game.dll","Niantic.Holoholo.Services.DynamicTappables","IDynamicTappableBehaviorService",behavior);
-    void *object=NULL;if(!r)r=silph_managed_target(s->managed,s->directory,&object);if(!r)r=silph_managed_retain(s->managed,object,false,directory);return r;
-}
-#endif
 #ifdef SILPH_PRESENT_SCOPED
 int silph_game_read_event_service(void *memory,SilphManagedRef *output){
     GameRead *s=memory;if(!s||!s->opened||!output)return SILPH_MANAGED_ARGUMENT;*output=(SilphManagedRef){0};

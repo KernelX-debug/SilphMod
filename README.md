@@ -5,7 +5,7 @@
 **English · [Español](spanish.md)**
 
 Local automation for the original Pokémon GO on **rooted Android**, both on UGPhone and on physical ARM64 phones. It catches nearby Pokémon, spins PokéStops, collects field, weekly, special and event research, claims GO Pass rewards, transfers new catches according to your filters and keeps the bag within the limits you choose.
-The **Kecleon (BETA)**, **AutoRocket (BETA)** and **Event tricks** modes have their own settings, notification and statistics.
+The **Kecleon (BETA)** and **AutoRocket (BETA)** modes have their own settings, notification and statistics.
 
 You configure the features, press **Start service** and follow the progress from the notification. **Stop** and **Export logs** let you stop the session and review its results. The interface, notifications and visual assets are in English.
 
@@ -21,7 +21,6 @@ You configure the features, press **Start service** and follow the progress from
 - [Features](#features)
   - [Kecleon (BETA)](#kecleon-beta)
   - [AutoRocket (BETA)](#autorocket-beta)
-  - [Event tricks](#event-tricks)
   - [Only catch: choosing which Pokémon to catch](#only-catch-choosing-which-pokémon-to-catch)
   - [Select Pokémon to keep](#select-pokémon-to-keep)
   - [Buddy](#buddy)
@@ -73,7 +72,7 @@ You configure the features, press **Start service** and follow the progress from
 | Connection | Adaptive selection among four startup routes, reusing the one that worked for the environment |
 | Installed identity | `dev.rootcatch.ugphonetest`, kept so earlier installations can be updated |
 
-The app brings together **Farmer**, **Kecleon (BETA)**, **AutoRocket (BETA)** and **Event tricks**, with independent execution and separate statistics. Startup adapts to the **Android of the device or instance**.
+The app brings together **Farmer**, **Kecleon (BETA)** and **AutoRocket (BETA)**, with independent execution and separate statistics. Startup adapts to the **Android of the device or instance**.
 
 ## Features
 
@@ -268,7 +267,7 @@ The engine uses objects and methods of the original process; the game client kee
 
 Startup offers four combinations: **ATTACH / FD**, **ATTACH / PATH**, **SEIZE / FD** and **SEIZE / PATH**. They change the connection mechanism and how the library is opened, not the engine or its policies. The route that worked is tied to the device and the game profile. There is a maximum of **ten attempts**, with confirmation that the previous attempt has exited before continuing.
 
-Execution is bound to the process, the session and the account. Heartbeats and the focus query are kept separate from log writing and from the feed's network operations. The scheduler runs actions on the Unity thread and coordinates their pending requests. Event tricks uses a bounded queue to collect several boxes without blocking the rest of the interface.
+Execution is bound to the process, the session and the account. Heartbeats and the focus query are kept separate from log writing and from the feed's network operations. The scheduler runs actions on the Unity thread and coordinates their pending requests.
 
 Focus reading distinguishes the underlying Pokémon GO, notifications and system overlays. **scrcpy**, screenshots and recording are not interpreted on their own as an app change. Opening another application or locking the screen pauses the actions; **Stop** cancels the service.
 
@@ -628,19 +627,17 @@ This edition also improves recovery from native channel disconnections and the h
 **2.2.11 adds AutoRocket (BETA)**, with regular Grunt candidates, recommended team, automatic attacks and shields, catching by filters, return to the configured location and team healing between battles. It adds **Only catch 13/13/13 or above**, **Maximum Rockets** and per-account history.
 The Farmer adds regular and daily incense spawns and **Automatic event actions** to collect the Halloween boxes and catch their encounters. It improves continuity during informational notices of missions and rewards, avoids late camera openings from the boxes and shortens the wait after temporary encounter failures.
 
-**2.3.8 adds Event tricks**, an independent mode to collect Candy from the event boxes, repeat confirmed collections and give preference to Rare Candy boxes. It includes its own notification and statistics, with continuity in compatible menus and the usual pauses when leaving the game.
-
 The Farmer adds **Select Pokémon to keep**, regional forms in both selectors and an updated catalog with Minior, Mimikyu and Bramblin. The **Buddy** section allows feeding and mega evolving the buddy. **15/15/15** are identified in red and the temporary name is prepared from startup.
 
 AutoRocket adds configurable Potion and Revive priorities, and shortens the transition from dialogs and rewards to the catch. The validation of presentation objects and the preservation of arguments when executing game calls are reinforced.
 
-**2.3.15 updates compatibility for Pokémon GO 0.435.1** in Farmer, Kecleon, AutoRocket and Event tricks. Game references, services and preparation of the temporary name at startup have been adapted.
+**2.3.15 updates compatibility for Pokémon GO 0.435.1** in Farmer, Kecleon and AutoRocket. Game references, services and preparation of the temporary name at startup have been adapted.
 
 AutoRocket fixes engine startup before opening the Grunt and preserves team selection, shields, filtered catches, the return location and healing between battles.
 
-Startup expands the checks for older kernels and keeps its four connection routes. Event tricks logs reduce repetitive entries and preserve state changes and the final session summary. Rare Candy priority, collection settings and transfer protections are maintained.
+Startup expands the checks for older kernels and keeps its four connection routes.
 
-The next phase is to keep optimizing the continuity of the four modes and expand compatibility across devices.
+The next phase is to keep optimizing the continuity of the three modes and expand compatibility across devices.
 
 We will look to add a setting for the hierarchical order in which Poké Balls are used. Not the default one: 1. Poké Ball; 2. Great Ball; 3. Ultra Ball
 

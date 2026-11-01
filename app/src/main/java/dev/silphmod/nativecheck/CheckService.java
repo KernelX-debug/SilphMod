@@ -23,11 +23,12 @@ public final class CheckService extends Service {
         String action=intent==null?STOP:intent.getAction();
         if(STOP.equals(action)){NativeCheckRunner current=runner;if(current!=null)current.stop();else stopSelf();return START_NOT_STICKY;}
         if(!START.equals(action)||runner!=null)return START_NOT_STICKY;
+        mode=intent.getIntExtra("mode",1);
         view=new View(true,"Preparing…","");
         if(Build.VERSION.SDK_INT>=34)startForeground(1,notification(),ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);else startForeground(1,notification());
+        if(mode<1||mode>3){view=new View(false,"Mode unavailable","");stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();return START_NOT_STICKY;}
         try{log=new CheckLog(this);}catch(Exception error){publish(false,"Cannot save session log",error.toString(),true);stopSelf();return START_NOT_STICKY;}
         wake=getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"SilphMod:service");wake.setReferenceCounted(false);wake.acquire(10*60_000L);main.postDelayed(renewWake,5*60_000L);
-        mode=intent.getIntExtra("mode",1);if(mode!=1&&mode!=2&&mode!=3&&mode!=4)mode=1;
         runner=new NativeCheckRunner(this,mode,log,(status,details)->publish(true,status,details,false));
         NativeCheckRunner active=runner;
         new Thread(()->{

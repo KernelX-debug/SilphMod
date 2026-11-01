@@ -4,9 +4,6 @@
 #include <string.h>
 #include <sys/syscall.h>
 #include <unistd.h>
-#ifdef SILPH_PILOT_EVENT
-#include "event-call-trace.h"
-#endif
 #ifdef SILPH_ENABLE_ACTIONS
 #include "managed-action.h"
 #include "core.h"
@@ -262,10 +259,6 @@ static int invoke_checked(Read *state,const void *found,void *object,uint32_t ki
         if(permit)status=SILPH_MANAGED_STATE;
 #endif
         if(!status) {
-#ifdef SILPH_PILOT_EVENT
-            const char *called=state->base.method_get_name(found);
-            if(called&&!strcmp(called,"bftu")){void *runtime=NULL;memcpy(&runtime,&state->base.runtime_invoke,sizeof(runtime));event_trace_call(found,runtime);}
-#endif
             void *exception=NULL,*result=state->base.runtime_invoke(found,instance,count?parameters:NULL,&exception);
             if(exception){status=SILPH_MANAGED_EXCEPTION;
 #ifdef SILPH_PRESENT_SCOPED
@@ -396,16 +389,6 @@ int silph_read_close(void *memory) {
 #include "managed-rpc.inc"
 #include "managed-proto.inc"
 #include "research-bridge.inc"
-#ifdef SILPH_PILOT_EVENT
-int silph_event_process(void *memory,const SilphSchedulePermit *permit,SilphManagedRef service,SilphManagedRef tappable,SilphReadValue *out){
-    if(!out)return SILPH_MANAGED_ARGUMENT;clear_value(out);if(!silph_schedule_permitted(permit,true))return SILPH_MANAGED_STATE;
-    Read *s=memory;int r=enter_read(s);if(r)return r;void *a=NULL,*b=NULL;
-    r=silph_managed_target(s->managed,service,&a);if(!r)r=silph_managed_target(s->managed,tappable,&b);
-    if(!r&&(!research_type(s,a,"Niantic.Holoholo.Services.DynamicTappables","DynamicTappableBehaviorService")||!research_type(s,b,"","DynamicTappableController")))r=SILPH_MANAGED_CONTRACT;
-    SilphReadArgument arg={.kind=SILPH_READ_REFERENCE,.value.reference=tappable};
-    if(!r)r=call_internal(s,service,NULL,"bftu",SILPH_READ_REFERENCE,&arg,1,out,permit);return leave_read(s,r);
-}
-#endif
 #ifdef SILPH_PRESENT_SCOPED
 #include "event-actions.h"
 #include "buddy-care.h"

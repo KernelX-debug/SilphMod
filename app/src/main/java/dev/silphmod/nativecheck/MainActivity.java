@@ -35,7 +35,7 @@ public final class MainActivity extends Activity {
     @Override protected void onPause(){handler.removeCallbacks(refresh);super.onPause();}
     private void show(){
         edits.clear();inputError="";ui=new ModeUi(this);status=null;start=null;
-        if(mode!=1&&mode!=2&&mode!=3&&mode!=4){
+        if(mode!=1&&mode!=2&&mode!=3){
             ui.title("SilphMod",BuildConfig.VERSION_NAME);
             LinearLayout farmer=ui.card("FARMER");farmer.addView(ui.text("Autocatch & autospin",23,ModeUi.TEXT));
             farmer.addView(ui.text("Wild catches · PokéStops · Inventory",14,ModeUi.MUTED));
@@ -45,26 +45,17 @@ public final class MainActivity extends Activity {
             ui.button(kec,"Open Kecleon (BETA)",false).setOnClickListener(v->open(2));
             LinearLayout rocket=ui.card("AUTOROCKET (BETA)");rocket.addView(ui.text("Automatic grunt battles & shadow catches",23,ModeUi.TEXT));
             rocket.addView(ui.text("Rocket queue · Team healing · IV & shiny filters",14,ModeUi.MUTED));ui.button(rocket,"Open AutoRocket (BETA)",false).setOnClickListener(v->open(3));
-            LinearLayout events=ui.card("EVENT TRICKS");events.addView(ui.text("Automatic event box collection",23,ModeUi.TEXT));
-            events.addView(ui.text("Pokémon Candy · Rare Candy · No catches or spins",14,ModeUi.MUTED));
-            ui.button(events,"Open Event tricks",false).setOnClickListener(v->open(4));ui.show();return;
+            ui.show();return;
         }
         ui.button(ui.page,"‹  Modes",false).setOnClickListener(v->{mode=0;show();});
-        ui.title(mode==4?"Event tricks":mode==1?"Farmer":mode==2?"Kecleon (BETA)":"AutoRocket (BETA)","SilphMod");
+        ui.title(mode==1?"Farmer":mode==2?"Kecleon (BETA)":"AutoRocket (BETA)","SilphMod");
         status=ui.text(CheckService.view.status,17,ModeUi.ACCENT);ui.page.addView(status);
         elapsed=ui.text("00:00:00",16,ModeUi.MUTED);ui.page.addView(elapsed);
         details=ui.text("",13,ModeUi.MUTED);ui.page.addView(details);
-        String[] labels=mode==4?new String[]{"Boxes opened","Pokémon Candy","Rare Candy / XL","Candy XL","XP","Stardust"}:mode==1?new String[]{"Catches","PokéStops","Transferred","Items deleted","XP","Stardust"}:new String[]{mode==3?"Rockets":"Encounters","Catches","Shinies","Items deleted","XP","Stardust"};
+        String[] labels=mode==1?new String[]{"Catches","PokéStops","Transferred","Items deleted","XP","Stardust"}:new String[]{mode==3?"Rockets":"Encounters","Catches","Shinies","Items deleted","XP","Stardust"};
         for(int row=0;row<3;row++){LinearLayout line=ui.row();ui.page.addView(line);for(int col=0;col<2;col++)metrics[row*2+col]=ui.metric(line,labels[row*2+col]);}
         clear=ui.button(ui.page,"Clear statistics",false);clear.setOnClickListener(v->{if(CheckService.view.running)return;
             inputError="";settings.save(mode,new NativeSessionState.Totals());settings.prefs.edit().putLong("stats"+mode+".elapsed",0).apply();if(mode==2)dev.rootcatch.ugphone.KecleonHost.clearHistory(this);if(mode==3)NativeRocketHost.clear(this);render();});ui.space(ui.page,16);
-        if(mode==4){
-            LinearLayout event=ui.card("Event boxes");
-            event.addView(ui.text("Collects box rewards as you follow your route. Pokémon encounters are left uncaught.",14,ModeUi.MUTED));
-            check(event,"Fix error 12","eventFixLocation",settings.prefs.getBoolean("fixLocation",false));
-            check(event,"Hide trainer name","eventHideTrainerName",true);
-            serviceControls();ui.show();render();return;
-        }
         SettingsDialogs dialogs=new SettingsDialogs(this);
         LinearLayout features=ui.card("Features");
         check(features,"Fix error 12","fixLocation",false);
@@ -138,7 +129,7 @@ public final class MainActivity extends Activity {
     private void render(){
         if(status==null)return;CheckService.View value=CheckService.view;var t=settings.totals(mode);
         set(status,value.running||inputError.isEmpty()?value.status:inputError);set(details,value.running?value.details:"");
-        long[] values=mode==4?new long[]{t.spun,t.caught,t.shinies,t.discarded,t.xp,t.stardust}:mode==1?new long[]{t.caught,t.spun,t.transferred,t.discarded,t.xp,t.stardust}:new long[]{mode==3?t.spun:t.encounters,t.caught,t.shinies,t.discarded,t.xp,t.stardust};
+        long[] values=mode==1?new long[]{t.caught,t.spun,t.transferred,t.discarded,t.xp,t.stardust}:new long[]{mode==3?t.spun:t.encounters,t.caught,t.shinies,t.discarded,t.xp,t.stardust};
         long seconds=settings.elapsed(mode)/1000;set(elapsed,String.format(Locale.US,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60));
         for(int i=0;i<6;i++)set(metrics[i],String.format(Locale.US,"%,d",values[i]));
         set(start,value.running?"Stop service":"Start service");clear.setEnabled(!value.running);for(View edit:edits)edit.setEnabled(!value.running);

@@ -13,21 +13,11 @@ uint32_t silph_wire_crc(const void *memory,size_t bytes){
 static int berry(uint32_t v){return v==701||v==703||v==705||v==706||v==708;}
 int silph_config_validate(const SilphSessionConfig *c){
     if(!c||c->pid<=1||c->pid>INT32_MAX||!c->ticks||c->ticks>INT64_MAX||(!c->session_hi&&!c->session_lo)||c->mode<1||c->mode>SILPH_MODE_MAX
-#if defined(SILPH_PILOT_EVENT) || defined(SILPH_EVENT_WIRE)
-        ||(c->flags&~(c->mode==SILPH_MODE_EVENT?1728u:c->mode==SILPH_MODE_ROCKET?131071u:c->mode==SILPH_MODE_FARMER?196607u:65535u))
-#else
         ||(c->flags&~(c->mode==SILPH_MODE_ROCKET?131071u:c->mode==SILPH_MODE_FARMER?196607u:65535u))
-#endif
         ||c->quality<1||c->quality>4||c->delay_ms<100||c->delay_ms>3000||c->keep>255||c->max_catches>50000||c->max_spins>50000
         ||c->max_encounters>50000||c->berry_count>5||c->limit_count>64||c->filters>(c->mode==SILPH_MODE_ROCKET?31u:15u)||c->duration_ms>86400000
         ||(c->duration_ms&&c->duration_ms<1000))return SILPH_WIRE_ARGUMENT;
     if(c->flags&SILPH_CFG_READONLY){if(c->flags!=SILPH_CFG_READONLY||c->max_catches||c->max_spins||c->max_encounters||c->filters)return SILPH_WIRE_ARGUMENT;}
-#if defined(SILPH_PILOT_EVENT) || defined(SILPH_EVENT_WIRE)
-    else if(c->mode==SILPH_MODE_EVENT){
-        if(c->max_catches||c->max_spins||c->max_encounters||c->filters||c->keep||c->berry_count||c->limit_count)return SILPH_WIRE_ARGUMENT;
-        for(unsigned i=0;i<256;i++)if(c->species[i])return SILPH_WIRE_ARGUMENT;
-    }
-#endif
     else if(c->mode==SILPH_MODE_FARMER){
         if(!(c->flags&7)||((c->flags&SILPH_CFG_CATCH)&&!c->max_catches)||c->max_encounters||c->filters
             ||(!(c->flags&SILPH_CFG_CATCH)&&(c->flags&(SILPH_CFG_TRANSFER|SILPH_CFG_BERRIES))))return SILPH_WIRE_ARGUMENT;

@@ -5,7 +5,7 @@
 **[English](README.md) · Español**
 
 Automatización local para Pokémon GO original en **Android con root**, tanto en UGPhone como en teléfonos físicos ARM64. Captura de Pokémon cercanos, gira Poképaradas, recoge investigaciones de campo, semanales, especiales y de eventos, reclama recompensas del GO Pass, transfiere nuevas capturas según tus filtros y mantiene la mochila dentro de los límites que elijas.
-Los modos **Kecleon (BETA)**, **AutoRocket (BETA)** y **Event tricks** tienen su propia configuración, notificación y estadísticas.
+Los modos **Kecleon (BETA)** y **AutoRocket (BETA)** tienen su propia configuración, notificación y estadísticas.
 
 Configuras las funciones, pulsas **Start service** y sigues el progreso desde la notificación. **Stop** y **Export logs** permiten detener la sesión y revisar sus resultados. La interfaz, las notificaciones y los recursos visuales están en inglés.
 
@@ -21,7 +21,6 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 - [Funciones](#funciones)
   - [Kecleon (BETA)](#kecleon-beta)
   - [AutoRocket (BETA)](#autorocket-beta)
-  - [Event tricks](#event-tricks)
   - [Only catch: escoger qué Pokémon capturar](#only-catch-escoger-qué-pokémon-capturar)
   - [Select Pokémon to keep](#select-pokémon-to-keep)
   - [Compañero](#compañero)
@@ -73,7 +72,7 @@ Configuras las funciones, pulsas **Start service** y sigues el progreso desde la
 | Conexión | Selección adaptativa entre cuatro rutas de arranque y reutilización de la que funcionó para el entorno |
 | Identidad instalada | `dev.rootcatch.ugphonetest`, conservada para actualizar instalaciones anteriores |
 
-La aplicación reúne **Farmer**, **Kecleon (BETA)**, **AutoRocket (BETA)** y **Event tricks**, con ejecución independiente y estadísticas separadas. El arranque se adapta al **Android del dispositivo o de la instancia**.
+La aplicación reúne **Farmer**, **Kecleon (BETA)** y **AutoRocket (BETA)**, con ejecución independiente y estadísticas separadas. El arranque se adapta al **Android del dispositivo o de la instancia**.
 
 ## Funciones
 
@@ -268,7 +267,7 @@ El motor utiliza objetos y métodos del proceso original; el cliente del juego s
 
 El arranque dispone de cuatro combinaciones: **ATTACH / FD**, **ATTACH / PATH**, **SEIZE / FD** y **SEIZE / PATH**. Cambian el mecanismo de conexión y la apertura de la biblioteca, no el motor ni sus políticas. La ruta que funcionó queda asociada al dispositivo y al perfil del juego. Hay un máximo de **diez intentos**, con confirmación de salida del intento anterior antes de continuar.
 
-La ejecución se vincula al proceso, la sesión y la cuenta. Los latidos y la consulta de foco van separados de la escritura de registros y de las operaciones de red del feed. El planificador ejecuta las acciones en el hilo Unity y coordina sus solicitudes pendientes. Event tricks utiliza una cola acotada para recoger varias cajas sin bloquear el resto de la interfaz.
+La ejecución se vincula al proceso, la sesión y la cuenta. Los latidos y la consulta de foco van separados de la escritura de registros y de las operaciones de red del feed. El planificador ejecuta las acciones en el hilo Unity y coordina sus solicitudes pendientes.
 
 La lectura de foco distingue Pokémon GO subyacente, notificaciones y superposiciones del sistema. **scrcpy**, capturas de pantalla y grabación no se interpretan por sí solos como cambio de app. Abrir otra aplicación o bloquear la pantalla pausa las acciones; **Stop** cancela el servicio.
 
@@ -628,19 +627,17 @@ Esta edición también mejora la recuperación de desconexiones del canal nativo
 **2.2.11 incorpora AutoRocket (BETA)**, con candidatos de reclutas normales, equipo recomendado, ataques y escudos automáticos, captura por filtros, retorno a la ubicación configurada y curación del equipo entre combates. Añade **Only catch 13/13/13 or above**, **Maximum Rockets** e historial por cuenta.
 El Farmer incorpora las apariciones de incienso normal y diario y **Automatic event actions** para recoger las cajas de Halloween y capturar sus encuentros. Mejora la continuidad durante los avisos informativos de misiones y recompensas, evita aperturas tardías de cámara de las cajas y acorta la espera tras fallos temporales de encuentro.
 
-**2.3.8 incorpora Event tricks**, un modo independiente para recoger caramelos de las cajas del evento, repetir las recogidas confirmadas y dar preferencia a las cajas de Caramelos Raros. Incluye su propia notificación y estadísticas, con continuidad en los menús compatibles y las pausas habituales al salir del juego.
-
 El Farmer añade **Select Pokémon to keep**, formas regionales en ambos selectores y un catálogo actualizado con Minior, Mimikyu y Bramblin. La sección **Buddy** permite alimentar y megaevolucionar al compañero. Los **15/15/15** se identifican en rojo y el nombre temporal se prepara desde el arranque.
 
 AutoRocket incorpora prioridades configurables de pociones y revivires, y acorta la transición de los diálogos y las recompensas hacia la captura. Se refuerza la validación de los objetos de presentación y la conservación de argumentos al ejecutar las llamadas del juego.
 
-**2.3.15 actualiza la compatibilidad a Pokémon GO 0.435.1** en Farmer, Kecleon, AutoRocket y Event tricks. Se adaptan las referencias del juego, los servicios y la preparación del nombre temporal desde el arranque.
+**2.3.15 actualiza la compatibilidad a Pokémon GO 0.435.1** en Farmer, Kecleon y AutoRocket. Se adaptan las referencias del juego, los servicios y la preparación del nombre temporal desde el arranque.
 
 AutoRocket corrige el inicio del motor antes de abrir al recluta y conserva la selección de equipo, los escudos, la captura por filtros, la ubicación de retorno y la curación entre combates.
 
-El arranque amplía las comprobaciones para kernels antiguos y mantiene sus cuatro rutas de conexión. Los registros de Event tricks reducen las entradas repetitivas y conservan los cambios de estado y el resumen final de la sesión. Se mantienen la prioridad de Caramelos Raros, la configuración de recogida y las protecciones de transferencia.
+El arranque amplía las comprobaciones para kernels antiguos y mantiene sus cuatro rutas de conexión.
 
-La siguiente fase es seguir optimizando la continuidad de los cuatro modos y ampliar la compatibilidad entre dispositivos.
+La siguiente fase es seguir optimizando la continuidad de los tres modos y ampliar la compatibilidad entre dispositivos.
 
 Se buscará agregar la configuración del orden jerárquico del uso de pokebolas. No la de por defecto: 1. Pokeball; 2. Superball; 3. Ultraball
 
